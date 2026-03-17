@@ -1,0 +1,204 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== Print-Friendly Styles ===== */
+@media print {
+  /* --- Global: Hide non-content UI elements --- */
+  /* Sidebar navigation */
+  aside {
+    display: none !important;
+  }
+
+  /* Top bar / header */
+  header {
+    display: none !important;
+  }
+
+  /* Mobile overlay */
+  .fixed.inset-0.bg-black\/50 {
+    display: none !important;
+  }
+
+  /* Hide all modal dialogs when printing */
+  [role="dialog"] {
+    display: none !important;
+  }
+
+  /* Elements marked with print:hidden via Tailwind */
+  .print-hidden {
+    display: none !important;
+  }
+
+  /* --- Layout adjustments --- */
+  body {
+    background: white !important;
+    margin: 0;
+    padding: 0;
+    font-size: 11pt;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Remove flex layout constraints so content fills the page */
+  .min-h-screen {
+    min-height: auto !important;
+  }
+
+  /* Main content area: remove padding/margin constraints */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Remove background colors on containers */
+  .bg-gray-50 {
+    background: white !important;
+  }
+
+  /* --- Table print styles --- */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 10pt;
+  }
+
+  table thead {
+    display: table-header-group;
+  }
+
+  table tbody {
+    display: table-row-group;
+  }
+
+  table tr {
+    page-break-inside: avoid;
+  }
+
+  table th,
+  table td {
+    border: 1px solid #d1d5db !important;
+    padding: 4px 8px !important;
+    text-align: left;
+  }
+
+  table th {
+    background-color: #f3f4f6 !important;
+    font-weight: 600;
+  }
+
+  /* Remove hover effects */
+  table tr:hover {
+    background: transparent !important;
+  }
+
+  /* --- Card / section styles --- */
+  .rounded-lg,
+  .rounded-md {
+    border-radius: 0 !important;
+  }
+
+  .border {
+    border: 1px solid #d1d5db !important;
+  }
+
+  .shadow-xl,
+  .shadow-lg,
+  .shadow-md,
+  .shadow {
+    box-shadow: none !important;
+  }
+
+  /* --- Links: show as plain text --- */
+  a {
+    color: #000 !important;
+    text-decoration: none !important;
+  }
+
+  /* --- Buttons: hide all interactive buttons --- */
+  button {
+    display: none !important;
+  }
+
+  /* --- Page break handling --- */
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
+
+  .bg-white {
+    background: white !important;
+  }
+
+  /* Keep summary cards together */
+  .grid {
+    page-break-inside: avoid;
+  }
+
+  /* --- Invoice-specific print styles --- */
+  /* Invoice summary card: keep visible with clean borders */
+  .bg-white.rounded-lg.border.border-gray-200.p-5 {
+    border: 1px solid #d1d5db !important;
+    padding: 12px !important;
+    margin-bottom: 12px !important;
+    page-break-inside: avoid;
+  }
+
+  /* Status badges: ensure colors print */
+  .bg-red-100,
+  .bg-green-100,
+  .bg-yellow-100,
+  .bg-blue-100,
+  .bg-purple-100 {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* --- Delivery manifest print styles --- */
+  /* Manifest cards: clean borders, no action buttons */
+  .max-w-lg {
+    max-width: 100% !important;
+  }
+
+  /* Stop number circles */
+  .rounded-full.bg-gray-800 {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Progress bar: hide when printing */
+  .bg-gray-200.rounded-full.h-2 {
+    display: none !important;
+  }
+
+  /* --- Report page print styles --- */
+  /* Pagination controls: hidden */
+  .flex.items-center.justify-between.mt-4 {
+    display: none !important;
+  }
+
+  /* Overflow containers: allow full width */
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  /* --- Ledger print styles --- */
+  /* Balance highlight: ensure it prints */
+  .text-red-700,
+  .text-green-700 {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* --- Page margins --- */
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+
+  /* First page: add extra top margin for header */
+  @page :first {
+    margin-top: 2cm;
+  }
+}

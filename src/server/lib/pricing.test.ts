@@ -1,0 +1,194 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import fc from 'fast-check';
+
+// ---------------------------------------------------------------------------
+// Mock Prisma
+// ---------------------------------------------------------------------------
+const mockFindFirst = vi.fn();
+
+vi.mock('../index.js', () => ({
+  prisma: {
+    productPrice: {
+      findFirst: (...args: any[]) => mockFindFirst(...args),
+    },
+  },
+  redis: {},
+}));
+
+import { getEffectivePrice } from './pricing.js';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Create a Date from a day offset relative to a base date (2020-01-01). */
+function dateFromOffset(offset: number): Date {
+  const d = new Date(2020, 0, 1);
+  d.setDate(d.getDate() + offset);
+  return d;
+}
+
+/** Simulate what Prisma's findFirst with orderBy effectiveDate desc + lte filter does. */
+function findMostRecentPrice(
+  prices: { effectiveDate: Date; price: number; branch: string | null }[],
+  targetDate: Date,
+  branch: string | null,
+) {
+  return prices
+    .filter((p) => p.branch === branch && p.effectiveDate <= targetDate)
+    .sort((a, b) => b.effectiveDate.getTime() - a.effectiveDate.getTime())[0] ?? null;
+}
+
+const VARIANT_ID = 'variant-1';
+
+// ---------------------------------------------------------------------------
+// Arbitraries
+// ---------------------------------------------------------------------------
+
+/** Generate a price entry with an effective date offset and a positive price. */
+const priceEntryArb = (branch: string | null) =>
+  fc.record({
+    effectiveDate: fc.integer({ min: 0, max: 3650 }).map(dateFromOffset),
+    price: fc.integer({ min: 1, max: 100000 }).map((n) => n / 100),
+    branch: fc.constant(branch),
+  });
+
+/** Generate a non-empty array of default price entries. */
+const defaultPriceHistoryArb = fc.array(priceEntryArb(null), { minLength: 1, maxLength: 20 });
+
+/** Generate a target date as an offset. */
+const targetDateArb = fc.integer({ min: 0, max: 3650 }).map(dateFromOffset);
+
+// ---------------------------------------------------------------------------
+// Property 1: Effective price lookup always returns the most recent price
+//             on or before the target date.
+// Validates: Requirements 4.4, 4.5
+// ---------------------------------------------------------------------------
+describe('Property 1: Most recent effective price is selected', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('always returns the price with the greatest effectiveDate <= targetDate', async () => {
+    await fc.assert(
+      fc.asyncProperty(defaultPriceHistoryArb, targetDateArb, async (prices, targetDate) => {
+        const expected = findMostRecentPrice(prices, targetDate, null);
+
+        // Configure mock to simulate Prisma behavior
+        mockFindFirst.mockImplementation(async (args: any) => {
+          const branchFilter = args.where.branch;
+          return findMostRecentPrice(prices, targetDate, branchFilter ?? null);
+        });
+
+        return getEffectivePrice(VARIANT_ID, targetDate).then(
+          (result) => {
+            // If we got a result, it should match the expected price
+            if (expected) {
+              expect(result.price).toBe(expected.price);
+              expect(result.effectiveDate.getTime()).toBe(expected.effectiveDate.getTime());
+              // The effective date must be on or before the target date
+              expect(result.effectiveDate <= targetDate).toBe(true);
+            }
+            return true;
+          },
+          (err) => {
+            // Should only throw if no price exists on or before targetDate
+            if (!expected) {
+              expect(err.message).toContain('No effective price found');
+              return true;
+            }
+            throw err;
+          },
+        );
+      }),
+      { numRuns: 200 },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Property 2: Future-dated prices are never applied before their effective date.
+// Validates: Requirements 4.5
+// ---------------------------------------------------------------------------
+describe('Property 2: Future prices are never applied early', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('never returns a price whose effectiveDate is after the target date', async () => {
+    await fc.assert(
+      fc.asyncProperty(defaultPriceHistoryArb, targetDateArb, async (prices, targetDate) => {
+        mockFindFirst.mockImplementation(async (args: any) => {
+          const branchFilter = args.where.branch;
+          return findMostRecentPrice(prices, targetDate, branchFilter ?? null);
+        });
+
+        return getEffectivePrice(VARIANT_ID, targetDate).then(
+          (result) => {
+            // The returned price's effective date must never be in the future
+            expect(result.effectiveDate <= targetDate).toBe(true);
+            return true;
+          },
+          (err) => {
+            // Only acceptable error is "no price found"
+            expect(err.message).toContain('No effective price found');
+            return true;
+          },
+        );
+      }),
+      { numRuns: 200 },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Property 3: Branch override takes precedence over default price when
+//             branch matches.
+// Validates: Requirements 4.7
+// ---------------------------------------------------------------------------
+describe('Property 3: Branch override takes precedence', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns branch price when available, default otherwise', async () => {
+    const branchPriceHistoryArb = fc.array(priceEntryArb('branch-A'), {
+      minLength: 0,
+      maxLength: 10,
+    });
+
+    await fc.assert(
+      fc.asyncProperty(
+        defaultPriceHistoryArb,
+        branchPriceHistoryArb,
+        targetDateArb,
+        async (defaultPrices, branchPrices, targetDate) => {
+          const allPrices = [...defaultPrices, ...branchPrices];
+          const expectedBranch = findMostRecentPrice(allPrices, targetDate, 'branch-A');
+          const expectedDefault = findMostRecentPrice(allPrices, targetDate, null);
+
+          mockFindFirst.mockImplementation(async (args: any) => {
+            const branchFilter = args.where.branch;
+            return findMostRecentPrice(allPrices, targetDate, branchFilter ?? null);
+          });
+
+          return getEffectivePrice(VARIANT_ID, targetDate, 'branch-A').then(
+            (result) => {
+              if (expectedBranch) {
+                // Branch price should take precedence
+                expect(result.price).toBe(expectedBranch.price);
+                expect(result.branch).toBe('branch-A');
+              } else if (expectedDefault) {
+                // Falls back to default
+                expect(result.price).toBe(expectedDefault.price);
+                expect(result.branch).toBeNull();
+              }
+              return true;
+            },
+            (err) => {
+              // Only fails if neither branch nor default price exists
+              expect(!expectedBranch && !expectedDefault).toBe(true);
+              expect(err.message).toContain('No effective price found');
+              return true;
+            },
+          );
+        },
+      ),
+      { numRuns: 200 },
+    );
+  });
+});

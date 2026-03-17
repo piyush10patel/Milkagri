@@ -1,0 +1,659 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgcrypto]
+}
+
+// ─── Core Identity Tables ────────────────────────────────────────────────────
+
+model User {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email               String    @unique @db.VarChar(255)
+  passwordHash        String    @map("password_hash") @db.VarChar(255)
+  name                String    @db.VarChar(255)
+  role                UserRole
+  isActive            Boolean   @default(true) @map("is_active")
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime? @map("locked_until") @db.Timestamptz
+  lastLoginAt         DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+  routeAgents        RouteAgent[]
+  vacationHolds      VacationHold[]     @relation("VacationHoldCreator")
+  quantityChanges    QuantityChange[]   @relation("QuantityChangeCreator")
+  subscriptionChanges SubscriptionChange[] @relation("SubscriptionChangeCreator")
+  invoiceAdjustments InvoiceAdjustment[] @relation("AdjustmentCreator")
+  invoiceDiscounts   InvoiceDiscount[]  @relation("DiscountCreator")
+  deliveredOrders    DeliveryOrder[]    @relation("DeliveredBy")
+  collectedPayments  Payment[]          @relation("CollectedBy")
+  recordedPayments   Payment[]          @relation("RecordedBy")
+  createdHolidays    Holiday[]          @relation("HolidayCreator")
+  createdRouteHolidays RouteHoliday[]   @relation("RouteHolidayCreator")
+  updatedSettings    SystemSetting[]    @relation("SettingUpdater")
+  jobExecutions      JobExecution[]     @relation("JobUser")
+  inwardStocks       InwardStock[]      @relation("InwardStockRecorder")
+  wastages           Wastage[]          @relation("WastageRecorder")
+
+  @@map("users")
+}
+
+enum UserRole {
+  super_admin
+  admin
+  delivery_agent
+  billing_staff
+  read_only
+}
+
+model Customer {
+  id                     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                   String         @db.VarChar(255)
+  phone                  String         @unique @db.VarChar(20)
+  email                  String?        @db.VarChar(255)
+  status                 CustomerStatus @default(active)
+  deliveryNotes          String?        @map("delivery_notes") @db.Text
+  preferredDeliveryWindow String?       @map("preferred_delivery_window") @db.VarChar(50)
+  routeId                String?        @map("route_id") @db.Uuid
+  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  route          Route?           @relation(fields: [routeId], references: [id])
+  addresses      CustomerAddress[]
+  subscriptions  Subscription[]
+  deliveryOrders DeliveryOrder[]
+  invoices       Invoice[]
+  payments       Payment[]
+  ledgerEntries  LedgerEntry[]
+  routeCustomers RouteCustomer[]
+
+  @@map("customers")
+}
+
+enum CustomerStatus {
+  active
+  paused
+  stopped
+}
+
+model CustomerAddress {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId   String   @map("customer_id") @db.Uuid
+  addressLine1 String   @map("address_line1") @db.VarChar(500)
+  addressLine2 String?  @map("address_line2") @db.VarChar(500)
+  city         String?  @db.VarChar(100)
+  state        String?  @db.VarChar(100)
+  pincode      String?  @db.VarChar(10)
+  latitude     Decimal? @db.Decimal(10, 8)
+  longitude    Decimal? @db.Decimal(11, 8)
+  isPrimary    Boolean  @default(false) @map("is_primary")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("customer_addresses")
+}
+
+// ─── Product Tables ──────────────────────────────────────────────────────────
+
+model Product {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @db.VarChar(255)
+  category    String?  @db.VarChar(100)
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  variants ProductVariant[]
+
+  @@map("products")
+}
+
+model ProductVariant {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId       String   @map("product_id") @db.Uuid
+  unitType        UnitType @map("unit_type")
+  quantityPerUnit Decimal  @map("quantity_per_unit") @db.Decimal(10, 3)
+  sku             String?  @unique @db.VarChar(100)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  product          Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  prices           ProductPrice[]
+  subscriptions    Subscription[]
+  deliveryOrders   DeliveryOrder[]
+  invoiceLineItems InvoiceLineItem[]
+  inwardStocks     InwardStock[]
+  wastages         Wastage[]
+
+  @@map("product_variants")
+}
+
+enum UnitType {
+  liters
+  milliliters
+  packets
+  kilograms
+  pieces
+}
+
+model ProductPrice {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productVariantId String   @map("product_variant_id") @db.Uuid
+  price            Decimal  @db.Decimal(10, 2)
+  effectiveDate    DateTime @map("effective_date") @db.Date
+  branch           String?  @db.VarChar(100)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+
+  @@unique([productVariantId, effectiveDate, branch], map: "uq_product_prices_variant_date_branch")
+  @@index([productVariantId, effectiveDate(sort: Desc)], map: "idx_product_prices_lookup")
+  @@map("product_prices")
+}
+
+// ─── Subscription Tables ─────────────────────────────────────────────────────
+
+model Subscription {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId       String             @map("customer_id") @db.Uuid
+  productVariantId String             @map("product_variant_id") @db.Uuid
+  quantity         Decimal            @db.Decimal(10, 3)
+  frequencyType    FrequencyType      @map("frequency_type")
+  weekdays         Int[]
+  startDate        DateTime           @map("start_date") @db.Date
+  endDate          DateTime?          @map("end_date") @db.Date
+  status           SubscriptionStatus @default(active)
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  customer       Customer             @relation(fields: [customerId], references: [id])
+  productVariant ProductVariant       @relation(fields: [productVariantId], references: [id])
+  vacationHolds  VacationHold[]
+  quantityChanges QuantityChange[]
+  changes        SubscriptionChange[]
+  deliveryOrders DeliveryOrder[]
+
+  @@map("subscriptions")
+}
+
+enum FrequencyType {
+  daily
+  alternate_day
+  custom_weekday
+}
+
+enum SubscriptionStatus {
+  active
+  paused
+  cancelled
+}
+
+model VacationHold {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionId String    @map("subscription_id") @db.Uuid
+  startDate      DateTime  @map("start_date") @db.Date
+  endDate        DateTime  @map("end_date") @db.Date
+  resumedAt      DateTime? @map("resumed_at") @db.Date
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  creator      User         @relation("VacationHoldCreator", fields: [createdBy], references: [id])
+
+  @@map("vacation_holds")
+}
+
+model QuantityChange {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionId String   @map("subscription_id") @db.Uuid
+  newQuantity    Decimal  @map("new_quantity") @db.Decimal(10, 3)
+  effectiveDate  DateTime @map("effective_date") @db.Date
+  applied        Boolean  @default(false)
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  creator      User         @relation("QuantityChangeCreator", fields: [createdBy], references: [id])
+
+  @@map("quantity_changes")
+}
+
+model SubscriptionChange {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionId String   @map("subscription_id") @db.Uuid
+  changeType     String   @map("change_type") @db.VarChar(50)
+  oldValue       String?  @map("old_value") @db.Text
+  newValue       String?  @map("new_value") @db.Text
+  changedBy      String   @map("changed_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  changer      User         @relation("SubscriptionChangeCreator", fields: [changedBy], references: [id])
+
+  @@map("subscription_changes")
+}
+
+// ─── Delivery Tables ─────────────────────────────────────────────────────────
+
+model DeliveryOrder {
+  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId       String              @map("customer_id") @db.Uuid
+  productVariantId String              @map("product_variant_id") @db.Uuid
+  subscriptionId   String?             @map("subscription_id") @db.Uuid
+  routeId          String?             @map("route_id") @db.Uuid
+  deliveryDate     DateTime            @map("delivery_date") @db.Date
+  quantity         Decimal             @db.Decimal(10, 3)
+  status           DeliveryOrderStatus @default(pending)
+  skipReason       String?             @map("skip_reason") @db.VarChar(50)
+  failureReason    String?             @map("failure_reason") @db.Text
+  returnedQuantity Decimal?            @map("returned_quantity") @db.Decimal(10, 3)
+  deliveryNotes    String?             @map("delivery_notes") @db.Text
+  deliveredBy      String?             @map("delivered_by") @db.Uuid
+  deliveredAt      DateTime?           @map("delivered_at") @db.Timestamptz
+  isAutoGenerated  Boolean             @default(true) @map("is_auto_generated")
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  customer       Customer         @relation(fields: [customerId], references: [id])
+  productVariant ProductVariant   @relation(fields: [productVariantId], references: [id])
+  subscription   Subscription?    @relation(fields: [subscriptionId], references: [id])
+  route          Route?           @relation(fields: [routeId], references: [id])
+  deliverer      User?            @relation("DeliveredBy", fields: [deliveredBy], references: [id])
+  invoiceLineItems InvoiceLineItem[]
+
+  @@unique([subscriptionId, deliveryDate], map: "idx_delivery_orders_unique")
+  @@index([deliveryDate], map: "idx_delivery_orders_date")
+  @@index([customerId, deliveryDate], map: "idx_delivery_orders_customer_date")
+  @@index([routeId, deliveryDate], map: "idx_delivery_orders_route_date")
+  @@map("delivery_orders")
+}
+
+enum DeliveryOrderStatus {
+  pending
+  delivered
+  skipped
+  failed
+  returned
+}
+
+// ─── Route Tables ────────────────────────────────────────────────────────────
+
+model Route {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  customers      Customer[]
+  routeCustomers RouteCustomer[]
+  routeAgents    RouteAgent[]
+  deliveryOrders DeliveryOrder[]
+  routeHolidays  RouteHoliday[]
+
+  @@map("routes")
+}
+
+model RouteCustomer {
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routeId       String @map("route_id") @db.Uuid
+  customerId    String @map("customer_id") @db.Uuid
+  sequenceOrder Int    @map("sequence_order")
+
+  // Relations
+  route    Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@unique([routeId, customerId], map: "uq_route_customers_route_customer")
+  @@unique([routeId, sequenceOrder], map: "uq_route_customers_route_sequence")
+  @@map("route_customers")
+}
+
+model RouteAgent {
+  id      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routeId String @map("route_id") @db.Uuid
+  userId  String @map("user_id") @db.Uuid
+
+  // Relations
+  route Route @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([routeId, userId], map: "uq_route_agents_route_user")
+  @@map("route_agents")
+}
+
+// ─── Billing Tables ──────────────────────────────────────────────────────────
+
+model Invoice {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId        String        @map("customer_id") @db.Uuid
+  billingCycleStart DateTime      @map("billing_cycle_start") @db.Date
+  billingCycleEnd   DateTime      @map("billing_cycle_end") @db.Date
+  version           Int           @default(1)
+  openingBalance    Decimal       @default(0) @map("opening_balance") @db.Decimal(12, 2)
+  totalCharges      Decimal       @default(0) @map("total_charges") @db.Decimal(12, 2)
+  totalDiscounts    Decimal       @default(0) @map("total_discounts") @db.Decimal(12, 2)
+  totalAdjustments  Decimal       @default(0) @map("total_adjustments") @db.Decimal(12, 2)
+  totalPayments     Decimal       @default(0) @map("total_payments") @db.Decimal(12, 2)
+  closingBalance    Decimal       @default(0) @map("closing_balance") @db.Decimal(12, 2)
+  paymentStatus     PaymentStatus @default(unpaid) @map("payment_status")
+  isCurrent         Boolean       @default(true) @map("is_current")
+  generatedAt       DateTime      @default(now()) @map("generated_at") @db.Timestamptz
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  customer    Customer            @relation(fields: [customerId], references: [id])
+  lineItems   InvoiceLineItem[]
+  adjustments InvoiceAdjustment[]
+  discounts   InvoiceDiscount[]
+  payments    Payment[]
+
+  @@map("invoices")
+}
+
+enum PaymentStatus {
+  unpaid
+  partial
+  paid
+}
+
+model InvoiceLineItem {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId        String   @map("invoice_id") @db.Uuid
+  deliveryOrderId  String   @map("delivery_order_id") @db.Uuid
+  productVariantId String   @map("product_variant_id") @db.Uuid
+  deliveryDate     DateTime @map("delivery_date") @db.Date
+  quantity         Decimal  @db.Decimal(10, 3)
+  unitPrice        Decimal  @map("unit_price") @db.Decimal(10, 2)
+  lineTotal        Decimal  @map("line_total") @db.Decimal(12, 2)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  invoice        Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  deliveryOrder  DeliveryOrder  @relation(fields: [deliveryOrderId], references: [id])
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+
+  @@map("invoice_line_items")
+}
+
+model InvoiceAdjustment {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId      String         @map("invoice_id") @db.Uuid
+  adjustmentType AdjustmentType @map("adjustment_type")
+  amount         Decimal        @db.Decimal(12, 2)
+  reason         String         @db.Text
+  createdBy      String         @map("created_by") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  creator User    @relation("AdjustmentCreator", fields: [createdBy], references: [id])
+
+  @@map("invoice_adjustments")
+}
+
+enum AdjustmentType {
+  credit
+  debit
+}
+
+model InvoiceDiscount {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId    String       @map("invoice_id") @db.Uuid
+  discountType DiscountType @map("discount_type")
+  value        Decimal      @db.Decimal(10, 2)
+  amount       Decimal      @db.Decimal(12, 2)
+  description  String?      @db.Text
+  createdBy    String       @map("created_by") @db.Uuid
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  creator User    @relation("DiscountCreator", fields: [createdBy], references: [id])
+
+  @@map("invoice_discounts")
+}
+
+enum DiscountType {
+  percentage
+  fixed
+}
+
+// ─── Payment Tables ──────────────────────────────────────────────────────────
+
+model Payment {
+  id                       String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId               String        @map("customer_id") @db.Uuid
+  invoiceId                String?       @map("invoice_id") @db.Uuid
+  amount                   Decimal       @db.Decimal(12, 2)
+  paymentMethod            PaymentMethod @map("payment_method")
+  paymentMethodDescription String?       @map("payment_method_description") @db.Text
+  paymentDate              DateTime      @map("payment_date") @db.Date
+  collectedBy              String?       @map("collected_by") @db.Uuid
+  isFieldCollection        Boolean       @default(false) @map("is_field_collection")
+  recordedBy               String        @map("recorded_by") @db.Uuid
+  createdAt                DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  customer  Customer @relation(fields: [customerId], references: [id])
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+  collector User?    @relation("CollectedBy", fields: [collectedBy], references: [id])
+  recorder  User     @relation("RecordedBy", fields: [recordedBy], references: [id])
+
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  cash
+  upi
+  bank_transfer
+  card
+  other
+}
+
+// ─── Ledger Table ────────────────────────────────────────────────────────────
+
+model LedgerEntry {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId      String          @map("customer_id") @db.Uuid
+  entryDate       DateTime        @map("entry_date") @db.Date
+  transactionType TransactionType @map("transaction_type")
+  referenceType   String?         @map("reference_type") @db.VarChar(20)
+  referenceId     String?         @map("reference_id") @db.Uuid
+  debitAmount     Decimal         @default(0) @map("debit_amount") @db.Decimal(12, 2)
+  creditAmount    Decimal         @default(0) @map("credit_amount") @db.Decimal(12, 2)
+  runningBalance  Decimal         @map("running_balance") @db.Decimal(12, 2)
+  description     String?         @db.Text
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, entryDate], map: "idx_ledger_customer_date")
+  @@map("ledger_entries")
+}
+
+enum TransactionType {
+  charge
+  payment
+  adjustment
+  credit_applied
+}
+
+// ─── Holiday and System Tables ───────────────────────────────────────────────
+
+model Holiday {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  holidayDate  DateTime @map("holiday_date") @db.Date
+  description  String?  @db.VarChar(255)
+  isSystemWide Boolean  @default(true) @map("is_system_wide")
+  createdBy    String   @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  creator User @relation("HolidayCreator", fields: [createdBy], references: [id])
+
+  @@map("holidays")
+}
+
+model RouteHoliday {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routeId     String   @map("route_id") @db.Uuid
+  holidayDate DateTime @map("holiday_date") @db.Date
+  description String?  @db.VarChar(255)
+  createdBy   String   @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  route   Route @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  creator User  @relation("RouteHolidayCreator", fields: [createdBy], references: [id])
+
+  @@unique([routeId, holidayDate], map: "uq_route_holidays_route_date")
+  @@map("route_holidays")
+}
+
+model AuditLog {
+  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String     @map("user_id") @db.Uuid
+  userRole   String     @map("user_role") @db.VarChar(50)
+  actionType ActionType @map("action_type")
+  entityType String     @map("entity_type") @db.VarChar(50)
+  entityId   String     @map("entity_id") @db.Uuid
+  changes    Json?      @db.JsonB
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId], map: "idx_audit_logs_entity")
+  @@index([userId], map: "idx_audit_logs_user")
+  @@index([createdAt], map: "idx_audit_logs_created")
+  @@map("audit_logs")
+}
+
+enum ActionType {
+  create
+  update
+  delete
+}
+
+model Notification {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  title     String   @db.VarChar(255)
+  body      String   @db.Text
+  eventType String   @map("event_type") @db.VarChar(50)
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead, createdAt(sort: Desc)], map: "idx_notifications_user")
+  @@map("notifications")
+}
+
+model SystemSetting {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key         String   @unique @db.VarChar(100)
+  value       Json     @db.JsonB
+  description String?  @db.Text
+  updatedBy   String?  @map("updated_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  updater User? @relation("SettingUpdater", fields: [updatedBy], references: [id])
+
+  @@map("system_settings")
+}
+
+model JobExecution {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobName          String         @map("job_name") @db.VarChar(100)
+  startedAt        DateTime       @map("started_at") @db.Timestamptz
+  completedAt      DateTime?      @map("completed_at") @db.Timestamptz
+  status           JobStatus
+  recordsProcessed Int            @default(0) @map("records_processed")
+  errorMessage     String?        @map("error_message") @db.Text
+  triggeredBy      JobTriggerType @map("triggered_by")
+  userId           String?        @map("user_id") @db.Uuid
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  user User? @relation("JobUser", fields: [userId], references: [id])
+
+  @@map("job_executions")
+}
+
+enum JobStatus {
+  running
+  success
+  failure
+}
+
+enum JobTriggerType {
+  scheduler
+  manual
+}
+
+// ─── Inventory Tables (Post-MVP) ─────────────────────────────────────────────
+
+model InwardStock {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productVariantId String   @map("product_variant_id") @db.Uuid
+  quantity         Decimal  @db.Decimal(10, 3)
+  stockDate        DateTime @map("stock_date") @db.Date
+  supplierName     String   @map("supplier_name") @db.VarChar(255)
+  recordedBy       String   @map("recorded_by") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+  recorder       User           @relation("InwardStockRecorder", fields: [recordedBy], references: [id])
+
+  @@index([productVariantId, stockDate], map: "idx_inward_stock_variant_date")
+  @@map("inward_stock")
+}
+
+model Wastage {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productVariantId String   @map("product_variant_id") @db.Uuid
+  quantity         Decimal  @db.Decimal(10, 3)
+  wastageDate      DateTime @map("wastage_date") @db.Date
+  reason           String   @db.Text
+  recordedBy       String   @map("recorded_by") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+  recorder       User           @relation("WastageRecorder", fields: [recordedBy], references: [id])
+
+  @@index([productVariantId, wastageDate], map: "idx_wastage_variant_date")
+  @@map("wastage")
+}
