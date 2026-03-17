@@ -4,6 +4,82 @@ import type { UpdateDeliveryStatusInput } from './delivery.types.js';
 import type { Prisma } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
+// Get flat manifest for the delivery page (used by both agents and admins).
+// Admins see all orders for the date; agents see only their assigned routes.
+// Returns { data: ManifestItem[] } matching the client's expected format.
+// ---------------------------------------------------------------------------
+export async function getManifestFlat(userId: string, date: string, isAdmin: boolean) {
+  const deliveryDate = new Date(date + 'T00:00:00.000Z');
+
+  const where: Prisma.DeliveryOrderWhereInput = { deliveryDate };
+
+  if (!isAdmin) {
+    // Filter by routes assigned to this agent
+    const routeAgents = await prisma.routeAgent.findMany({
+      where: { userId },
+      select: { routeId: true },
+    });
+    const routeIds = routeAgents.map((ra) => ra.routeId);
+    if (routeIds.length === 0) {
+      return { data: [] };
+    }
+    where.routeId = { in: routeIds };
+  }
+
+  const orders = await prisma.deliveryOrder.findMany({
+    where,
+    orderBy: [{ route: { name: 'asc' } }, { createdAt: 'asc' }],
+    include: {
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          deliveryNotes: true,
+          addresses: { where: { isPrimary: true }, take: 1 },
+        },
+      },
+      productVariant: {
+        include: { product: { select: { id: true, name: true } } },
+      },
+      route: { select: { id: true, name: true } },
+    },
+  });
+
+  const data = orders.map((o, idx) => ({
+    id: o.id,
+    customer: {
+      id: o.customer.id,
+      name: o.customer.name,
+      phone: o.customer.phone,
+      deliveryNotes: o.customer.deliveryNotes,
+    },
+    customerAddress: o.customer.addresses[0]
+      ? {
+          addressLine1: o.customer.addresses[0].addressLine1,
+          addressLine2: o.customer.addresses[0].addressLine2,
+          city: o.customer.addresses[0].city,
+        }
+      : undefined,
+    productVariant: {
+      id: o.productVariant.id,
+      product: { name: o.productVariant.product.name },
+      unitType: o.productVariant.unitType,
+      quantityPerUnit: o.productVariant.quantityPerUnit,
+    },
+    quantity: Number(o.quantity),
+    status: o.status,
+    skipReason: o.skipReason,
+    failureReason: o.failureReason,
+    returnedQuantity: o.returnedQuantity ? Number(o.returnedQuantity) : undefined,
+    deliveryNotes: o.deliveryNotes,
+    sequenceOrder: idx + 1,
+  }));
+
+  return { data };
+}
+
+// ---------------------------------------------------------------------------
 // Get agent's manifest for a date (Req 7.1, 7.2)
 // Returns delivery orders ordered by route sequence for routes assigned to
 // the given agent.

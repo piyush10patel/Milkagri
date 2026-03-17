@@ -31,7 +31,7 @@ router.get(
 // PATCH /delivery/orders/:id/status
 router.patch(
   '/orders/:id/status',
-  authorize(['delivery_agent']),
+  authorize(deliveryAgentPlus),
   csrfProtection,
   validate({ params: uuidParamSchema, body: updateDeliveryStatusSchema }),
   controller.updateStatus,
@@ -40,7 +40,7 @@ router.patch(
 // PATCH /delivery/orders/:id/notes
 router.patch(
   '/orders/:id/notes',
-  authorize(['delivery_agent']),
+  authorize(deliveryAgentPlus),
   csrfProtection,
   validate({ params: uuidParamSchema, body: updateDeliveryNotesSchema }),
   controller.updateNotes,

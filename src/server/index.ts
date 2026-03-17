@@ -155,6 +155,25 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/inventory', inventoryRoutes);
 
+// Duplicate under /api/v1 so client calls with v1 prefix work
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/users', usersRoutes);
+app.use('/api/v1/audit-logs', auditRoutes);
+app.use('/api/v1/customers', customersRoutes);
+app.use('/api/v1/products', productsRoutes);
+app.use('/api/v1/subscriptions', subscriptionsRoutes);
+app.use('/api/v1/holidays', holidaysRoutes);
+app.use('/api/v1/orders', ordersRoutes);
+app.use('/api/v1/routes', routesRoutes);
+app.use('/api/v1/delivery', deliveryRoutes);
+app.use('/api/v1/billing', billingRoutes);
+app.use('/api/v1/payments', paymentsRoutes);
+app.use('/api/v1/customers', ledgerRoutes);
+app.use('/api/v1/reports', reportsRoutes);
+app.use('/api/v1/notifications', notificationsRoutes);
+app.use('/api/v1/settings', settingsRoutes);
+app.use('/api/v1/inventory', inventoryRoutes);
+
 // ---------------------------------------------------------------------------
 // Error handler — must be last
 // ---------------------------------------------------------------------------

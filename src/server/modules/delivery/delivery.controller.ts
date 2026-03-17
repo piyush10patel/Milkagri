@@ -12,12 +12,16 @@ function sessionUserId(req: Request): string {
 
 // ---------------------------------------------------------------------------
 // GET /delivery/manifest?date=YYYY-MM-DD
+// Returns a flat list of delivery items for the manifest page.
+// Admins see all orders; delivery agents see only their assigned routes.
 // ---------------------------------------------------------------------------
 export async function manifest(req: Request, res: Response, next: NextFunction) {
   try {
     const date = req.query.date as string;
-    const agentId = sessionUserId(req);
-    const result = await deliveryService.getAgentManifest(agentId, date);
+    const userId = sessionUserId(req);
+    const role = (req.session as any)?.userRole ?? '';
+    const isAdmin = ['super_admin', 'admin'].includes(role);
+    const result = await deliveryService.getManifestFlat(userId, date, isAdmin);
     res.json(result);
   } catch (err) {
     next(err);

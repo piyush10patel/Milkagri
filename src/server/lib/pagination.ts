@@ -13,11 +13,13 @@ export interface PaginationParams {
 }
 
 export interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
+  data: T[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }
 
 const DEFAULT_PAGE = 1;
@@ -49,17 +51,20 @@ export function parsePagination(
 
 /**
  * Build a standardised paginated response envelope.
+ * Returns { data, pagination } format expected by the client.
  */
 export function paginatedResponse<T>(
   items: T[],
   total: number,
   params: PaginationParams,
-): PaginatedResponse<T> {
+): { data: T[]; pagination: { page: number; limit: number; total: number; totalPages: number } } {
   return {
-    items,
-    total,
-    page: params.page,
-    limit: params.limit,
-    totalPages: Math.ceil(total / params.limit) || 0,
+    data: items,
+    pagination: {
+      page: params.page,
+      limit: params.limit,
+      total,
+      totalPages: Math.ceil(total / params.limit) || 0,
+    },
   };
 }

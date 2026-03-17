@@ -1,7 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { parsePagination, paginatedResponse } from '../../lib/pagination.js';
 import * as ordersService from './orders.service.js';
-import { triggerManualGeneration } from '../../jobs/index.js';
 
 function param(req: Request, name: string): string {
   const val = req.params[name];
@@ -106,14 +105,14 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
 }
 
 // ---------------------------------------------------------------------------
-// POST /orders/generate (manual trigger)
+// POST /orders/generate (manual trigger — runs synchronously)
 // ---------------------------------------------------------------------------
 export async function generate(req: Request, res: Response, next: NextFunction) {
   try {
     const targetDate = req.body.targetDate as string;
-    const userId = sessionUserId(req);
-    const jobId = await triggerManualGeneration(targetDate, userId);
-    res.json({ message: 'Order generation job enqueued', jobId, targetDate });
+    const date = new Date(targetDate + 'T00:00:00.000Z');
+    const summary = await ordersService.generateOrdersForDate(date);
+    res.json({ message: 'Order generation complete', targetDate, ...summary });
   } catch (err) {
     next(err);
   }

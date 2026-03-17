@@ -56,29 +56,31 @@ describe('paginatedResponse', () => {
     const result = paginatedResponse(['a', 'b', 'c'], 25, params);
 
     expect(result).toEqual({
-      items: ['a', 'b', 'c'],
-      total: 25,
-      page: 1,
-      limit: 10,
-      totalPages: 3,
+      data: ['a', 'b', 'c'],
+      pagination: {
+        total: 25,
+        page: 1,
+        limit: 10,
+        totalPages: 3,
+      },
     });
   });
 
   it('calculates totalPages correctly for exact division', () => {
     const params = parsePagination('1', '5');
     const result = paginatedResponse([], 20, params);
-    expect(result.totalPages).toBe(4);
+    expect(result.pagination.totalPages).toBe(4);
   });
 
   it('returns 0 totalPages when total is 0', () => {
     const params = parsePagination('1', '10');
     const result = paginatedResponse([], 0, params);
-    expect(result.totalPages).toBe(0);
+    expect(result.pagination.totalPages).toBe(0);
   });
 
   it('rounds up totalPages for partial last page', () => {
     const params = parsePagination('1', '10');
     const result = paginatedResponse([], 11, params);
-    expect(result.totalPages).toBe(2);
+    expect(result.pagination.totalPages).toBe(2);
   });
 });

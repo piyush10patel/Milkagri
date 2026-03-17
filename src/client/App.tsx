@@ -20,7 +20,13 @@ import OutstandingPage from '@/pages/payments/OutstandingPage';
 import PaymentFormPage from '@/pages/payments/PaymentFormPage';
 import CustomerLedgerPage from '@/pages/ledger/CustomerLedgerPage';
 import ReportsDashboardPage from '@/pages/reports/ReportsDashboardPage';
-import ReportPage from '@/pages/reports/ReportPage';
+import DailyDeliveryReportPage from '@/pages/reports/DailyDeliveryReportPage';
+import RouteDeliveryReportPage from '@/pages/reports/RouteDeliveryReportPage';
+import OutstandingReportPage from '@/pages/reports/OutstandingReportPage';
+import RevenueReportPage from '@/pages/reports/RevenueReportPage';
+import ProductSalesReportPage from '@/pages/reports/ProductSalesReportPage';
+import MissedDeliveriesReportPage from '@/pages/reports/MissedDeliveriesReportPage';
+import SubscriptionChangesReportPage from '@/pages/reports/SubscriptionChangesReportPage';
 import InventoryPage from '@/pages/inventory/InventoryPage';
 import UserListPage from '@/pages/users/UserListPage';
 import UserFormPage from '@/pages/users/UserFormPage';
@@ -78,7 +84,13 @@ export default function App() {
           <Route path="payments/:id/edit" element={<PaymentFormPage />} />
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="reports" element={<ReportsDashboardPage />} />
-          <Route path="reports/:reportType" element={<ReportPage />} />
+          <Route path="reports/daily-delivery" element={<DailyDeliveryReportPage />} />
+          <Route path="reports/route-delivery" element={<RouteDeliveryReportPage />} />
+          <Route path="reports/outstanding" element={<OutstandingReportPage />} />
+          <Route path="reports/revenue" element={<RevenueReportPage />} />
+          <Route path="reports/product-sales" element={<ProductSalesReportPage />} />
+          <Route path="reports/missed-deliveries" element={<MissedDeliveriesReportPage />} />
+          <Route path="reports/subscription-changes" element={<SubscriptionChangesReportPage />} />
           <Route path="users" element={<UserListPage />} />
           <Route path="users/new" element={<UserFormPage />} />
           <Route path="users/:id/edit" element={<UserFormPage />} />

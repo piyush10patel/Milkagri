@@ -104,7 +104,7 @@ export default function DailyOperationsPage() {
   });
 
   const generateMutation = useMutation({
-    mutationFn: () => api.post('/api/v1/orders/generate', { date }),
+    mutationFn: () => api.post('/api/v1/orders/generate', { targetDate: date }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['orders-summary'] });

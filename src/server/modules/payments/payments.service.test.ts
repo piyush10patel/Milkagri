@@ -384,15 +384,15 @@ describe('getOutstandingSummary', () => {
 
     const result = await getOutstandingSummary({});
 
-    expect(result.items).toHaveLength(2);
+    expect(result.data).toHaveLength(2);
 
     // Default sort: by outstanding desc → cust-1 (500) first, cust-2 (150) second
-    const first = result.items[0];
+    const first = result.data[0];
     expect(first.customer.id).toBe('cust-1');
     expect(first.totalOutstanding.eq(new Prisma.Decimal('500'))).toBe(true);
     expect(first.invoiceCount).toBe(2);
 
-    const second = result.items[1];
+    const second = result.data[1];
     expect(second.customer.id).toBe('cust-2');
     expect(second.totalOutstanding.eq(new Prisma.Decimal('150'))).toBe(true);
     expect(second.invoiceCount).toBe(1);
