@@ -76,9 +76,9 @@ export default function InvoiceDetailPage() {
   const [adjForm, setAdjForm] = useState({ adjustmentType: 'credit', amount: '', reason: '' });
   const [discForm, setDiscForm] = useState({ discountType: 'fixed', value: '', description: '' });
 
-  const { data: invoiceData, isLoading } = useQuery({
+  const { data: inv, isLoading } = useQuery({
     queryKey: ['invoice', id],
-    queryFn: () => api.get<{ data: InvoiceDetail }>(`/api/v1/billing/invoices/${id}`),
+    queryFn: () => api.get<InvoiceDetail>(`/api/v1/billing/invoices/${id}`),
   });
 
   const adjustmentMutation = useMutation({
@@ -107,7 +107,6 @@ export default function InvoiceDetailPage() {
   });
 
   if (isLoading) return <p className="text-sm text-gray-500">Loading…</p>;
-  const inv = invoiceData?.data;
   if (!inv) return <p className="text-sm text-red-600">Invoice not found</p>;
 
   const isBillingStaff = user?.role === 'billing_staff' || user?.role === 'super_admin' || user?.role === 'admin';

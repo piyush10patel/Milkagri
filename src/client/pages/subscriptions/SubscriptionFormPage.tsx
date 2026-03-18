@@ -5,8 +5,17 @@ import { api, type ApiError } from '@/lib/api';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-interface CustomerOption { id: string; name: string; phone: string; }
+interface CustomerOption { id: string; name: string; phone: string; pricingCategory?: 'cat_1' | 'cat_2' | 'cat_3'; }
 interface VariantOption { id: string; product: { id: string; name: string }; unitType: string; quantityPerUnit: number; }
+interface PricingRow {
+  id: string;
+  latestPrices: {
+    default: { price: number; effectiveDate: string } | null;
+    cat_1: { price: number; effectiveDate: string } | null;
+    cat_2: { price: number; effectiveDate: string } | null;
+    cat_3: { price: number; effectiveDate: string } | null;
+  };
+}
 
 export default function SubscriptionFormPage() {
   const { id } = useParams();
@@ -33,6 +42,11 @@ export default function SubscriptionFormPage() {
     queryFn: () => api.get<{ data: Array<{ id: string; name: string; variants: VariantOption[] }> }>('/api/v1/products?limit=200'),
   });
 
+  const { data: pricingData } = useQuery({
+    queryKey: ['pricing-matrix'],
+    queryFn: () => api.get<{ data: PricingRow[] }>('/api/v1/products/pricing-matrix'),
+  });
+
   useEffect(() => {
     if (existing?.data) {
       const s = existing.data;
@@ -47,6 +61,14 @@ export default function SubscriptionFormPage() {
       variantOptions.push({ id: v.id, label: `${p.name} - ${v.quantityPerUnit} ${v.unitType}` });
     });
   });
+
+  const selectedCustomer = customersData?.data?.find((customer) => customer.id === form.customerId);
+  const selectedPricing = pricingData?.data?.find((variant) => variant.id === form.productVariantId);
+  const appliedCategory = selectedCustomer?.pricingCategory ?? 'cat_1';
+  const appliedPrice =
+    selectedPricing?.latestPrices?.[appliedCategory] ??
+    selectedPricing?.latestPrices?.default ??
+    null;
 
   const mutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
@@ -106,6 +128,22 @@ export default function SubscriptionFormPage() {
               </select>
               {errors.productVariantId && <p className="text-xs text-red-600 mt-1">{errors.productVariantId}</p>}
             </div>
+            {form.customerId && form.productVariantId && (
+              <div className="rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-sm">
+                <p className="font-medium text-blue-900">
+                  Customer pricing category: {(appliedCategory ?? 'cat_1').replace('_', ' ').toUpperCase()}
+                </p>
+                <p className="text-blue-800">
+                  Applied billing price:{' '}
+                  {appliedPrice ? `₹${Number(appliedPrice.price).toFixed(2)} (effective ${appliedPrice.effectiveDate})` : 'Not set'}
+                </p>
+                {!appliedPrice && (
+                  <p className="text-xs text-red-700 mt-1">
+                    No active price found for this variant and category. Add it on the Pricing page before saving.
+                  </p>
+                )}
+              </div>
+            )}
             <div>
               <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
               <input id="startDate" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className={fieldClass('startDate')} required />

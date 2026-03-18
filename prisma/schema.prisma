@@ -62,6 +62,8 @@ model Customer {
   status                 CustomerStatus @default(active)
   deliveryNotes          String?        @map("delivery_notes") @db.Text
   preferredDeliveryWindow String?       @map("preferred_delivery_window") @db.VarChar(50)
+  pricingCategory        PricingCategory @default(cat_1) @map("pricing_category")
+  billingFrequency       BillingFrequency @default(monthly) @map("billing_frequency")
   routeId                String?        @map("route_id") @db.Uuid
   createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt              DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
@@ -83,6 +85,20 @@ enum CustomerStatus {
   active
   paused
   stopped
+}
+
+enum PricingCategory {
+  cat_1
+  cat_2
+  cat_3
+}
+
+enum BillingFrequency {
+  daily
+  every_2_days
+  weekly
+  every_10_days
+  monthly
 }
 
 model CustomerAddress {
@@ -153,18 +169,19 @@ enum UnitType {
 }
 
 model ProductPrice {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  productVariantId String   @map("product_variant_id") @db.Uuid
-  price            Decimal  @db.Decimal(10, 2)
-  effectiveDate    DateTime @map("effective_date") @db.Date
-  branch           String?  @db.VarChar(100)
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productVariantId String           @map("product_variant_id") @db.Uuid
+  price            Decimal          @db.Decimal(10, 2)
+  effectiveDate    DateTime         @map("effective_date") @db.Date
+  branch           String?          @db.VarChar(100)
+  pricingCategory  PricingCategory? @map("pricing_category")
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz
 
   // Relations
   productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
 
-  @@unique([productVariantId, effectiveDate, branch], map: "uq_product_prices_variant_date_branch")
-  @@index([productVariantId, effectiveDate(sort: Desc)], map: "idx_product_prices_lookup")
+  @@unique([productVariantId, effectiveDate, branch, pricingCategory], map: "uq_product_prices_variant_date_branch_category")
+  @@index([productVariantId, effectiveDate(sort: Desc), pricingCategory], map: "idx_product_prices_lookup")
   @@map("product_prices")
 }
 

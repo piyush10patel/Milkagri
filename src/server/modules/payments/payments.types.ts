@@ -50,3 +50,15 @@ export const outstandingQuerySchema = z.object({
 });
 
 export type OutstandingQuery = z.infer<typeof outstandingQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// GET /payments (history listing)
+// ---------------------------------------------------------------------------
+export const listPaymentsQuerySchema = z.object({
+  customerId: z.string().uuid().optional(),
+  invoiceId: z.string().uuid().optional(),
+  page: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().positive().max(100).optional(),
+});
+
+export type ListPaymentsQuery = z.infer<typeof listPaymentsQuerySchema>;

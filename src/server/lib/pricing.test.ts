@@ -30,12 +30,20 @@ function dateFromOffset(offset: number): Date {
 
 /** Simulate what Prisma's findFirst with orderBy effectiveDate desc + lte filter does. */
 function findMostRecentPrice(
-  prices: { effectiveDate: Date; price: number; branch: string | null }[],
+  prices: { effectiveDate: Date; price: number; branch: string | null; pricingCategory?: string | null }[],
   targetDate: Date,
   branch: string | null,
+  pricingCategory?: string | null,
 ) {
   return prices
-    .filter((p) => p.branch === branch && p.effectiveDate <= targetDate)
+    .filter((p) => {
+      if (p.branch !== branch) return false;
+      if (p.effectiveDate > targetDate) return false;
+      // Match pricingCategory: undefined means "not filtered", null means "must be null"
+      const pCat = p.pricingCategory ?? null;
+      const filterCat = pricingCategory ?? null;
+      return pCat === filterCat;
+    })
     .sort((a, b) => b.effectiveDate.getTime() - a.effectiveDate.getTime())[0] ?? null;
 }
 
@@ -46,11 +54,12 @@ const VARIANT_ID = 'variant-1';
 // ---------------------------------------------------------------------------
 
 /** Generate a price entry with an effective date offset and a positive price. */
-const priceEntryArb = (branch: string | null) =>
+const priceEntryArb = (branch: string | null, pricingCategory?: string | null) =>
   fc.record({
     effectiveDate: fc.integer({ min: 0, max: 3650 }).map(dateFromOffset),
     price: fc.integer({ min: 1, max: 100000 }).map((n) => n / 100),
     branch: fc.constant(branch),
+    pricingCategory: fc.constant(pricingCategory ?? null),
   });
 
 /** Generate a non-empty array of default price entries. */
@@ -75,7 +84,8 @@ describe('Property 1: Most recent effective price is selected', () => {
         // Configure mock to simulate Prisma behavior
         mockFindFirst.mockImplementation(async (args: any) => {
           const branchFilter = args.where.branch;
-          return findMostRecentPrice(prices, targetDate, branchFilter ?? null);
+          const catFilter = args.where.pricingCategory;
+          return findMostRecentPrice(prices, targetDate, branchFilter ?? null, catFilter ?? null);
         });
 
         return getEffectivePrice(VARIANT_ID, targetDate).then(
@@ -116,7 +126,8 @@ describe('Property 2: Future prices are never applied early', () => {
       fc.asyncProperty(defaultPriceHistoryArb, targetDateArb, async (prices, targetDate) => {
         mockFindFirst.mockImplementation(async (args: any) => {
           const branchFilter = args.where.branch;
-          return findMostRecentPrice(prices, targetDate, branchFilter ?? null);
+          const catFilter = args.where.pricingCategory;
+          return findMostRecentPrice(prices, targetDate, branchFilter ?? null, catFilter ?? null);
         });
 
         return getEffectivePrice(VARIANT_ID, targetDate).then(
@@ -163,7 +174,8 @@ describe('Property 3: Branch override takes precedence', () => {
 
           mockFindFirst.mockImplementation(async (args: any) => {
             const branchFilter = args.where.branch;
-            return findMostRecentPrice(allPrices, targetDate, branchFilter ?? null);
+            const catFilter = args.where.pricingCategory;
+            return findMostRecentPrice(allPrices, targetDate, branchFilter ?? null, catFilter ?? null);
           });
 
           return getEffectivePrice(VARIANT_ID, targetDate, 'branch-A').then(

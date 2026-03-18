@@ -61,3 +61,24 @@ function makeSub(o: {
     productVariant: { id: o.productVariantId ?? 'variant-1', product: { name: 'Milk' } },
   };
 }
+
+
+describe('orders.service', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupDefaultMocks();
+  });
+
+  it('should generate orders for active daily subscriptions', async () => {
+    const targetDate = new Date(2020, 0, 15);
+    const sub = makeSub({ frequencyType: 'daily', customerStatus: 'active' });
+    mockFindMany.mockResolvedValue([sub]);
+    mockIsSystemHoliday.mockResolvedValue(false);
+    mockIsRouteHoliday.mockResolvedValue(false);
+
+    const result = await generateOrdersForDate(targetDate);
+
+    expect(mockCreate).toHaveBeenCalled();
+    expect(result).toBeDefined();
+  });
+});

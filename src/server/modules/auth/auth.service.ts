@@ -16,8 +16,15 @@ export interface AuthenticatedUser {
   isActive: boolean;
 }
 
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 export async function verifyCredentials(email: string, password: string): Promise<AuthenticatedUser> {
-  const user = await prisma.user.findUnique({ where: { email } });
+  const normalizedEmail = normalizeEmail(email);
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+  });
 
   // Don't reveal whether email or password is wrong
   if (!user || !user.isActive) {

@@ -6,6 +6,7 @@ import type {
   RecordPaymentInput,
   RecordCollectionInput,
   OutstandingQuery,
+  ListPaymentsQuery,
 } from './payments.types.js';
 import { createLedgerEntry } from '../ledger/ledger.service.js';
 
@@ -266,4 +267,40 @@ export async function getOutstandingSummary(query: OutstandingQuery) {
   const paged = items.slice(pagination.skip, pagination.skip + pagination.take);
 
   return paginatedResponse(paged, total, pagination);
+}
+
+// ---------------------------------------------------------------------------
+// Payment history
+// ---------------------------------------------------------------------------
+export async function listPayments(query: ListPaymentsQuery) {
+  const { page, limit, customerId, invoiceId } = query;
+  const pagination = parsePagination(page, limit);
+
+  const where: Prisma.PaymentWhereInput = {};
+  if (customerId) where.customerId = customerId;
+  if (invoiceId) where.invoiceId = invoiceId;
+
+  const [items, total] = await Promise.all([
+    prisma.payment.findMany({
+      where,
+      include: {
+        customer: { select: { id: true, name: true, phone: true } },
+        invoice: {
+          select: {
+            id: true,
+            billingCycleStart: true,
+            billingCycleEnd: true,
+          },
+        },
+        collector: { select: { id: true, name: true } },
+        recorder: { select: { id: true, name: true } },
+      },
+      orderBy: [{ paymentDate: 'desc' }, { createdAt: 'desc' }],
+      skip: pagination.skip,
+      take: pagination.take,
+    }),
+    prisma.payment.count({ where }),
+  ]);
+
+  return paginatedResponse(items, total, pagination);
 }

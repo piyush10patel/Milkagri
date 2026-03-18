@@ -5,6 +5,7 @@ import { parsePagination, paginatedResponse } from '../../lib/pagination.js';
 import { Prisma } from '@prisma/client';
 import type { ListInvoicesQuery, AddAdjustmentInput, AddDiscountInput } from './billing.types.js';
 import { createLedgerEntry } from '../ledger/ledger.service.js';
+import { getNextCycle, getCycleForDate, isCycleComplete } from '../../lib/billingCycle.js';
 
 // ---------------------------------------------------------------------------
 // Generate invoices for a billing cycle (Req 9.1, 9.2, 9.3, 9.4, 9.7, 9.8)
@@ -561,4 +562,202 @@ export async function addDiscount(invoiceId: string, input: AddDiscountInput, us
 
     return updated;
   });
+}
+
+// ---------------------------------------------------------------------------
+// Generate invoice for a single customer's billing cycle (Req 3.4, 5.1, 5.8)
+// ---------------------------------------------------------------------------
+export async function generateInvoiceForCustomer(
+  customerId: string,
+  cycleStart: Date,
+  cycleEnd: Date,
+) {
+  // Fetch customer with pricing category
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    select: { id: true, pricingCategory: true },
+  });
+  if (!customer) throw new NotFoundError('Customer not found');
+
+  // Query delivered orders for this customer within the cycle
+  const deliveredOrders = await prisma.deliveryOrder.findMany({
+    where: {
+      customerId,
+      status: 'delivered',
+      deliveryDate: { gte: cycleStart, lte: cycleEnd },
+    },
+    include: { productVariant: true },
+    orderBy: { deliveryDate: 'asc' },
+  });
+
+  // Get previous invoice closing balance as opening balance (Req 5.8)
+  const previousInvoice = await prisma.invoice.findFirst({
+    where: { customerId, isCurrent: true },
+    orderBy: { billingCycleEnd: 'desc' },
+  });
+
+  let openingBalance = new Prisma.Decimal(0);
+  if (previousInvoice && previousInvoice.billingCycleEnd < cycleStart) {
+    openingBalance = previousInvoice.closingBalance;
+  }
+
+  // Build line items using customer's pricing category for price resolution
+  const lineItems: {
+    deliveryOrderId: string;
+    productVariantId: string;
+    deliveryDate: Date;
+    quantity: Prisma.Decimal;
+    unitPrice: Prisma.Decimal;
+    lineTotal: Prisma.Decimal;
+  }[] = [];
+
+  let totalCharges = new Prisma.Decimal(0);
+
+  for (const order of deliveredOrders) {
+    const priceRecord = await getEffectivePrice(
+      order.productVariantId,
+      order.deliveryDate,
+      null,
+      customer.pricingCategory,
+    );
+
+    const qty = new Prisma.Decimal(order.quantity.toString());
+    const unitPrice = new Prisma.Decimal(priceRecord.price.toString());
+    const lineTotal = qty.mul(unitPrice);
+
+    lineItems.push({
+      deliveryOrderId: order.id,
+      productVariantId: order.productVariantId,
+      deliveryDate: order.deliveryDate,
+      quantity: qty,
+      unitPrice,
+      lineTotal,
+    });
+
+    totalCharges = totalCharges.add(lineTotal);
+  }
+
+  const totalDiscounts = new Prisma.Decimal(0);
+  const totalAdjustments = new Prisma.Decimal(0);
+  const totalPayments = new Prisma.Decimal(0);
+  const closingBalance = openingBalance
+    .add(totalCharges)
+    .sub(totalDiscounts)
+    .add(totalAdjustments)
+    .sub(totalPayments);
+
+  const paymentStatus = closingBalance.lte(0) ? 'paid' : 'unpaid';
+
+  const invoice = await prisma.$transaction(async (tx) => {
+    const inv = await tx.invoice.create({
+      data: {
+        customerId,
+        billingCycleStart: cycleStart,
+        billingCycleEnd: cycleEnd,
+        version: 1,
+        openingBalance,
+        totalCharges,
+        totalDiscounts,
+        totalAdjustments,
+        totalPayments,
+        closingBalance,
+        paymentStatus,
+        isCurrent: true,
+        generatedAt: new Date(),
+      },
+    });
+
+    if (lineItems.length > 0) {
+      await tx.invoiceLineItem.createMany({
+        data: lineItems.map((li) => ({
+          invoiceId: inv.id,
+          deliveryOrderId: li.deliveryOrderId,
+          productVariantId: li.productVariantId,
+          deliveryDate: li.deliveryDate,
+          quantity: li.quantity,
+          unitPrice: li.unitPrice,
+          lineTotal: li.lineTotal,
+        })),
+      });
+    }
+
+    if (totalCharges.gt(0)) {
+      const startStr = cycleStart.toISOString().slice(0, 10);
+      const endStr = cycleEnd.toISOString().slice(0, 10);
+      await createLedgerEntry(tx, {
+        customerId,
+        entryDate: cycleEnd,
+        transactionType: 'charge',
+        referenceType: 'invoice',
+        referenceId: inv.id,
+        debitAmount: totalCharges,
+        creditAmount: new Prisma.Decimal(0),
+        description: `Invoice charges for ${startStr} to ${endStr}`,
+      });
+    }
+
+    return inv;
+  });
+
+  return invoice;
+}
+
+// ---------------------------------------------------------------------------
+// Daily billing job — process all customers whose cycle has ended (Req 5.2, 6.2, 6.3, 6.4)
+// ---------------------------------------------------------------------------
+export async function runDailyBillingJob(today: Date = new Date()) {
+  const activeCustomers = await prisma.customer.findMany({
+    where: { status: 'active' },
+    select: { id: true, billingFrequency: true },
+  });
+
+  let invoicesCreated = 0;
+  const errors: { customerId: string; error: string }[] = [];
+
+  for (const customer of activeCustomers) {
+    try {
+      // Find the most recent invoice for this customer to determine next cycle
+      const lastInvoice = await prisma.invoice.findFirst({
+        where: { customerId: customer.id, isCurrent: true },
+        orderBy: { billingCycleEnd: 'desc' },
+        select: { billingCycleEnd: true, billingCycleStart: true },
+      });
+
+      let nextCycle;
+      if (lastInvoice) {
+        nextCycle = getNextCycle(customer.billingFrequency, lastInvoice.billingCycleEnd);
+      } else {
+        // No prior invoice — use the cycle containing today
+        nextCycle = getCycleForDate(customer.billingFrequency, today);
+      }
+
+      // Skip if cycle hasn't ended yet
+      if (!isCycleComplete(nextCycle, today)) continue;
+
+      // Skip if an invoice already covers this cycle
+      const existingInvoice = await prisma.invoice.findFirst({
+        where: {
+          customerId: customer.id,
+          isCurrent: true,
+          billingCycleStart: nextCycle.start,
+          billingCycleEnd: nextCycle.end,
+        },
+      });
+      if (existingInvoice) continue;
+
+      await generateInvoiceForCustomer(customer.id, nextCycle.start, nextCycle.end);
+      invoicesCreated++;
+    } catch (err) {
+      errors.push({
+        customerId: customer.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return {
+    customersProcessed: activeCustomers.length,
+    invoicesCreated,
+    errors,
+  };
 }

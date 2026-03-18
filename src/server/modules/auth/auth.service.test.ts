@@ -2,14 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import bcrypt from 'bcrypt';
 
 // Mock Prisma
-const mockFindUnique = vi.fn();
+const mockFindFirst = vi.fn();
 const mockFindMany = vi.fn();
 const mockUpdate = vi.fn();
 
 vi.mock('../../index.js', () => ({
   prisma: {
     user: {
-      findUnique: (...args: any[]) => mockFindUnique(...args),
+      findFirst: (...args: any[]) => mockFindFirst(...args),
+      findUnique: vi.fn(),
       findMany: (...args: any[]) => mockFindMany(...args),
       update: (...args: any[]) => mockUpdate(...args),
     },
@@ -47,7 +48,7 @@ describe('auth.service', () => {
   describe('verifyCredentials', () => {
     it('returns user on valid credentials', async () => {
       const hash = await bcrypt.hash('password123', 10);
-      mockFindUnique.mockResolvedValue(makeUser({ passwordHash: hash }));
+      mockFindFirst.mockResolvedValue(makeUser({ passwordHash: hash }));
       mockUpdate.mockResolvedValue({});
 
       const result = await verifyCredentials('admin@test.com', 'password123');
@@ -58,7 +59,7 @@ describe('auth.service', () => {
     });
 
     it('throws on invalid email (user not found)', async () => {
-      mockFindUnique.mockResolvedValue(null);
+      mockFindFirst.mockResolvedValue(null);
 
       await expect(verifyCredentials('nobody@test.com', 'pass'))
         .rejects.toThrow('Invalid credentials');
@@ -66,7 +67,7 @@ describe('auth.service', () => {
 
     it('throws on wrong password and increments failed attempts', async () => {
       const hash = await bcrypt.hash('correct', 10);
-      mockFindUnique.mockResolvedValue(makeUser({ passwordHash: hash }));
+      mockFindFirst.mockResolvedValue(makeUser({ passwordHash: hash }));
       mockUpdate.mockResolvedValue({});
 
       await expect(verifyCredentials('admin@test.com', 'wrong'))
@@ -82,7 +83,7 @@ describe('auth.service', () => {
 
     it('locks account after 5 failed attempts', async () => {
       const hash = await bcrypt.hash('correct', 10);
-      mockFindUnique.mockResolvedValue(
+      mockFindFirst.mockResolvedValue(
         makeUser({ passwordHash: hash, failedLoginAttempts: 4 }),
       );
       mockUpdate.mockResolvedValue({});
@@ -103,7 +104,7 @@ describe('auth.service', () => {
     it('rejects login when account is locked', async () => {
       const hash = await bcrypt.hash('password123', 10);
       const futureDate = new Date(Date.now() + 30 * 60 * 1000);
-      mockFindUnique.mockResolvedValue(
+      mockFindFirst.mockResolvedValue(
         makeUser({ passwordHash: hash, lockedUntil: futureDate }),
       );
 
@@ -112,7 +113,7 @@ describe('auth.service', () => {
     });
 
     it('rejects login for inactive user', async () => {
-      mockFindUnique.mockResolvedValue(makeUser({ isActive: false }));
+      mockFindFirst.mockResolvedValue(makeUser({ isActive: false }));
 
       await expect(verifyCredentials('admin@test.com', 'password123'))
         .rejects.toThrow('Invalid credentials');
@@ -120,7 +121,7 @@ describe('auth.service', () => {
 
     it('resets failed attempts on successful login', async () => {
       const hash = await bcrypt.hash('password123', 10);
-      mockFindUnique.mockResolvedValue(
+      mockFindFirst.mockResolvedValue(
         makeUser({ passwordHash: hash, failedLoginAttempts: 3 }),
       );
       mockUpdate.mockResolvedValue({});
@@ -136,6 +137,23 @@ describe('auth.service', () => {
         }),
       );
     });
+  });
+
+  it('matches email case-insensitively', async () => {
+    const hash = await bcrypt.hash('password123', 10);
+    mockFindFirst.mockResolvedValue(makeUser({ email: 'manager@milkdelivery.local', passwordHash: hash }));
+    mockUpdate.mockResolvedValue({});
+
+    const result = await verifyCredentials('Manager@MilkDelivery.Local', 'password123');
+
+    expect(result.email).toBe('manager@milkdelivery.local');
+    expect(mockFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          email: { equals: 'manager@milkdelivery.local', mode: 'insensitive' },
+        },
+      }),
+    );
   });
 
   describe('hashPassword', () => {

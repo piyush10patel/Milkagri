@@ -2,8 +2,8 @@ import { Queue, Worker } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
 import processDailyOrderGeneration from './dailyOrderGeneration.js';
 import type { DailyOrderGenerationData } from './dailyOrderGeneration.js';
-import processMonthlyInvoiceGeneration from './monthlyInvoiceGeneration.js';
-import type { MonthlyInvoiceGenerationData } from './monthlyInvoiceGeneration.js';
+import processDailyInvoiceGeneration from './dailyInvoiceGeneration.js';
+import type { DailyInvoiceGenerationData } from './dailyInvoiceGeneration.js';
 
 // ── Shared connection options (parsed from env to avoid circular import) ─
 function parseRedisConnection(): ConnectionOptions {
@@ -25,7 +25,7 @@ const connection: ConnectionOptions = parseRedisConnection();
 
 // ── Queue names ─────────────────────────────────────────────────────────
 const DAILY_ORDER_QUEUE = 'daily-order-generation';
-const MONTHLY_INVOICE_QUEUE = 'monthly-invoice-generation';
+const DAILY_INVOICE_QUEUE = 'daily-invoice-generation';
 
 // ── Queues ──────────────────────────────────────────────────────────────
 export const dailyOrderQueue = new Queue<DailyOrderGenerationData>(
@@ -33,14 +33,14 @@ export const dailyOrderQueue = new Queue<DailyOrderGenerationData>(
   { connection },
 );
 
-export const monthlyInvoiceQueue = new Queue<MonthlyInvoiceGenerationData>(
-  MONTHLY_INVOICE_QUEUE,
+export const dailyInvoiceQueue = new Queue<DailyInvoiceGenerationData>(
+  DAILY_INVOICE_QUEUE,
   { connection },
 );
 
 // ── Worker ──────────────────────────────────────────────────────────────
 let worker: Worker<DailyOrderGenerationData> | null = null;
-let monthlyInvoiceWorker: Worker<MonthlyInvoiceGenerationData> | null = null;
+let dailyInvoiceWorker: Worker<DailyInvoiceGenerationData> | null = null;
 
 /**
  * Start the BullMQ worker that processes daily order generation jobs.
@@ -69,47 +69,47 @@ export function startWorker(): Worker<DailyOrderGenerationData> {
     );
   });
 
-  // Also start the monthly invoice worker
-  startMonthlyInvoiceWorker();
+  // Also start the daily invoice worker
+  startDailyInvoiceWorker();
 
   return worker;
 }
 
 /**
- * Start the BullMQ worker that processes monthly invoice generation jobs.
+ * Start the BullMQ worker that processes daily invoice generation jobs.
  */
-export function startMonthlyInvoiceWorker(): Worker<MonthlyInvoiceGenerationData> {
-  if (monthlyInvoiceWorker) return monthlyInvoiceWorker;
+export function startDailyInvoiceWorker(): Worker<DailyInvoiceGenerationData> {
+  if (dailyInvoiceWorker) return dailyInvoiceWorker;
 
-  monthlyInvoiceWorker = new Worker<MonthlyInvoiceGenerationData>(
-    MONTHLY_INVOICE_QUEUE,
-    processMonthlyInvoiceGeneration,
+  dailyInvoiceWorker = new Worker<DailyInvoiceGenerationData>(
+    DAILY_INVOICE_QUEUE,
+    processDailyInvoiceGeneration,
     {
       connection,
       concurrency: 1,
     },
   );
 
-  monthlyInvoiceWorker.on('completed', (job) => {
-    console.log(`[jobs] monthly-invoice-generation completed: ${job?.id}`);
+  dailyInvoiceWorker.on('completed', (job) => {
+    console.log(`[jobs] daily-invoice-generation completed: ${job?.id}`);
   });
 
-  monthlyInvoiceWorker.on('failed', (job, err) => {
+  dailyInvoiceWorker.on('failed', (job, err) => {
     console.error(
-      `[jobs] monthly-invoice-generation failed: ${job?.id}`,
+      `[jobs] daily-invoice-generation failed: ${job?.id}`,
       err.message,
     );
   });
 
-  return monthlyInvoiceWorker;
+  return dailyInvoiceWorker;
 }
 
 /**
  * Register the repeatable cron schedule for daily order generation.
  * Default: every day at 02:00 AM (configurable via DAILY_ORDER_CRON env).
  *
- * Also registers the monthly invoice generation cron.
- * Default: 3 AM on the 1st of each month (configurable via MONTHLY_INVOICE_CRON env).
+ * Also registers the daily invoice generation cron.
+ * Default: 3 AM every day (configurable via DAILY_INVOICE_CRON env).
  */
 export async function registerSchedules(): Promise<void> {
   // ── Daily order generation schedule ───────────────────────────────────
@@ -138,30 +138,27 @@ export async function registerSchedules(): Promise<void> {
 
   console.log(`[jobs] Daily order generation cron registered: ${dailyCron}`);
 
-  // ── Monthly invoice generation schedule ───────────────────────────────
-  const monthlyCron = process.env.MONTHLY_INVOICE_CRON || '0 3 1 * *';
+  // ── Daily invoice generation schedule ───────────────────────────────
+  const dailyInvoiceCron = process.env.DAILY_INVOICE_CRON || '0 3 * * *';
 
-  const existingMonthly = await monthlyInvoiceQueue.getRepeatableJobs();
-  for (const job of existingMonthly) {
-    await monthlyInvoiceQueue.removeRepeatableByKey(job.key);
+  const existingInvoice = await dailyInvoiceQueue.getRepeatableJobs();
+  for (const job of existingInvoice) {
+    await dailyInvoiceQueue.removeRepeatableByKey(job.key);
   }
 
-  await monthlyInvoiceQueue.add(
+  await dailyInvoiceQueue.add(
     'scheduled',
     {
-      // Empty cycle dates — the processor will calculate the previous month's cycle
-      cycleStart: '',
-      cycleEnd: '',
       triggeredBy: 'scheduler',
     },
     {
-      repeat: { pattern: monthlyCron },
+      repeat: { pattern: dailyInvoiceCron },
       removeOnComplete: { count: 50 },
       removeOnFail: { count: 100 },
     },
   );
 
-  console.log(`[jobs] Monthly invoice generation cron registered: ${monthlyCron}`);
+  console.log(`[jobs] Daily invoice generation cron registered: ${dailyInvoiceCron}`);
 }
 
 /**
@@ -180,18 +177,20 @@ export async function triggerManualGeneration(
 }
 
 /**
- * Enqueue a manual (one-off) monthly invoice generation run.
+ * Enqueue a manual (one-off) daily invoice generation run.
  */
 export async function triggerManualInvoiceGeneration(
   cycleStart: string,
   cycleEnd: string,
   userId: string,
+  customerId?: string,
 ): Promise<string> {
-  const job = await monthlyInvoiceQueue.add('manual', {
-    cycleStart,
-    cycleEnd,
+  const job = await dailyInvoiceQueue.add('manual', {
     triggeredBy: 'manual',
     userId,
+    cycleStart,
+    cycleEnd,
+    customerId,
   });
   return job.id ?? '';
 }
@@ -204,8 +203,8 @@ export async function stopWorker(): Promise<void> {
     await worker.close();
     worker = null;
   }
-  if (monthlyInvoiceWorker) {
-    await monthlyInvoiceWorker.close();
-    monthlyInvoiceWorker = null;
+  if (dailyInvoiceWorker) {
+    await dailyInvoiceWorker.close();
+    dailyInvoiceWorker = null;
   }
 }

@@ -1,14 +1,19 @@
+import { PricingCategory } from '@prisma/client';
 import { prisma } from '../index.js';
 import { NotFoundError } from './errors.js';
 
 /**
  * Get the effective price for a product variant on a given date.
  *
- * Resolution order:
- * 1. If `branch` is provided, look for the most recent branch-specific price
- *    where effective_date <= targetDate. If found, return it.
- * 2. Fall back to the most recent default price (branch IS NULL)
- *    where effective_date <= targetDate.
+ * Resolution order (4-step with category support):
+ * 1. branch + pricingCategory  (most specific)
+ * 2. branch + null category    (branch default)
+ * 3. null branch + pricingCategory
+ * 4. null branch + null category (global default)
+ *
+ * Steps 1-2 are only attempted when `branch` is provided.
+ * Steps involving the category are only attempted when `pricingCategory` is
+ * provided and non-null.
  *
  * Returns the ProductPrice record or throws NotFoundError if no price exists.
  */
@@ -16,28 +21,45 @@ export async function getEffectivePrice(
   variantId: string,
   targetDate: Date,
   branch?: string | null,
+  pricingCategory?: PricingCategory | null,
 ) {
-  // Try branch-specific price first
-  if (branch) {
-    const branchPrice = await prisma.productPrice.findFirst({
-      where: {
-        productVariantId: variantId,
-        branch,
-        effectiveDate: { lte: targetDate },
-      },
-      orderBy: { effectiveDate: 'desc' },
+  const baseWhere = {
+    productVariantId: variantId,
+    effectiveDate: { lte: targetDate },
+  };
+  const orderBy = { effectiveDate: 'desc' as const };
+
+  // Step 1: branch + category
+  if (branch && pricingCategory) {
+    const price = await prisma.productPrice.findFirst({
+      where: { ...baseWhere, branch, pricingCategory },
+      orderBy,
     });
-    if (branchPrice) return branchPrice;
+    if (price) return price;
   }
 
-  // Fall back to default price (branch IS NULL)
+  // Step 2: branch + null category
+  if (branch) {
+    const price = await prisma.productPrice.findFirst({
+      where: { ...baseWhere, branch, pricingCategory: null },
+      orderBy,
+    });
+    if (price) return price;
+  }
+
+  // Step 3: null branch + category
+  if (pricingCategory) {
+    const price = await prisma.productPrice.findFirst({
+      where: { ...baseWhere, branch: null, pricingCategory },
+      orderBy,
+    });
+    if (price) return price;
+  }
+
+  // Step 4: null branch + null category (global default)
   const defaultPrice = await prisma.productPrice.findFirst({
-    where: {
-      productVariantId: variantId,
-      branch: null,
-      effectiveDate: { lte: targetDate },
-    },
-    orderBy: { effectiveDate: 'desc' },
+    where: { ...baseWhere, branch: null, pricingCategory: null },
+    orderBy,
   });
 
   if (!defaultPrice) {

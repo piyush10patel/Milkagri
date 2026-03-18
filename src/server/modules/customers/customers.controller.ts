@@ -33,7 +33,7 @@ export async function list(req: Request, res: Response, next: NextFunction) {
 export async function getById(req: Request, res: Response, next: NextFunction) {
   try {
     const customer = await customersService.getCustomer(param(req, 'id'));
-    res.json(customer);
+    res.json({ data: customer });
   } catch (err) {
     next(err);
   }

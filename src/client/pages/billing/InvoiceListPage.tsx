@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 
@@ -30,26 +30,72 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function InvoiceListPage() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [cycleFilter, setCycleFilter] = useState('');
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [generateForm, setGenerateForm] = useState({
+    cycleStart: '',
+    cycleEnd: '',
+  });
+  const [generateError, setGenerateError] = useState('');
   const limit = 20;
 
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (statusFilter) params.set('paymentStatus', statusFilter);
-  if (customerSearch) params.set('customerSearch', customerSearch);
-  if (cycleFilter) params.set('billingCycleStart', cycleFilter);
+  if (cycleFilter) {
+    const [year, month] = cycleFilter.split('-');
+    if (year && month) {
+      const start = `${year}-${month}-01`;
+      const end = new Date(Number(year), Number(month), 0).toISOString().slice(0, 10);
+      params.set('cycleStart', start);
+      params.set('cycleEnd', end);
+    }
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['invoices', page, statusFilter, customerSearch, cycleFilter],
     queryFn: () => api.get<ListResponse>(`/api/v1/billing/invoices?${params}`),
   });
 
+  const generateMutation = useMutation({
+    mutationFn: (payload: { cycleStart: string; cycleEnd: string }) =>
+      api.post<{ invoicesCreated: number }>('/api/v1/billing/generate', payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      setShowGenerateModal(false);
+      setGenerateForm({ cycleStart: '', cycleEnd: '' });
+      setGenerateError('');
+    },
+    onError: (err: { message?: string }) => {
+      setGenerateError(err.message ?? 'Failed to generate invoices');
+    },
+  });
+
+  const filteredInvoices = data?.data?.filter((inv) =>
+    customerSearch
+      ? inv.customer.name.toLowerCase().includes(customerSearch.toLowerCase())
+      : true,
+  ) ?? [];
+
+  function submitGenerateInvoice(e: React.FormEvent) {
+    e.preventDefault();
+    setGenerateError('');
+    generateMutation.mutate(generateForm);
+  }
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <h1 className="text-xl font-semibold text-gray-900">Invoices</h1>
+        <button
+          onClick={() => setShowGenerateModal(true)}
+          className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Generate Invoices
+        </button>
       </div>
 
       {/* Filters */}
@@ -97,7 +143,7 @@ export default function InvoiceListPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {data?.data?.map((inv) => (
+            {filteredInvoices.map((inv) => (
               <tr key={inv.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-sm">{inv.customer.name}</td>
                 <td className="px-4 py-3 text-sm text-gray-700">{inv.billingCycleStart} — {inv.billingCycleEnd}</td>
@@ -111,7 +157,7 @@ export default function InvoiceListPage() {
                 </td>
               </tr>
             ))}
-            {data?.data?.length === 0 && (
+            {filteredInvoices.length === 0 && (
               <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">No invoices found</td></tr>
             )}
           </tbody>
@@ -124,6 +170,56 @@ export default function InvoiceListPage() {
           <div className="flex gap-2">
             <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded-md border border-gray-300 px-3 py-1 text-sm disabled:opacity-50">Previous</button>
             <button disabled={page >= data.pagination.totalPages} onClick={() => setPage(page + 1)} className="rounded-md border border-gray-300 px-3 py-1 text-sm disabled:opacity-50">Next</button>
+          </div>
+        </div>
+      )}
+
+      {showGenerateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="generate-invoices-title">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
+            <h2 id="generate-invoices-title" className="text-lg font-semibold text-gray-900 mb-3">Generate Invoices</h2>
+            <form onSubmit={submitGenerateInvoice} className="space-y-3">
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Cycle Start</label>
+                <input
+                  type="date"
+                  value={generateForm.cycleStart}
+                  onChange={(e) => setGenerateForm((current) => ({ ...current, cycleStart: e.target.value }))}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Cycle End</label>
+                <input
+                  type="date"
+                  value={generateForm.cycleEnd}
+                  onChange={(e) => setGenerateForm((current) => ({ ...current, cycleEnd: e.target.value }))}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              {generateError && <p className="text-sm text-red-600">{generateError}</p>}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGenerateModal(false);
+                    setGenerateError('');
+                  }}
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={generateMutation.isPending}
+                  className="rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {generateMutation.isPending ? 'Generating...' : 'Generate'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

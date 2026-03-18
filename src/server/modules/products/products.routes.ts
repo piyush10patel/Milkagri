@@ -32,6 +32,12 @@ router.get(
   controller.list,
 );
 
+router.get(
+  '/pricing-matrix',
+  authorize(adminPlus),
+  controller.getPricingMatrix,
+);
+
 // GET /products/:id
 router.get('/:id', authorize(adminPlus), validate({ params: uuidParamSchema }), controller.getById);
 
@@ -81,6 +87,16 @@ router.put(
   validate({ params: uuidWithSubParam('vid'), body: updateVariantSchema }),
   auditLog(),
   controller.updateVariant,
+);
+
+// DELETE /products/:id/variants/:vid
+router.delete(
+  '/:id/variants/:vid',
+  authorize(adminOnly),
+  csrfProtection,
+  validate({ params: uuidWithSubParam('vid') }),
+  auditLog(),
+  controller.deleteVariant,
 );
 
 // POST /products/:id/variants/:vid/prices

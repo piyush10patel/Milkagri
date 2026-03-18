@@ -12,13 +12,14 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard', to: '/', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
-  { label: 'Customers', to: '/customers', roles: ['super_admin', 'admin'] },
-  { label: 'Products', to: '/products', roles: ['super_admin', 'admin'] },
-  { label: 'Subscriptions', to: '/subscriptions', roles: ['super_admin', 'admin'] },
-  { label: 'Orders', to: '/orders', roles: ['super_admin', 'admin'] },
+  { label: 'Dashboard', to: '/', roles: ['super_admin', 'admin', 'billing_staff', 'delivery_agent', 'read_only'] },
+  { label: 'Customers', to: '/customers', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
+  { label: 'Products', to: '/products', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
+  { label: 'Pricing', to: '/pricing', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
+  { label: 'Subscriptions', to: '/subscriptions', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
+  { label: 'Orders', to: '/orders', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
   { label: 'Deliveries', to: '/deliveries', roles: ['super_admin', 'admin', 'delivery_agent'] },
-  { label: 'Routes', to: '/routes', roles: ['super_admin', 'admin'] },
+  { label: 'Routes', to: '/routes', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
   { label: 'Billing', to: '/billing', roles: ['super_admin', 'admin', 'billing_staff'] },
   { label: 'Payments', to: '/payments', roles: ['super_admin', 'admin', 'billing_staff'] },
   { label: 'Reports', to: '/reports', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },

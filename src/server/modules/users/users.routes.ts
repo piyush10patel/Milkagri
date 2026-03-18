@@ -28,6 +28,20 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
+// GET /users/:id — get single staff account
+router.get(
+  '/:id',
+  validate({ params: uuidParamSchema }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = await usersService.getUser(req.params.id as string);
+      res.json({ data: user });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // POST /users — create staff account
 router.post(
   '/',

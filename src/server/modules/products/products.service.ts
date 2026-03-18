@@ -154,6 +154,34 @@ export async function updateVariant(
 }
 
 // ---------------------------------------------------------------------------
+// Delete variant (soft-delete by setting isActive: false)
+// ---------------------------------------------------------------------------
+export async function deleteVariant(productId: string, variantId: string) {
+  const variant = await prisma.productVariant.findFirst({
+    where: { id: variantId, productId },
+  });
+  if (!variant) throw new NotFoundError('Variant not found');
+
+  // Check if variant is referenced by any subscriptions or delivery orders
+  const [subscriptionCount, orderCount] = await Promise.all([
+    prisma.subscription.count({ where: { productVariantId: variantId } }),
+    prisma.deliveryOrder.count({ where: { productVariantId: variantId } }),
+  ]);
+
+  if (subscriptionCount > 0 || orderCount > 0) {
+    // Soft delete — variant is referenced
+    return prisma.productVariant.update({
+      where: { id: variantId },
+      data: { isActive: false },
+    });
+  }
+
+  // Hard delete if nothing references it
+  await prisma.productPrice.deleteMany({ where: { productVariantId: variantId } });
+  return prisma.productVariant.delete({ where: { id: variantId } });
+}
+
+// ---------------------------------------------------------------------------
 // Add price entry
 // ---------------------------------------------------------------------------
 export async function addPrice(
@@ -172,6 +200,7 @@ export async function addPrice(
       price: input.price,
       effectiveDate: new Date(input.effectiveDate),
       branch: input.branch ?? null,
+      pricingCategory: input.pricingCategory ?? null,
     },
   });
 }
@@ -202,4 +231,39 @@ export async function getPriceHistory(
   ]);
 
   return { prices, total };
+}
+
+// ---------------------------------------------------------------------------
+// Pricing matrix for category-based billing
+// ---------------------------------------------------------------------------
+export async function getPricingMatrix() {
+  const variants = await prisma.productVariant.findMany({
+    where: { isActive: true },
+    include: {
+      product: { select: { id: true, name: true } },
+      prices: {
+        where: { branch: null },
+        orderBy: [{ effectiveDate: 'desc' }, { createdAt: 'desc' }],
+      },
+    },
+    orderBy: [{ product: { name: 'asc' } }, { quantityPerUnit: 'asc' }],
+  });
+
+  return variants.map((variant) => {
+    const latest = {
+      default: variant.prices.find((price) => !price.pricingCategory) ?? null,
+      cat_1: variant.prices.find((price) => price.pricingCategory === 'cat_1') ?? null,
+      cat_2: variant.prices.find((price) => price.pricingCategory === 'cat_2') ?? null,
+      cat_3: variant.prices.find((price) => price.pricingCategory === 'cat_3') ?? null,
+    };
+
+    return {
+      id: variant.id,
+      sku: variant.sku,
+      unitType: variant.unitType,
+      quantityPerUnit: variant.quantityPerUnit,
+      product: variant.product,
+      latestPrices: latest,
+    };
+  });
 }

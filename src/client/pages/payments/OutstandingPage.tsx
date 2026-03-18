@@ -5,20 +5,23 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 
 interface OutstandingCustomer {
-  customerId: string;
-  customerName: string;
-  customerPhone: string;
+  customer: {
+    id: string;
+    name: string;
+    phone: string;
+  };
   totalOutstanding: number;
   invoiceCount: number;
   oldestUnpaidDate?: string;
 }
 
 interface ReconciliationEntry {
-  agentId: string;
-  agentName: string;
+  agent: {
+    id: string;
+    name: string;
+  };
   totalCollected: number;
-  totalHandedOver: number;
-  discrepancy: number;
+  collectionCount: number;
 }
 
 interface ListResponse {
@@ -29,13 +32,18 @@ interface ListResponse {
 export default function OutstandingPage() {
   const { user } = useAuth();
   const [page, setPage] = useState(1);
-  const [sortBy, setSortBy] = useState('totalOutstanding');
+  const [sortBy, setSortBy] = useState<'name' | 'totalOutstanding'>('totalOutstanding');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showReconciliation, setShowReconciliation] = useState(false);
   const [reconDate, setReconDate] = useState(() => new Date().toISOString().slice(0, 10));
   const limit = 20;
 
-  const params = new URLSearchParams({ page: String(page), limit: String(limit), sortBy, sortOrder });
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    sortBy: sortBy === 'totalOutstanding' ? 'outstanding' : 'name',
+    sortOrder,
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['outstanding', page, sortBy, sortOrder],
@@ -44,13 +52,13 @@ export default function OutstandingPage() {
 
   const { data: reconData } = useQuery({
     queryKey: ['payment-reconciliation', reconDate],
-    queryFn: () => api.get<{ data: ReconciliationEntry[] }>(`/api/v1/payments/reconciliation?date=${reconDate}`),
+    queryFn: () => api.get<{ agents: ReconciliationEntry[]; grandTotal: number }>(`/api/v1/payments/reconciliation?date=${reconDate}`),
     enabled: showReconciliation,
   });
 
   const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
 
-  function handleSort(col: string) {
+  function handleSort(col: 'name' | 'totalOutstanding') {
     if (sortBy === col) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     else { setSortBy(col); setSortOrder('desc'); }
   }
@@ -62,6 +70,9 @@ export default function OutstandingPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <h1 className="text-xl font-semibold text-gray-900">Outstanding Payments</h1>
         <div className="flex gap-2">
+          <Link to="/payments/history" className="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50">
+            History
+          </Link>
           <Link to="/payments/new" className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
             + Record Payment
           </Link>
@@ -90,24 +101,20 @@ export default function OutstandingPage() {
               aria-label="Reconciliation date"
             />
           </div>
-          {reconData?.data?.length ? (
+          {reconData?.agents?.length ? (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                 <thead><tr>
                   <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Agent</th>
                   <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500">Collected</th>
-                  <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500">Handed Over</th>
-                  <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500">Discrepancy</th>
+              <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500">Collections</th>
                 </tr></thead>
                 <tbody className="divide-y divide-gray-100">
-                  {reconData.data.map((r) => (
-                    <tr key={r.agentId}>
-                      <td className="px-3 py-2">{r.agentName}</td>
+                  {reconData.agents.map((r) => (
+                    <tr key={r.agent.id}>
+                      <td className="px-3 py-2">{r.agent.name}</td>
                       <td className="px-3 py-2 text-right">₹{Number(r.totalCollected).toFixed(2)}</td>
-                      <td className="px-3 py-2 text-right">₹{Number(r.totalHandedOver).toFixed(2)}</td>
-                      <td className={`px-3 py-2 text-right font-medium ${r.discrepancy !== 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        ₹{Number(r.discrepancy).toFixed(2)}
-                      </td>
+                      <td className="px-3 py-2 text-right">{r.collectionCount}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -128,20 +135,20 @@ export default function OutstandingPage() {
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
               <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleSort('totalOutstanding')} tabIndex={0} role="button" onKeyDown={(e) => e.key === 'Enter' && handleSort('totalOutstanding')}>Outstanding{sortIcon('totalOutstanding')}</th>
               <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Invoices</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleSort('oldestUnpaidDate')} tabIndex={0} role="button" onKeyDown={(e) => e.key === 'Enter' && handleSort('oldestUnpaidDate')}>Oldest Unpaid{sortIcon('oldestUnpaidDate')}</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Oldest Unpaid</th>
               <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {data?.data?.map((c) => (
-              <tr key={c.customerId} className="hover:bg-gray-50">
-                <td className="px-4 py-3 text-sm"><Link to={`/customers/${c.customerId}`} className="text-blue-600 hover:underline">{c.customerName}</Link></td>
-                <td className="px-4 py-3 text-sm text-gray-700">{c.customerPhone}</td>
+              <tr key={c.customer.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3 text-sm"><Link to={`/customers/${c.customer.id}`} className="text-blue-600 hover:underline">{c.customer.name}</Link></td>
+                <td className="px-4 py-3 text-sm text-gray-700">{c.customer.phone}</td>
                 <td className="px-4 py-3 text-sm text-right font-medium text-red-700">₹{Number(c.totalOutstanding).toFixed(2)}</td>
                 <td className="px-4 py-3 text-sm text-right">{c.invoiceCount}</td>
                 <td className="px-4 py-3 text-sm text-gray-700">{c.oldestUnpaidDate ?? '—'}</td>
                 <td className="px-4 py-3 text-sm text-right">
-                  <Link to={`/payments/new?customerId=${c.customerId}`} className="text-blue-600 hover:underline text-xs">Pay</Link>
+                  <Link to={`/payments/new?customerId=${c.customer.id}`} className="text-blue-600 hover:underline text-xs">Pay</Link>
                 </td>
               </tr>
             ))}

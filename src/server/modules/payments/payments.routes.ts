@@ -8,12 +8,20 @@ import {
   recordCollectionSchema,
   reconciliationQuerySchema,
   outstandingQuerySchema,
+  listPaymentsQuerySchema,
 } from './payments.types.js';
 import * as controller from './payments.controller.js';
 
 const router = Router();
 
 router.use(authenticate);
+
+router.get(
+  '/',
+  authorize(['admin', 'billing_staff', 'super_admin']),
+  validate({ query: listPaymentsQuerySchema }),
+  controller.listPayments,
+);
 
 // POST /payments — Record payment (Billing_Staff, Super_Admin)
 router.post(

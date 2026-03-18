@@ -5,6 +5,13 @@ import { api, type ApiError } from '@/lib/api';
 
 interface ProductData { id: string; name: string; category?: string; description?: string; isActive: boolean; }
 interface VariantData { id: string; unitType: string; quantityPerUnit: number; sku?: string; isActive: boolean; }
+interface PriceHistoryItem {
+  id: string;
+  price: number;
+  effectiveDate: string;
+  branch?: string | null;
+  pricingCategory?: 'cat_1' | 'cat_2' | 'cat_3' | null;
+}
 
 export default function ProductFormPage() {
   const { id } = useParams();
@@ -21,7 +28,7 @@ export default function ProductFormPage() {
 
   // Price form
   const [priceTarget, setPriceTarget] = useState<string | null>(null);
-  const [priceForm, setPriceForm] = useState({ price: '', effectiveDate: '', branch: '' });
+  const [priceForm, setPriceForm] = useState({ price: '', effectiveDate: '', branch: '', pricingCategory: '' });
 
   const { data: existing } = useQuery({
     queryKey: ['product', id],
@@ -33,6 +40,12 @@ export default function ProductFormPage() {
     queryKey: ['product-variants', id],
     queryFn: () => api.get<{ data: VariantData[] }>(`/api/v1/products/${id}/variants`),
     enabled: isEdit,
+  });
+
+  const { data: priceHistoryData, refetch: refetchPriceHistory } = useQuery({
+    queryKey: ['price-history', id, priceTarget],
+    queryFn: () => api.get<{ data: PriceHistoryItem[] }>(`/api/v1/products/${id}/variants/${priceTarget}/prices?limit=20`),
+    enabled: isEdit && !!priceTarget,
   });
 
   useEffect(() => {
@@ -67,7 +80,16 @@ export default function ProductFormPage() {
   const priceMutation = useMutation({
     mutationFn: ({ variantId, data }: { variantId: string; data: Record<string, unknown> }) =>
       api.post(`/api/v1/products/${id}/variants/${variantId}/prices`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['price-history'] }); setPriceTarget(null); setPriceForm({ price: '', effectiveDate: '', branch: '' }); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['price-history'] });
+      refetchPriceHistory();
+      setPriceForm({ price: '', effectiveDate: '', branch: '', pricingCategory: '' });
+    },
+  });
+
+  const deleteVariantMutation = useMutation({
+    mutationFn: (variantId: string) => api.delete(`/api/v1/products/${id}/variants/${variantId}`),
+    onSuccess: () => { refetchVariants(); queryClient.invalidateQueries({ queryKey: ['product', id] }); },
   });
 
   function handleSubmit(e: React.FormEvent) {
@@ -87,7 +109,7 @@ export default function ProductFormPage() {
   function handleAddPrice(e: React.FormEvent) {
     e.preventDefault();
     if (!priceTarget) return;
-    priceMutation.mutate({ variantId: priceTarget, data: { price: Number(priceForm.price), effectiveDate: priceForm.effectiveDate, branch: priceForm.branch || null } });
+    priceMutation.mutate({ variantId: priceTarget, data: { price: Number(priceForm.price), effectiveDate: priceForm.effectiveDate, branch: priceForm.branch || null, pricingCategory: priceForm.pricingCategory || null } });
   }
 
   const fieldClass = (name: string) =>
@@ -159,13 +181,23 @@ export default function ProductFormPage() {
             <div key={v.id} className="border border-gray-100 rounded p-3 mb-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm">{v.quantityPerUnit} {v.unitType} {v.sku ? `(${v.sku})` : ''} {!v.isActive && <span className="text-xs text-red-600 ml-1">Inactive</span>}</span>
-                <button type="button" onClick={() => setPriceTarget(priceTarget === v.id ? null : v.id)} className="text-xs text-blue-600 hover:underline">
-                  {priceTarget === v.id ? 'Cancel' : '+ Add Price'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setPriceTarget(priceTarget === v.id ? null : v.id)} className="text-xs text-blue-600 hover:underline">
+                    {priceTarget === v.id ? 'Cancel' : '+ Add Price'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { if (window.confirm('Delete this variant? If it has active subscriptions it will be deactivated instead.')) deleteVariantMutation.mutate(v.id); }}
+                    disabled={deleteVariantMutation.isPending}
+                    className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
               {priceTarget === v.id && (
                 <form onSubmit={handleAddPrice} className="mt-2 border-t border-gray-50 pt-2 space-y-2">
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     <div>
                       <label className="block text-xs text-gray-600 mb-1">Price *</label>
                       <input type="number" step="0.01" min="0.01" value={priceForm.price} onChange={(e) => setPriceForm({ ...priceForm, price: e.target.value })} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" required />
@@ -178,10 +210,48 @@ export default function ProductFormPage() {
                       <label className="block text-xs text-gray-600 mb-1">Branch</label>
                       <input value={priceForm.branch} onChange={(e) => setPriceForm({ ...priceForm, branch: e.target.value })} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" placeholder="Default" />
                     </div>
+                    <div>
+                      <label htmlFor={`pricingCat-${v.id}`} className="block text-xs text-gray-600 mb-1">Pricing Category</label>
+                      <select id={`pricingCat-${v.id}`} value={priceForm.pricingCategory} onChange={(e) => setPriceForm({ ...priceForm, pricingCategory: e.target.value })} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm">
+                        <option value="">Default (All)</option>
+                        <option value="cat_1">Cat 1</option>
+                        <option value="cat_2">Cat 2</option>
+                        <option value="cat_3">Cat 3</option>
+                      </select>
+                    </div>
                   </div>
                   <button type="submit" disabled={priceMutation.isPending} className="rounded-md bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:opacity-50">
                     {priceMutation.isPending ? 'Adding…' : 'Add Price'}
                   </button>
+
+                  <div className="rounded-md bg-blue-50 border border-blue-100 px-3 py-2 text-xs text-blue-800">
+                    Add separate entries for Default, Cat 1, and Cat 2 when customers in those pricing categories should be billed differently.
+                  </div>
+
+                  {priceHistoryData?.data?.length ? (
+                    <div className="overflow-x-auto pt-2">
+                      <table className="min-w-full text-xs">
+                        <thead>
+                          <tr className="text-gray-500 border-b border-gray-100">
+                            <th className="py-1 text-left">Effective</th>
+                            <th className="py-1 text-right">Price</th>
+                            <th className="py-1 pl-3 text-left">Category</th>
+                            <th className="py-1 pl-3 text-left">Branch</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {priceHistoryData.data.map((price) => (
+                            <tr key={price.id} className="border-b border-gray-50">
+                              <td className="py-1">{price.effectiveDate}</td>
+                              <td className="py-1 text-right">₹{Number(price.price).toFixed(2)}</td>
+                              <td className="py-1 pl-3">{price.pricingCategory ? price.pricingCategory.replace('_', ' ').toUpperCase() : 'Default'}</td>
+                              <td className="py-1 pl-3">{price.branch ?? 'All branches'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null}
                 </form>
               )}
             </div>

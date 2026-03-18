@@ -38,6 +38,8 @@ export const createCustomerSchema = z.object({
   preferredDeliveryWindow: z.string().max(50).optional(),
   routeId: z.string().uuid('Invalid route ID').optional(),
   address: createAddressSchema.optional(),
+  pricingCategory: z.enum(['cat_1', 'cat_2', 'cat_3']).optional(),
+  billingFrequency: z.enum(['daily', 'every_2_days', 'weekly', 'every_10_days', 'monthly']).optional(),
 });
 
 export const updateCustomerSchema = z.object({
@@ -47,6 +49,8 @@ export const updateCustomerSchema = z.object({
   deliveryNotes: z.string().optional(),
   preferredDeliveryWindow: z.string().max(50).optional(),
   routeId: z.string().uuid('Invalid route ID').nullable().optional(),
+  pricingCategory: z.enum(['cat_1', 'cat_2', 'cat_3']).optional(),
+  billingFrequency: z.enum(['daily', 'every_2_days', 'weekly', 'every_10_days', 'monthly']).optional(),
 });
 
 export const changeStatusSchema = z.object({

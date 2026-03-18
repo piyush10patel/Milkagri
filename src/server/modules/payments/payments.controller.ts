@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import * as paymentsService from './payments.service.js';
-import type { OutstandingQuery } from './payments.types.js';
+import type { OutstandingQuery, ListPaymentsQuery } from './payments.types.js';
 
 // ---------------------------------------------------------------------------
 // POST /payments — Record payment (Req 10.1)
@@ -48,6 +48,19 @@ export async function getOutstanding(req: Request, res: Response, next: NextFunc
   try {
     const query = req.query as unknown as OutstandingQuery;
     const result = await paymentsService.getOutstandingSummary(query);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /payments
+// ---------------------------------------------------------------------------
+export async function listPayments(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = req.query as unknown as ListPaymentsQuery;
+    const result = await paymentsService.listPayments(query);
     res.json(result);
   } catch (err) {
     next(err);

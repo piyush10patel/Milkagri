@@ -11,6 +11,8 @@ interface CustomerData {
   deliveryNotes?: string;
   preferredDeliveryWindow?: string;
   routeId?: string;
+  pricingCategory?: string;
+  billingFrequency?: string;
 }
 
 interface RouteOption { id: string; name: string; }
@@ -21,7 +23,7 @@ export default function CustomerFormPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [form, setForm] = useState({ name: '', phone: '', email: '', deliveryNotes: '', preferredDeliveryWindow: '', routeId: '' });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', deliveryNotes: '', preferredDeliveryWindow: '', routeId: '', pricingCategory: 'cat_1', billingFrequency: 'monthly' });
   const [address, setAddress] = useState({ addressLine1: '', addressLine2: '', city: '', state: '', pincode: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -39,7 +41,7 @@ export default function CustomerFormPage() {
   useEffect(() => {
     if (existing?.data) {
       const c = existing.data;
-      setForm({ name: c.name, phone: c.phone, email: c.email ?? '', deliveryNotes: c.deliveryNotes ?? '', preferredDeliveryWindow: c.preferredDeliveryWindow ?? '', routeId: c.routeId ?? '' });
+      setForm({ name: c.name, phone: c.phone, email: c.email ?? '', deliveryNotes: c.deliveryNotes ?? '', preferredDeliveryWindow: c.preferredDeliveryWindow ?? '', routeId: c.routeId ?? '', pricingCategory: c.pricingCategory ?? 'cat_1', billingFrequency: c.billingFrequency ?? 'monthly' });
     }
   }, [existing]);
 
@@ -64,6 +66,8 @@ export default function CustomerFormPage() {
     if (form.deliveryNotes) payload.deliveryNotes = form.deliveryNotes;
     if (form.preferredDeliveryWindow) payload.preferredDeliveryWindow = form.preferredDeliveryWindow;
     if (form.routeId) payload.routeId = form.routeId;
+    payload.pricingCategory = form.pricingCategory;
+    payload.billingFrequency = form.billingFrequency;
     if (!isEdit && address.addressLine1) {
       payload.address = { addressLine1: address.addressLine1, addressLine2: address.addressLine2 || undefined, city: address.city || undefined, state: address.state || undefined, pincode: address.pincode || undefined, isPrimary: true };
     }
@@ -104,6 +108,28 @@ export default function CustomerFormPage() {
             <option value="">No route</option>
             {routesData?.data?.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
+        </div>
+
+        <div>
+          <label htmlFor="pricingCategory" className="block text-sm font-medium text-gray-700 mb-1">Pricing Category</label>
+          <select id="pricingCategory" value={form.pricingCategory} onChange={(e) => setForm({ ...form, pricingCategory: e.target.value })} className={fieldClass('pricingCategory')}>
+            <option value="cat_1">Cat 1</option>
+            <option value="cat_2">Cat 2</option>
+            <option value="cat_3">Cat 3</option>
+          </select>
+          {errors.pricingCategory && <p className="text-xs text-red-600 mt-1">{errors.pricingCategory}</p>}
+        </div>
+
+        <div>
+          <label htmlFor="billingFrequency" className="block text-sm font-medium text-gray-700 mb-1">Billing Frequency</label>
+          <select id="billingFrequency" value={form.billingFrequency} onChange={(e) => setForm({ ...form, billingFrequency: e.target.value })} className={fieldClass('billingFrequency')}>
+            <option value="daily">Daily</option>
+            <option value="every_2_days">Every 2 Days</option>
+            <option value="weekly">Weekly</option>
+            <option value="every_10_days">Every 10 Days</option>
+            <option value="monthly">Monthly</option>
+          </select>
+          {errors.billingFrequency && <p className="text-xs text-red-600 mt-1">{errors.billingFrequency}</p>}
         </div>
 
         <div>

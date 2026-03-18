@@ -8,6 +8,7 @@ import CustomerFormPage from '@/pages/customers/CustomerFormPage';
 import CustomerDetailPage from '@/pages/customers/CustomerDetailPage';
 import ProductListPage from '@/pages/products/ProductListPage';
 import ProductFormPage from '@/pages/products/ProductFormPage';
+import PricingPage from '@/pages/products/PricingPage';
 import SubscriptionListPage from '@/pages/subscriptions/SubscriptionListPage';
 import SubscriptionFormPage from '@/pages/subscriptions/SubscriptionFormPage';
 import DailyOperationsPage from '@/pages/orders/DailyOperationsPage';
@@ -18,6 +19,7 @@ import InvoiceListPage from '@/pages/billing/InvoiceListPage';
 import InvoiceDetailPage from '@/pages/billing/InvoiceDetailPage';
 import OutstandingPage from '@/pages/payments/OutstandingPage';
 import PaymentFormPage from '@/pages/payments/PaymentFormPage';
+import PaymentHistoryPage from '@/pages/payments/PaymentHistoryPage';
 import CustomerLedgerPage from '@/pages/ledger/CustomerLedgerPage';
 import ReportsDashboardPage from '@/pages/reports/ReportsDashboardPage';
 import DailyDeliveryReportPage from '@/pages/reports/DailyDeliveryReportPage';
@@ -67,6 +69,7 @@ export default function App() {
           <Route path="customers/:id/edit" element={<CustomerFormPage />} />
           <Route path="customers/:id/ledger" element={<CustomerLedgerPage />} />
           <Route path="products" element={<ProductListPage />} />
+          <Route path="pricing" element={<PricingPage />} />
           <Route path="products/new" element={<ProductFormPage />} />
           <Route path="products/:id/edit" element={<ProductFormPage />} />
           <Route path="subscriptions" element={<SubscriptionListPage />} />
@@ -80,6 +83,7 @@ export default function App() {
           <Route path="billing" element={<InvoiceListPage />} />
           <Route path="billing/:id" element={<InvoiceDetailPage />} />
           <Route path="payments" element={<OutstandingPage />} />
+          <Route path="payments/history" element={<PaymentHistoryPage />} />
           <Route path="payments/new" element={<PaymentFormPage />} />
           <Route path="payments/:id/edit" element={<PaymentFormPage />} />
           <Route path="inventory" element={<InventoryPage />} />

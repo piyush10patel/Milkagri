@@ -1,6 +1,6 @@
 import { prisma } from '../../index.js';
 import { redis } from '../../index.js';
-import { hashPassword, invalidateUserSessions } from '../auth/auth.service.js';
+import { hashPassword, invalidateUserSessions, normalizeEmail } from '../auth/auth.service.js';
 import { NotFoundError, ConflictError } from '../../lib/errors.js';
 import type { CreateUserInput, UpdateUserInput } from './users.types.js';
 import type { PaginationParams } from '../../lib/pagination.js';
@@ -27,8 +27,32 @@ export async function listUsers(pagination: PaginationParams) {
   return { users, total };
 }
 
+export async function getUser(id: string) {
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  if (!user) {
+    throw new NotFoundError('User not found');
+  }
+
+  return user;
+}
+
 export async function createUser(input: CreateUserInput) {
-  const existing = await prisma.user.findUnique({ where: { email: input.email } });
+  const email = normalizeEmail(input.email);
+  const existing = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+  });
   if (existing) {
     throw new ConflictError('A user with this email already exists');
   }
@@ -37,7 +61,7 @@ export async function createUser(input: CreateUserInput) {
 
   return prisma.user.create({
     data: {
-      email: input.email,
+      email,
       passwordHash,
       name: input.name,
       role: input.role,
@@ -61,11 +85,14 @@ export async function updateUser(id: string, input: UpdateUserInput) {
 
   const data: Record<string, unknown> = {};
   if (input.email !== undefined) {
-    const existing = await prisma.user.findUnique({ where: { email: input.email } });
+    const email = normalizeEmail(input.email);
+    const existing = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+    });
     if (existing && existing.id !== id) {
       throw new ConflictError('A user with this email already exists');
     }
-    data.email = input.email;
+    data.email = email;
   }
   if (input.name !== undefined) data.name = input.name;
   if (input.role !== undefined) data.role = input.role;

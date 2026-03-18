@@ -32,7 +32,19 @@ export async function list(req: Request, res: Response, next: NextFunction) {
 export async function getById(req: Request, res: Response, next: NextFunction) {
   try {
     const product = await productsService.getProduct(param(req, 'id'));
-    res.json(product);
+    res.json({ data: product });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /products/pricing-matrix
+// ---------------------------------------------------------------------------
+export async function getPricingMatrix(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const matrix = await productsService.getPricingMatrix();
+    res.json({ data: matrix });
   } catch (err) {
     next(err);
   }
@@ -94,7 +106,26 @@ export async function listVariants(req: Request, res: Response, next: NextFuncti
       param(req, 'id'),
       req.query as any,
     );
-    res.json(variants);
+    res.json({ data: variants });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /products/:id/variants/:vid
+// ---------------------------------------------------------------------------
+export async function deleteVariant(req: Request, res: Response, next: NextFunction) {
+  try {
+    const productId = param(req, 'id');
+    const variantId = param(req, 'vid');
+    await productsService.deleteVariant(productId, variantId);
+    res.locals.audit = {
+      actionType: 'delete',
+      entityType: 'product_variant',
+      entityId: variantId,
+    };
+    res.json({ message: 'Variant deleted' });
   } catch (err) {
     next(err);
   }

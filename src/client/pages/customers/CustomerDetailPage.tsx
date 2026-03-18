@@ -11,6 +11,7 @@ interface LedgerEntry { id: string; entryDate: string; transactionType: string; 
 interface CustomerDetail {
   id: string; name: string; phone: string; email?: string; status: string;
   deliveryNotes?: string; preferredDeliveryWindow?: string;
+  pricingCategory?: string; billingFrequency?: string;
   route?: { id: string; name: string };
   addresses: Address[];
   createdAt: string;
@@ -49,6 +50,8 @@ export default function CustomerDetailPage() {
 
   const statusColors: Record<string, string> = { active: 'bg-green-100 text-green-800', paused: 'bg-yellow-100 text-yellow-800', stopped: 'bg-red-100 text-red-800' };
   const freqLabel: Record<string, string> = { daily: 'Daily', alternate_day: 'Alternate Day', custom_weekday: 'Custom Weekday' };
+  const pricingCategoryLabel: Record<string, string> = { cat_1: 'Cat 1', cat_2: 'Cat 2', cat_3: 'Cat 3' };
+  const billingFrequencyLabel: Record<string, string> = { daily: 'Daily', every_2_days: 'Every 2 Days', weekly: 'Weekly', every_10_days: 'Every 10 Days', monthly: 'Monthly' };
 
   return (
     <div>
@@ -80,6 +83,8 @@ export default function CustomerDetailPage() {
           <div><p className="text-xs text-gray-500">Route</p><p className="text-sm">{c.route?.name ?? '—'}</p></div>
           <div><p className="text-xs text-gray-500">Delivery Notes</p><p className="text-sm">{c.deliveryNotes || '—'}</p></div>
           <div><p className="text-xs text-gray-500">Preferred Window</p><p className="text-sm">{c.preferredDeliveryWindow || '—'}</p></div>
+          <div><p className="text-xs text-gray-500">Pricing Category</p><p className="text-sm">{c.pricingCategory ? pricingCategoryLabel[c.pricingCategory] ?? c.pricingCategory : '—'}</p></div>
+          <div><p className="text-xs text-gray-500">Billing Frequency</p><p className="text-sm">{c.billingFrequency ? billingFrequencyLabel[c.billingFrequency] ?? c.billingFrequency : '—'}</p></div>
         </div>
       </div>
 

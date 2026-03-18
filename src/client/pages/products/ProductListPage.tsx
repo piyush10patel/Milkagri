@@ -109,7 +109,7 @@ function VariantList({ productId }: { productId: string }) {
 function PriceHistory({ productId, variantId }: { productId: string; variantId: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ['price-history', productId, variantId],
-    queryFn: () => api.get<{ data: Array<{ id: string; price: number; effectiveDate: string; branch?: string }> }>(`/api/v1/products/${productId}/variants/${variantId}/prices`),
+    queryFn: () => api.get<{ data: Array<{ id: string; price: number; effectiveDate: string; branch?: string | null; pricingCategory?: string | null }> }>(`/api/v1/products/${productId}/variants/${variantId}/prices`),
   });
 
   if (isLoading) return <p className="text-xs text-gray-400 mt-1">Loading prices…</p>;
@@ -118,14 +118,15 @@ function PriceHistory({ productId, variantId }: { productId: string; variantId: 
   return (
     <table className="mt-2 w-full text-xs">
       <thead><tr className="text-gray-500">
-        <th className="text-left py-1">Effective Date</th><th className="text-right py-1">Price</th><th className="text-left py-1 pl-3">Branch</th>
+        <th className="text-left py-1">Effective Date</th><th className="text-right py-1">Price</th><th className="text-left py-1 pl-3">Category</th><th className="text-left py-1 pl-3">Branch</th>
       </tr></thead>
       <tbody>
         {data.data.map((p) => (
           <tr key={p.id} className="border-t border-gray-50">
             <td className="py-1">{p.effectiveDate}</td>
             <td className="py-1 text-right">₹{Number(p.price).toFixed(2)}</td>
-            <td className="py-1 pl-3">{p.branch ?? 'Default'}</td>
+            <td className="py-1 pl-3">{p.pricingCategory ? p.pricingCategory.replace('_', ' ').toUpperCase() : 'Default'}</td>
+            <td className="py-1 pl-3">{p.branch ?? 'All branches'}</td>
           </tr>
         ))}
       </tbody>
