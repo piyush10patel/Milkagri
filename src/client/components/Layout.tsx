@@ -18,6 +18,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Pricing', to: '/pricing', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
   { label: 'Subscriptions', to: '/subscriptions', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
   { label: 'Orders', to: '/orders', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
+  { label: 'Milk Summary', to: '/orders/summary', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
+  { label: 'Milk Collection', to: '/milk-collections', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
   { label: 'Deliveries', to: '/deliveries', roles: ['super_admin', 'admin', 'delivery_agent'] },
   { label: 'Routes', to: '/routes', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
   { label: 'Billing', to: '/billing', roles: ['super_admin', 'admin', 'billing_staff'] },

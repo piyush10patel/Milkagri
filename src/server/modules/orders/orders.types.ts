@@ -19,11 +19,30 @@ export const createOneTimeOrderSchema = z.object({
   routeId: z.string().uuid('Invalid route ID').optional(),
   deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Delivery date must be YYYY-MM-DD'),
   quantity: z.number().positive('Quantity must be positive'),
+  deliverySession: z.enum(['morning', 'evening']).default('morning'),
+  packBreakdown: z
+    .array(
+      z.object({
+        packSize: z.number().positive('Pack size must be positive'),
+        packCount: z.number().int().positive('Pack count must be positive'),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 export const updateOrderSchema = z.object({
   quantity: z.number().positive('Quantity must be positive').optional(),
   deliveryNotes: z.string().optional(),
+  deliverySession: z.enum(['morning', 'evening']).optional(),
+  packBreakdown: z
+    .array(
+      z.object({
+        packSize: z.number().positive('Pack size must be positive'),
+        packCount: z.number().int().positive('Pack count must be positive'),
+      }),
+    )
+    .optional(),
 });
 
 export const generateOrdersSchema = z.object({

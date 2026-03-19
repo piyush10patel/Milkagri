@@ -121,6 +121,25 @@ export async function cancel(req: Request, res: Response, next: NextFunction) {
 }
 
 // ---------------------------------------------------------------------------
+// DELETE /subscriptions/:id
+// ---------------------------------------------------------------------------
+export async function remove(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = param(req, 'id');
+    const result = await subscriptionsService.deleteSubscription(id);
+    res.locals.audit = {
+      actionType: 'delete',
+      entityType: 'subscription',
+      entityId: id,
+      changes: { removedOrders: { old: result.removedOrders, new: 0 } },
+    };
+    res.json({ message: 'Subscription deleted', data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // POST /subscriptions/:id/vacation-holds
 // ---------------------------------------------------------------------------
 export async function createVacationHold(req: Request, res: Response, next: NextFunction) {

@@ -98,6 +98,55 @@ export async function updateRoute(id: string, input: UpdateRouteInput) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Delete route
+// ---------------------------------------------------------------------------
+export async function deleteRoute(id: string) {
+  const route = await prisma.route.findUnique({
+    where: { id },
+    include: {
+      routeCustomers: true,
+      deliveryOrders: {
+        select: { id: true },
+        take: 1,
+      },
+      routeHolidays: {
+        select: { id: true },
+      },
+      routeAgents: {
+        select: { id: true },
+      },
+    },
+  });
+
+  if (!route) {
+    throw new NotFoundError('Route not found');
+  }
+
+  if (route.routeCustomers.length > 0) {
+    throw new ValidationError(
+      'Cannot delete route with assigned customers. Reassign or remove those customers first.',
+      { customers: [`${route.routeCustomers.length} customer(s) still assigned`] },
+    );
+  }
+
+  if (route.deliveryOrders.length > 0) {
+    throw new ValidationError(
+      'Cannot delete route with delivery order history. Deactivate it instead.',
+    );
+  }
+
+  await prisma.route.delete({
+    where: { id },
+  });
+
+  return {
+    id,
+    removedAgents: route.routeAgents.length,
+    removedHolidays: route.routeHolidays.length,
+  };
+}
+
 
 // ---------------------------------------------------------------------------
 // Deactivate route — requires all customers to be reassigned first (Req 8.7)
@@ -179,18 +228,8 @@ export async function assignCustomers(routeId: string, input: AssignCustomersInp
     });
     const previousCustomerIds = new Set(previousAssignments.map((a) => a.customerId));
 
-    // Find customers newly assigned to this route (they may be moving from another route)
-    const newCustomerIds = customerIds.filter((cid) => !previousCustomerIds.has(cid));
-
-    // Remove all existing assignments for this route
-    await tx.routeCustomer.deleteMany({ where: { routeId } });
-
-    // Remove assignments for newly-added customers from their old routes
-    if (newCustomerIds.length > 0) {
-      await tx.routeCustomer.deleteMany({
-        where: { customerId: { in: newCustomerIds } },
-      });
-    }
+  // Remove all existing assignments for this route
+  await tx.routeCustomer.deleteMany({ where: { routeId } });
 
     // Create new assignments
     if (input.customers.length > 0) {
@@ -203,41 +242,14 @@ export async function assignCustomers(routeId: string, input: AssignCustomersInp
       });
     }
 
-    // Update customer.routeId for all assigned customers
-    if (customerIds.length > 0) {
-      await tx.customer.updateMany({
-        where: { id: { in: customerIds } },
-        data: { routeId },
-      });
-    }
-
-    // Clear routeId for customers removed from this route
-    const removedCustomerIds = [...previousCustomerIds].filter(
-      (cid) => !customerIds.includes(cid),
-    );
-    if (removedCustomerIds.length > 0) {
-      // Only clear routeId if they aren't assigned to another route
-      for (const cid of removedCustomerIds) {
-        const otherAssignment = await tx.routeCustomer.findFirst({
-          where: { customerId: cid },
-        });
-        if (!otherAssignment) {
-          await tx.customer.update({
-            where: { id: cid },
-            data: { routeId: null },
-          });
-        }
-      }
-    }
-
-    // Update future delivery_orders for customers that moved to this route (Req 8.5)
+    // Update future delivery_orders for customers assigned to this route (Req 8.5)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    if (newCustomerIds.length > 0) {
+    if (customerIds.length > 0) {
       await tx.deliveryOrder.updateMany({
         where: {
-          customerId: { in: newCustomerIds },
+          customerId: { in: customerIds },
           deliveryDate: { gt: today },
           status: 'pending',
         },

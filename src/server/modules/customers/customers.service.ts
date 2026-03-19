@@ -98,6 +98,15 @@ export async function createCustomer(input: CreateCustomerInput) {
     throw new ConflictError('A customer with this phone number already exists');
   }
 
+  if (input.pricingCategory) {
+    const pricingCategory = await prisma.pricingCategory.findFirst({
+      where: { code: input.pricingCategory, isActive: true },
+    });
+    if (!pricingCategory) {
+      throw new ConflictError('Selected pricing category does not exist');
+    }
+  }
+
   const { address, ...customerData } = input;
 
   const customer = await prisma.customer.create({
@@ -133,6 +142,15 @@ export async function updateCustomer(id: string, input: UpdateCustomerInput) {
     });
     if (phoneExists) {
       throw new ConflictError('A customer with this phone number already exists');
+    }
+  }
+
+  if (input.pricingCategory) {
+    const pricingCategory = await prisma.pricingCategory.findFirst({
+      where: { code: input.pricingCategory, isActive: true },
+    });
+    if (!pricingCategory) {
+      throw new ConflictError('Selected pricing category does not exist');
     }
   }
 
@@ -302,5 +320,67 @@ export async function updateAddress(
   return prisma.customerAddress.update({
     where: { id: addressId },
     data: input,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Reset operational customer data
+// ---------------------------------------------------------------------------
+export async function resetOperationalCustomerData() {
+  return prisma.$transaction(async (tx) => {
+    const [
+      invoiceLineItems,
+      invoiceAdjustments,
+      invoiceDiscounts,
+      payments,
+      invoices,
+      ledgerEntries,
+      deliveryOrderPacks,
+      deliveryOrders,
+      subscriptionPacks,
+      quantityChanges,
+      vacationHolds,
+      subscriptionChanges,
+      subscriptions,
+      routeCustomers,
+      addresses,
+      customers,
+    ] = await Promise.all([
+      tx.invoiceLineItem.deleteMany({}),
+      tx.invoiceAdjustment.deleteMany({}),
+      tx.invoiceDiscount.deleteMany({}),
+      tx.payment.deleteMany({}),
+      tx.invoice.deleteMany({}),
+      tx.ledgerEntry.deleteMany({}),
+      tx.deliveryOrderPack.deleteMany({}),
+      tx.deliveryOrder.deleteMany({}),
+      tx.subscriptionPack.deleteMany({}),
+      tx.quantityChange.deleteMany({}),
+      tx.vacationHold.deleteMany({}),
+      tx.subscriptionChange.deleteMany({}),
+      tx.subscription.deleteMany({}),
+      tx.routeCustomer.deleteMany({}),
+      tx.customerAddress.deleteMany({}),
+      tx.customer.deleteMany({}),
+    ]);
+
+    return {
+      invoiceLineItems: invoiceLineItems.count,
+      invoiceAdjustments: invoiceAdjustments.count,
+      invoiceDiscounts: invoiceDiscounts.count,
+      payments: payments.count,
+      invoices: invoices.count,
+      ledgerEntries: ledgerEntries.count,
+      deliveryOrderPacks: deliveryOrderPacks.count,
+      deliveryOrders: deliveryOrders.count,
+      subscriptionPacks: subscriptionPacks.count,
+      quantityChanges: quantityChanges.count,
+      vacationHolds: vacationHolds.count,
+      subscriptionChanges: subscriptionChanges.count,
+      subscriptions: subscriptions.count,
+      routeCustomers: routeCustomers.count,
+      addresses: addresses.count,
+      customers: customers.count,
+    };
   });
 }

@@ -1,4 +1,3 @@
-import { PricingCategory } from '@prisma/client';
 import { prisma } from '../index.js';
 import { NotFoundError } from './errors.js';
 
@@ -21,7 +20,7 @@ export async function getEffectivePrice(
   variantId: string,
   targetDate: Date,
   branch?: string | null,
-  pricingCategory?: PricingCategory | null,
+  pricingCategory?: string | null,
 ) {
   const baseWhere = {
     productVariantId: variantId,

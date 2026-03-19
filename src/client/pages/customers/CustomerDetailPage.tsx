@@ -6,7 +6,17 @@ import { useModalFocusTrap } from '@/hooks/useModalFocusTrap';
 
 
 interface Address { id: string; addressLine1: string; addressLine2?: string; city?: string; state?: string; pincode?: string; isPrimary: boolean; }
-interface Subscription { id: string; productVariant: { product: { name: string }; unitType: string; quantityPerUnit: number }; quantity: number; frequencyType: string; status: string; startDate: string; }
+interface Subscription {
+  id: string;
+  route?: { id: string; name: string } | null;
+  productVariant: { product: { name: string }; unitType: string; quantityPerUnit: number };
+  quantity: number;
+  deliverySession: 'morning' | 'evening';
+  packs?: Array<{ packSize: number | string; packCount: number }>;
+  frequencyType: string;
+  status: string;
+  startDate: string;
+}
 interface LedgerEntry { id: string; entryDate: string; transactionType: string; debitAmount: number; creditAmount: number; runningBalance: number; description?: string; }
 interface CustomerDetail {
   id: string; name: string; phone: string; email?: string; status: string;
@@ -16,6 +26,7 @@ interface CustomerDetail {
   addresses: Address[];
   createdAt: string;
 }
+interface PricingCategoryOption { id: string; code: string; name: string; }
 
 export default function CustomerDetailPage() {
   const { id } = useParams();
@@ -39,6 +50,11 @@ export default function CustomerDetailPage() {
     queryFn: () => api.get<{ data: LedgerEntry[] }>(`/api/v1/customers/${id}/ledger?limit=20`),
   });
 
+  const { data: pricingCategoriesData } = useQuery({
+    queryKey: ['pricing-categories-options'],
+    queryFn: () => api.get<{ data: PricingCategoryOption[] }>('/api/v1/pricing-categories'),
+  });
+
   const statusMutation = useMutation({
     mutationFn: (status: string) => api.patch(`/api/v1/customers/${id}/status`, { status }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customer', id] }); setConfirmAction(null); },
@@ -50,8 +66,8 @@ export default function CustomerDetailPage() {
 
   const statusColors: Record<string, string> = { active: 'bg-green-100 text-green-800', paused: 'bg-yellow-100 text-yellow-800', stopped: 'bg-red-100 text-red-800' };
   const freqLabel: Record<string, string> = { daily: 'Daily', alternate_day: 'Alternate Day', custom_weekday: 'Custom Weekday' };
-  const pricingCategoryLabel: Record<string, string> = { cat_1: 'Cat 1', cat_2: 'Cat 2', cat_3: 'Cat 3' };
   const billingFrequencyLabel: Record<string, string> = { daily: 'Daily', every_2_days: 'Every 2 Days', weekly: 'Weekly', every_10_days: 'Every 10 Days', monthly: 'Monthly' };
+  const pricingCategoryLabel = pricingCategoriesData?.data?.find((item) => item.code === c.pricingCategory)?.name ?? c.pricingCategory;
 
   return (
     <div>
@@ -83,7 +99,7 @@ export default function CustomerDetailPage() {
           <div><p className="text-xs text-gray-500">Route</p><p className="text-sm">{c.route?.name ?? '—'}</p></div>
           <div><p className="text-xs text-gray-500">Delivery Notes</p><p className="text-sm">{c.deliveryNotes || '—'}</p></div>
           <div><p className="text-xs text-gray-500">Preferred Window</p><p className="text-sm">{c.preferredDeliveryWindow || '—'}</p></div>
-          <div><p className="text-xs text-gray-500">Pricing Category</p><p className="text-sm">{c.pricingCategory ? pricingCategoryLabel[c.pricingCategory] ?? c.pricingCategory : '—'}</p></div>
+          <div><p className="text-xs text-gray-500">Pricing Category</p><p className="text-sm">{c.pricingCategory ? pricingCategoryLabel : '—'}</p></div>
           <div><p className="text-xs text-gray-500">Billing Frequency</p><p className="text-sm">{c.billingFrequency ? billingFrequencyLabel[c.billingFrequency] ?? c.billingFrequency : '—'}</p></div>
         </div>
       </div>
@@ -112,6 +128,8 @@ export default function CustomerDetailPage() {
               <thead><tr>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
+                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Session</th>
+                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Route</th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Frequency</th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Status</th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Start</th>
@@ -120,7 +138,14 @@ export default function CustomerDetailPage() {
                 {subsData.data.map((s) => (
                   <tr key={s.id}>
                     <td className="px-3 py-2">{s.productVariant?.product?.name} ({s.productVariant?.quantityPerUnit} {s.productVariant?.unitType})</td>
-                    <td className="px-3 py-2">{s.quantity}</td>
+                    <td className="px-3 py-2">
+                      <div>{s.quantity}</div>
+                      <div className="text-xs text-gray-500">
+                        {s.packs?.length ? s.packs.map((pack) => `${pack.packCount} x ${Number(pack.packSize)}L`).join(', ') : 'No packs'}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 capitalize">{s.deliverySession}</td>
+                    <td className="px-3 py-2">{s.route?.name ?? '—'}</td>
                     <td className="px-3 py-2">{freqLabel[s.frequencyType] ?? s.frequencyType}</td>
                     <td className="px-3 py-2">{s.status}</td>
                     <td className="px-3 py-2">{s.startDate}</td>

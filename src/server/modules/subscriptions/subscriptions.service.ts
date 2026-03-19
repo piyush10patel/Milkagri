@@ -1,5 +1,6 @@
 import { prisma } from '../../index.js';
 import { NotFoundError, ValidationError } from '../../lib/errors.js';
+import { assertPackBreakdownMatchesQuantity } from '../../lib/packaging.js';
 import type { PaginationParams } from '../../lib/pagination.js';
 import type {
   CreateSubscriptionInput,
@@ -13,6 +14,7 @@ import type { Prisma } from '@prisma/client';
 
 const subscriptionInclude = {
   customer: { select: { id: true, name: true, phone: true, status: true } },
+  route: { select: { id: true, name: true } },
   productVariant: {
     select: {
       id: true,
@@ -21,6 +23,14 @@ const subscriptionInclude = {
       sku: true,
       product: { select: { id: true, name: true } },
     },
+  },
+  packs: {
+    select: {
+      id: true,
+      packSize: true,
+      packCount: true,
+    },
+    orderBy: { packSize: 'desc' },
   },
 } satisfies Prisma.SubscriptionInclude;
 
@@ -95,20 +105,40 @@ export async function createSubscription(input: CreateSubscriptionInput, userId:
     throw new ValidationError('Cannot subscribe to an inactive product variant');
   }
 
+  if (input.routeId) {
+    const route = await prisma.route.findUnique({ where: { id: input.routeId } });
+    if (!route) throw new NotFoundError('Route not found');
+    if (!route.isActive) {
+      throw new ValidationError('Cannot assign an inactive route to a subscription');
+    }
+  }
+
   // Validate weekdays for custom_weekday
   if (input.frequencyType === 'custom_weekday' && (!input.weekdays || input.weekdays.length === 0)) {
     throw new ValidationError('Custom weekday frequency requires at least one weekday');
   }
 
   return prisma.$transaction(async (tx) => {
+    const packs = assertPackBreakdownMatchesQuantity(input.quantity, input.packBreakdown);
+
     const subscription = await tx.subscription.create({
       data: {
         customerId: input.customerId,
         productVariantId: input.productVariantId,
+        routeId: input.routeId ?? customer.routeId ?? null,
         quantity: input.quantity,
+        deliverySession: input.deliverySession,
         frequencyType: input.frequencyType,
         weekdays: input.weekdays || [],
         startDate: new Date(input.startDate),
+        packs: packs.length
+          ? {
+              create: packs.map((pack) => ({
+                packSize: pack.packSize,
+                packCount: pack.packCount,
+              })),
+            }
+          : undefined,
       },
       include: subscriptionInclude,
     });
@@ -120,8 +150,11 @@ export async function createSubscription(input: CreateSubscriptionInput, userId:
         changeType: 'created',
         newValue: JSON.stringify({
           quantity: input.quantity,
+          routeId: input.routeId ?? customer.routeId ?? null,
+          deliverySession: input.deliverySession,
           frequencyType: input.frequencyType,
           weekdays: input.weekdays,
+          packBreakdown: packs,
           startDate: input.startDate,
         }),
         changedBy: userId,
@@ -151,27 +184,79 @@ export async function updateSubscription(id: string, input: UpdateSubscriptionIn
     throw new ValidationError('Custom weekday frequency requires at least one weekday');
   }
 
+  if (input.routeId) {
+    const route = await prisma.route.findUnique({ where: { id: input.routeId } });
+    if (!route) throw new NotFoundError('Route not found');
+    if (!route.isActive) {
+      throw new ValidationError('Cannot assign an inactive route to a subscription');
+    }
+  }
+
   return prisma.$transaction(async (tx) => {
+    const nextQuantity = input.quantity !== undefined ? input.quantity : Number(existing.quantity);
+    const packs = input.packBreakdown !== undefined
+      ? assertPackBreakdownMatchesQuantity(nextQuantity, input.packBreakdown)
+      : undefined;
+
     const subscription = await tx.subscription.update({
       where: { id },
       data: {
+        ...(input.routeId !== undefined ? { routeId: input.routeId } : {}),
         ...(input.quantity !== undefined ? { quantity: input.quantity } : {}),
+        ...(input.deliverySession !== undefined ? { deliverySession: input.deliverySession } : {}),
         ...(input.frequencyType !== undefined ? { frequencyType: input.frequencyType } : {}),
         ...(input.weekdays !== undefined ? { weekdays: input.weekdays } : {}),
       },
       include: subscriptionInclude,
     });
 
+    if (packs !== undefined) {
+      await tx.subscriptionPack.deleteMany({ where: { subscriptionId: id } });
+      if (packs.length) {
+        await tx.subscriptionPack.createMany({
+          data: packs.map((pack) => ({
+            subscriptionId: id,
+            packSize: pack.packSize,
+            packCount: pack.packCount,
+          })),
+        });
+      }
+    }
+
+    const refreshed = await tx.subscription.findUnique({
+      where: { id },
+      include: subscriptionInclude,
+    });
+
+    if (!refreshed) {
+      throw new NotFoundError('Subscription not found');
+    }
+
     // Record changes
     const changes: Record<string, { old?: unknown; new?: unknown }> = {};
     if (input.quantity !== undefined && Number(existing.quantity) !== input.quantity) {
       changes.quantity = { old: Number(existing.quantity), new: input.quantity };
+    }
+    if (input.routeId !== undefined && existing.routeId !== input.routeId) {
+      changes.routeId = { old: existing.routeId, new: input.routeId };
+    }
+    if (input.deliverySession !== undefined && existing.deliverySession !== input.deliverySession) {
+      changes.deliverySession = { old: existing.deliverySession, new: input.deliverySession };
     }
     if (input.frequencyType !== undefined && existing.frequencyType !== input.frequencyType) {
       changes.frequencyType = { old: existing.frequencyType, new: input.frequencyType };
     }
     if (input.weekdays !== undefined) {
       changes.weekdays = { old: existing.weekdays, new: input.weekdays };
+    }
+    if (packs !== undefined) {
+      changes.packBreakdown = {
+        old: subscription.packs.map((pack) => ({
+          packSize: Number(pack.packSize),
+          packCount: pack.packCount,
+        })),
+        new: packs,
+      };
     }
 
     if (Object.keys(changes).length > 0) {
@@ -190,7 +275,7 @@ export async function updateSubscription(id: string, input: UpdateSubscriptionIn
       });
     }
 
-    return subscription;
+    return refreshed;
   });
 }
 
@@ -227,6 +312,58 @@ export async function cancelSubscription(id: string, input: CancelSubscriptionIn
     });
 
     return subscription;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Delete subscription
+// ---------------------------------------------------------------------------
+export async function deleteSubscription(id: string) {
+  const existing = await prisma.subscription.findUnique({
+    where: { id },
+    include: {
+      deliveryOrders: {
+        include: {
+          invoiceLineItems: {
+            select: { id: true },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+
+  if (!existing) {
+    throw new NotFoundError('Subscription not found');
+  }
+
+  const hasProtectedHistory = existing.deliveryOrders.some(
+    (order) => order.status !== 'pending' || order.invoiceLineItems.length > 0,
+  );
+
+  if (hasProtectedHistory) {
+    throw new ValidationError(
+      'This subscription already has delivery or invoice history. Cancel it instead of deleting it.',
+    );
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const orderIds = existing.deliveryOrders.map((order) => order.id);
+
+    if (orderIds.length > 0) {
+      await tx.deliveryOrderPack.deleteMany({
+        where: { deliveryOrderId: { in: orderIds } },
+      });
+      await tx.deliveryOrder.deleteMany({
+        where: { id: { in: orderIds } },
+      });
+    }
+
+    await tx.subscription.delete({
+      where: { id },
+    });
+
+    return { id, removedOrders: orderIds.length };
   });
 }
 

@@ -33,6 +33,14 @@ router.get(
   controller.list,
 );
 
+router.post(
+  '/reset-operational-data',
+  authorize(['super_admin', 'admin']),
+  csrfProtection,
+  auditLog(),
+  controller.resetOperationalData,
+);
+
 // ---------------------------------------------------------------------------
 // GET /customers/:id — detail
 // ---------------------------------------------------------------------------

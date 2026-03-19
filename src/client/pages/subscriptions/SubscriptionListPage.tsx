@@ -7,8 +7,11 @@ import { useModalFocusTrap } from '@/hooks/useModalFocusTrap';
 interface Subscription {
   id: string;
   customer: { id: string; name: string };
+  route?: { id: string; name: string } | null;
   productVariant: { id: string; product: { name: string }; unitType: string; quantityPerUnit: number };
   quantity: number;
+  deliverySession: 'morning' | 'evening';
+  packs?: Array<{ packSize: number | string; packCount: number }>;
   frequencyType: string;
   status: 'active' | 'paused' | 'cancelled';
   startDate: string;
@@ -24,6 +27,9 @@ export default function SubscriptionListPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const closeDeleteModal = useCallback(() => setDeleteTarget(null), []);
+  const { modalRef: deleteModalRef } = useModalFocusTrap(!!deleteTarget, closeDeleteModal);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const closeCancelModal = useCallback(() => setCancelTarget(null), []);
   const { modalRef: cancelModalRef } = useModalFocusTrap(!!cancelTarget, closeCancelModal);
@@ -63,6 +69,14 @@ export default function SubscriptionListPage() {
     onSuccess: () => { setQtyTarget(null); setQtyForm({ newQuantity: '', effectiveDate: '' }); },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/v1/subscriptions/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+      setDeleteTarget(null);
+    },
+  });
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
@@ -89,6 +103,8 @@ export default function SubscriptionListPage() {
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Session</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Route</th>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Frequency</th>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Start</th>
@@ -100,7 +116,14 @@ export default function SubscriptionListPage() {
               <tr key={s.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-sm"><Link to={`/customers/${s.customer.id}`} className="text-blue-600 hover:underline">{s.customer.name}</Link></td>
                 <td className="px-4 py-3 text-sm">{s.productVariant?.product?.name} ({s.productVariant?.quantityPerUnit} {s.productVariant?.unitType})</td>
-                <td className="px-4 py-3 text-sm">{s.quantity}</td>
+                <td className="px-4 py-3 text-sm">
+                  <div>{s.quantity}</div>
+                  <div className="text-xs text-gray-500">
+                    {s.packs?.length ? s.packs.map((pack) => `${pack.packCount} x ${Number(pack.packSize)}L`).join(', ') : 'No packs'}
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-sm capitalize">{s.deliverySession}</td>
+                <td className="px-4 py-3 text-sm">{s.route?.name ?? '—'}</td>
                 <td className="px-4 py-3 text-sm">{FREQ_LABELS[s.frequencyType] ?? s.frequencyType}</td>
                 <td className="px-4 py-3 text-sm"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[s.status] ?? ''}`}>{s.status}</span></td>
                 <td className="px-4 py-3 text-sm">{s.startDate}</td>
@@ -113,11 +136,12 @@ export default function SubscriptionListPage() {
                       <button onClick={() => setCancelTarget(s.id)} className="text-red-600 hover:underline text-xs">Cancel</button>
                     </>
                   )}
+                  <button onClick={() => setDeleteTarget(s.id)} className="text-red-700 hover:underline text-xs">Delete</button>
                   <button onClick={() => setHistoryTarget(historyTarget === s.id ? null : s.id)} className="text-gray-600 hover:underline text-xs">History</button>
                 </td>
               </tr>
             ))}
-            {data?.data?.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">No subscriptions found</td></tr>}
+            {data?.data?.length === 0 && <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-gray-500">No subscriptions found</td></tr>}
           </tbody>
         </table>
       </div>
@@ -146,6 +170,28 @@ export default function SubscriptionListPage() {
               <button onClick={closeCancelModal} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">No</button>
               <button onClick={() => cancelMutation.mutate(cancelTarget)} disabled={cancelMutation.isPending} className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50">
                 {cancelMutation.isPending ? 'Cancelling…' : 'Yes, Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="delete-sub-title">
+          <div ref={deleteModalRef} className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
+            <h2 id="delete-sub-title" className="text-lg font-semibold text-gray-900 mb-2">Delete Subscription</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              This permanently removes the subscription. If it already has delivered or invoiced history, deletion will be blocked and you should cancel it instead.
+            </p>
+            {deleteMutation.isError && (
+              <p className="mb-4 text-sm text-red-600">
+                Failed to delete subscription. If this subscription already has delivery or invoice history, use Cancel instead.
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button onClick={closeDeleteModal} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">Cancel</button>
+              <button onClick={() => deleteMutation.mutate(deleteTarget)} disabled={deleteMutation.isPending} className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50">
+                {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

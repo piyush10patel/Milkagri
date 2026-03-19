@@ -37,6 +37,13 @@ router.get(
   controller.summary,
 );
 
+router.get(
+  '/milk-summary',
+  authorize(adminPlus),
+  validate({ query: summaryQuerySchema }),
+  controller.milkSummary,
+);
+
 // GET /orders/:id
 router.get('/:id', authorize(adminPlus), validate({ params: uuidParamSchema }), controller.getById);
 

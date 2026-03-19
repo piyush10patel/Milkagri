@@ -5,7 +5,12 @@ import { api, type ApiError } from '@/lib/api';
 
 interface RouteData { id: string; name: string; description?: string; isActive: boolean; }
 interface RouteCustomer { customerId: string; sequenceOrder: number; customer: { id: string; name: string; phone: string }; }
+interface RouteAgent { userId: string; user: { id: string; name: string; email: string; role: string }; }
 interface AgentOption { id: string; name: string; email: string; }
+interface RouteDetail extends RouteData {
+  routeCustomers: RouteCustomer[];
+  routeAgents: RouteAgent[];
+}
 
 export default function RouteFormPage() {
   const { id } = useParams();
@@ -20,19 +25,7 @@ export default function RouteFormPage() {
 
   const { data: existing } = useQuery({
     queryKey: ['route', id],
-    queryFn: () => api.get<{ data: RouteData }>(`/api/v1/routes/${id}`),
-    enabled: isEdit,
-  });
-
-  const { data: routeCustomers } = useQuery({
-    queryKey: ['route-customers', id],
-    queryFn: () => api.get<{ data: RouteCustomer[] }>(`/api/v1/routes/${id}/customers`),
-    enabled: isEdit,
-  });
-
-  const { data: routeAgents } = useQuery({
-    queryKey: ['route-agents', id],
-    queryFn: () => api.get<{ data: Array<{ userId: string }> }>(`/api/v1/routes/${id}/agents`),
+    queryFn: () => api.get<RouteDetail>(`/api/v1/routes/${id}`),
     enabled: isEdit,
   });
 
@@ -47,22 +40,12 @@ export default function RouteFormPage() {
   });
 
   useEffect(() => {
-    if (existing?.data) {
-      setForm({ name: existing.data.name, description: existing.data.description ?? '' });
+    if (existing) {
+      setForm({ name: existing.name, description: existing.description ?? '' });
+      setCustomers(existing.routeCustomers.map((rc) => ({ customerId: rc.customerId, sequenceOrder: rc.sequenceOrder, name: rc.customer?.name ?? rc.customerId })));
+      setSelectedAgents(existing.routeAgents.map((a) => a.userId));
     }
   }, [existing]);
-
-  useEffect(() => {
-    if (routeCustomers?.data) {
-      setCustomers(routeCustomers.data.map((rc) => ({ customerId: rc.customerId, sequenceOrder: rc.sequenceOrder, name: rc.customer?.name ?? rc.customerId })));
-    }
-  }, [routeCustomers]);
-
-  useEffect(() => {
-    if (routeAgents?.data) {
-      setSelectedAgents(routeAgents.data.map((a) => a.userId));
-    }
-  }, [routeAgents]);
 
   const routeMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
@@ -84,12 +67,12 @@ export default function RouteFormPage() {
   const customersMutation = useMutation({
     mutationFn: (data: { customers: Array<{ customerId: string; sequenceOrder: number }> }) =>
       api.put(`/api/v1/routes/${id}/customers`, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['route-customers', id] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['route', id] }),
   });
 
   const agentsMutation = useMutation({
     mutationFn: (data: { agentIds: string[] }) => api.put(`/api/v1/routes/${id}/agents`, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['route-agents', id] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['route', id] }),
   });
 
   function handleSubmit(e: React.FormEvent) {

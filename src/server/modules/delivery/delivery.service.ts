@@ -42,6 +42,14 @@ export async function getManifestFlat(userId: string, date: string, isAdmin: boo
       productVariant: {
         include: { product: { select: { id: true, name: true } } },
       },
+      packs: {
+        select: {
+          id: true,
+          packSize: true,
+          packCount: true,
+        },
+        orderBy: { packSize: 'desc' },
+      },
       route: { select: { id: true, name: true } },
     },
   });
@@ -67,6 +75,12 @@ export async function getManifestFlat(userId: string, date: string, isAdmin: boo
       unitType: o.productVariant.unitType,
       quantityPerUnit: o.productVariant.quantityPerUnit,
     },
+    deliverySession: o.deliverySession,
+    packBreakdown: o.packs.map((pack) => ({
+      id: pack.id,
+      packSize: pack.packSize,
+      packCount: pack.packCount,
+    })),
     quantity: Number(o.quantity),
     status: o.status,
     skipReason: o.skipReason,
@@ -129,6 +143,14 @@ export async function getAgentManifest(agentId: string, date: string) {
         productVariant: {
           include: { product: { select: { name: true } } },
         },
+        packs: {
+          select: {
+            id: true,
+            packSize: true,
+            packCount: true,
+          },
+          orderBy: { packSize: 'desc' },
+        },
       },
     });
 
@@ -173,6 +195,12 @@ export async function getAgentManifest(agentId: string, date: string) {
             unitType: o.productVariant.unitType,
             quantityPerUnit: o.productVariant.quantityPerUnit,
             quantity: o.quantity,
+            deliverySession: o.deliverySession,
+            packBreakdown: o.packs.map((pack) => ({
+              id: pack.id,
+              packSize: pack.packSize,
+              packCount: pack.packCount,
+            })),
             status: o.status,
             skipReason: o.skipReason,
             failureReason: o.failureReason,

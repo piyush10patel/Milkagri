@@ -194,6 +194,15 @@ export async function addPrice(
   });
   if (!variant) throw new NotFoundError('Variant not found');
 
+  if (input.pricingCategory) {
+    const category = await prisma.pricingCategory.findFirst({
+      where: { code: input.pricingCategory, isActive: true },
+    });
+    if (!category) {
+      throw new NotFoundError('Pricing category not found');
+    }
+  }
+
   return prisma.productPrice.create({
     data: {
       productVariantId: variantId,
@@ -237,6 +246,11 @@ export async function getPriceHistory(
 // Pricing matrix for category-based billing
 // ---------------------------------------------------------------------------
 export async function getPricingMatrix() {
+  const categories = await prisma.pricingCategory.findMany({
+    where: { isActive: true },
+    orderBy: { name: 'asc' },
+  });
+
   const variants = await prisma.productVariant.findMany({
     where: { isActive: true },
     include: {
@@ -249,13 +263,13 @@ export async function getPricingMatrix() {
     orderBy: [{ product: { name: 'asc' } }, { quantityPerUnit: 'asc' }],
   });
 
-  return variants.map((variant) => {
-    const latest = {
-      default: variant.prices.find((price) => !price.pricingCategory) ?? null,
-      cat_1: variant.prices.find((price) => price.pricingCategory === 'cat_1') ?? null,
-      cat_2: variant.prices.find((price) => price.pricingCategory === 'cat_2') ?? null,
-      cat_3: variant.prices.find((price) => price.pricingCategory === 'cat_3') ?? null,
-    };
+  const rows = variants.map((variant) => {
+    const categoryPrices = Object.fromEntries(
+      categories.map((category) => [
+        category.code,
+        variant.prices.find((price) => price.pricingCategory === category.code) ?? null,
+      ]),
+    );
 
     return {
       id: variant.id,
@@ -263,7 +277,20 @@ export async function getPricingMatrix() {
       unitType: variant.unitType,
       quantityPerUnit: variant.quantityPerUnit,
       product: variant.product,
-      latestPrices: latest,
+      latestPrices: {
+        default: variant.prices.find((price) => !price.pricingCategory) ?? null,
+        categories: categoryPrices,
+      },
     };
   });
+
+  return {
+    categories: categories.map((category) => ({
+      id: category.id,
+      code: category.code,
+      name: category.name,
+      isActive: category.isActive,
+    })),
+    rows,
+  };
 }

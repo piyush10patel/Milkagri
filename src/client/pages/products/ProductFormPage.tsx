@@ -10,8 +10,9 @@ interface PriceHistoryItem {
   price: number;
   effectiveDate: string;
   branch?: string | null;
-  pricingCategory?: 'cat_1' | 'cat_2' | 'cat_3' | null;
+  pricingCategory?: string | null;
 }
+interface PricingCategoryOption { id: string; code: string; name: string; }
 
 export default function ProductFormPage() {
   const { id } = useParams();
@@ -46,6 +47,11 @@ export default function ProductFormPage() {
     queryKey: ['price-history', id, priceTarget],
     queryFn: () => api.get<{ data: PriceHistoryItem[] }>(`/api/v1/products/${id}/variants/${priceTarget}/prices?limit=20`),
     enabled: isEdit && !!priceTarget,
+  });
+
+  const { data: pricingCategoriesData } = useQuery({
+    queryKey: ['pricing-categories-options'],
+    queryFn: () => api.get<{ data: PricingCategoryOption[] }>('/api/v1/pricing-categories'),
   });
 
   useEffect(() => {
@@ -214,9 +220,9 @@ export default function ProductFormPage() {
                       <label htmlFor={`pricingCat-${v.id}`} className="block text-xs text-gray-600 mb-1">Pricing Category</label>
                       <select id={`pricingCat-${v.id}`} value={priceForm.pricingCategory} onChange={(e) => setPriceForm({ ...priceForm, pricingCategory: e.target.value })} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm">
                         <option value="">Default (All)</option>
-                        <option value="cat_1">Cat 1</option>
-                        <option value="cat_2">Cat 2</option>
-                        <option value="cat_3">Cat 3</option>
+                        {pricingCategoriesData?.data?.map((category) => (
+                          <option key={category.id} value={category.code}>{category.name}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -225,7 +231,7 @@ export default function ProductFormPage() {
                   </button>
 
                   <div className="rounded-md bg-blue-50 border border-blue-100 px-3 py-2 text-xs text-blue-800">
-                    Add separate entries for Default, Cat 1, and Cat 2 when customers in those pricing categories should be billed differently.
+                    Add separate entries for the default price and any active pricing categories that should be billed differently.
                   </div>
 
                   {priceHistoryData?.data?.length ? (
@@ -244,7 +250,7 @@ export default function ProductFormPage() {
                             <tr key={price.id} className="border-b border-gray-50">
                               <td className="py-1">{price.effectiveDate}</td>
                               <td className="py-1 text-right">₹{Number(price.price).toFixed(2)}</td>
-                              <td className="py-1 pl-3">{price.pricingCategory ? price.pricingCategory.replace('_', ' ').toUpperCase() : 'Default'}</td>
+                              <td className="py-1 pl-3">{price.pricingCategory ? pricingCategoriesData?.data?.find((category) => category.code === price.pricingCategory)?.name ?? price.pricingCategory : 'Default'}</td>
                               <td className="py-1 pl-3">{price.branch ?? 'All branches'}</td>
                             </tr>
                           ))}

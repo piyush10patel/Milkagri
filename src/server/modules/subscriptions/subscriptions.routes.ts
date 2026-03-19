@@ -53,6 +53,16 @@ router.put(
   controller.update,
 );
 
+// DELETE /subscriptions/:id
+router.delete(
+  '/:id',
+  authorize(adminOnly),
+  csrfProtection,
+  validate({ params: uuidParamSchema }),
+  auditLog(),
+  controller.remove,
+);
+
 // PATCH /subscriptions/:id/cancel
 router.patch(
   '/:id/cancel',

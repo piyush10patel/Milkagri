@@ -160,3 +160,21 @@ export async function updateAddress(req: Request, res: Response, next: NextFunct
     next(err);
   }
 }
+
+// ---------------------------------------------------------------------------
+// POST /customers/reset-operational-data
+// ---------------------------------------------------------------------------
+export async function resetOperationalData(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await customersService.resetOperationalCustomerData();
+    res.locals.audit = {
+      actionType: 'delete',
+      entityType: 'customer_operational_data',
+      entityId: 'bulk-reset',
+      changes: result,
+    };
+    res.json({ data: result });
+  } catch (err) {
+    next(err);
+  }
+}

@@ -88,6 +88,18 @@ router.put(
 );
 
 // ---------------------------------------------------------------------------
+// DELETE /routes/:id
+// ---------------------------------------------------------------------------
+router.delete(
+  '/:id',
+  authorize(adminOnly),
+  csrfProtection,
+  validate({ params: uuidParamSchema }),
+  auditLog(),
+  controller.remove,
+);
+
+// ---------------------------------------------------------------------------
 // PATCH /routes/:id/deactivate — deactivate route
 // ---------------------------------------------------------------------------
 router.patch(

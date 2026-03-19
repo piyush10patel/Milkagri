@@ -130,3 +130,16 @@ export async function summary(req: Request, res: Response, next: NextFunction) {
     next(err);
   }
 }
+
+// ---------------------------------------------------------------------------
+// GET /orders/milk-summary
+// ---------------------------------------------------------------------------
+export async function milkSummary(req: Request, res: Response, next: NextFunction) {
+  try {
+    const date = new Date(req.query.date as string);
+    const result = await ordersService.getMilkSummary(date);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}

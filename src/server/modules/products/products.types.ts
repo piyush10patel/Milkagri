@@ -44,7 +44,7 @@ export const addPriceSchema = z.object({
   price: z.number().positive('Price must be positive'),
   effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
   branch: z.string().max(100).nullable().optional(),
-  pricingCategory: z.enum(['cat_1', 'cat_2', 'cat_3']).nullable().optional(),
+  pricingCategory: z.string().max(100).nullable().optional(),
 });
 
 // ---------------------------------------------------------------------------

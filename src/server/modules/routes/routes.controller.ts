@@ -84,6 +84,28 @@ export async function update(req: Request, res: Response, next: NextFunction) {
 }
 
 // ---------------------------------------------------------------------------
+// DELETE /routes/:id
+// ---------------------------------------------------------------------------
+export async function remove(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = param(req, 'id');
+    const result = await routesService.deleteRoute(id);
+    res.locals.audit = {
+      actionType: 'delete',
+      entityType: 'route',
+      entityId: id,
+      changes: {
+        removedAgents: { old: result.removedAgents, new: 0 },
+        removedHolidays: { old: result.removedHolidays, new: 0 },
+      },
+    };
+    res.json({ message: 'Route deleted', data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // PATCH /routes/:id/deactivate
 // ---------------------------------------------------------------------------
 export async function deactivate(req: Request, res: Response, next: NextFunction) {

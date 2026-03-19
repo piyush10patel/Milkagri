@@ -10,6 +10,8 @@ interface ManifestItem {
   customerAddress?: { addressLine1: string; addressLine2?: string; city?: string };
   productVariant: { id: string; product: { name: string }; unitType: string; quantityPerUnit: number };
   quantity: number;
+  deliverySession: 'morning' | 'evening';
+  packBreakdown?: Array<{ packSize: number | string; packCount: number }>;
   status: 'pending' | 'delivered' | 'skipped' | 'failed' | 'returned';
   skipReason?: string;
   failureReason?: string;
@@ -192,6 +194,12 @@ export default function DeliveryManifestPage() {
             <div className="bg-gray-50 rounded px-3 py-2 mb-3">
               <p className="text-sm font-medium">{item.productVariant?.product?.name}</p>
               <p className="text-sm text-gray-600">{item.quantity} × {item.productVariant?.quantityPerUnit} {item.productVariant?.unitType}</p>
+              <p className="text-xs text-gray-500 capitalize">Session: {item.deliverySession}</p>
+              {item.packBreakdown?.length ? (
+                <p className="text-xs text-gray-500">
+                  Packs: {item.packBreakdown.map((pack) => `${pack.packCount} x ${Number(pack.packSize)}L`).join(', ')}
+                </p>
+              ) : null}
             </div>
 
             {/* Action buttons - large tap targets */}

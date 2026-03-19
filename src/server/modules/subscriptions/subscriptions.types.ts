@@ -7,19 +7,40 @@ import { z } from 'zod';
 export const createSubscriptionSchema = z.object({
   customerId: z.string().uuid('Invalid customer ID'),
   productVariantId: z.string().uuid('Invalid product variant ID'),
+  routeId: z.string().uuid('Invalid route ID').optional(),
   quantity: z.number().positive('Quantity must be positive'),
+  deliverySession: z.enum(['morning', 'evening']).default('morning'),
   frequencyType: z.enum(['daily', 'alternate_day', 'custom_weekday']),
   weekdays: z
     .array(z.number().int().min(0).max(6))
+    .optional()
+    .default([]),
+  packBreakdown: z
+    .array(
+      z.object({
+        packSize: z.number().positive('Pack size must be positive'),
+        packCount: z.number().int().positive('Pack count must be positive'),
+      }),
+    )
     .optional()
     .default([]),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date must be YYYY-MM-DD'),
 });
 
 export const updateSubscriptionSchema = z.object({
+  routeId: z.string().uuid('Invalid route ID').nullable().optional(),
   quantity: z.number().positive('Quantity must be positive').optional(),
+  deliverySession: z.enum(['morning', 'evening']).optional(),
   frequencyType: z.enum(['daily', 'alternate_day', 'custom_weekday']).optional(),
   weekdays: z.array(z.number().int().min(0).max(6)).optional(),
+  packBreakdown: z
+    .array(
+      z.object({
+        packSize: z.number().positive('Pack size must be positive'),
+        packCount: z.number().int().positive('Pack count must be positive'),
+      }),
+    )
+    .optional(),
 });
 
 export const cancelSubscriptionSchema = z.object({

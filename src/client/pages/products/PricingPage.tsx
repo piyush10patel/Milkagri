@@ -8,6 +8,13 @@ interface LatestPrice {
   effectiveDate: string;
 }
 
+interface PricingCategoryOption {
+  id: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+}
+
 interface PricingRow {
   id: string;
   sku?: string | null;
@@ -16,23 +23,24 @@ interface PricingRow {
   product: { id: string; name: string };
   latestPrices: {
     default: LatestPrice | null;
-    cat_1: LatestPrice | null;
-    cat_2: LatestPrice | null;
-    cat_3: LatestPrice | null;
+    categories: Record<string, LatestPrice | null>;
   };
+}
+
+interface PricingMatrixResponse {
+  categories: PricingCategoryOption[];
+  rows: PricingRow[];
 }
 
 interface PriceEditorState {
   variantId: string;
   productId: string;
-  defaultPrice: string;
-  cat1Price: string;
-  cat2Price: string;
   effectiveDate: string;
+  prices: Record<string, string>;
 }
 
 function formatCurrency(price: LatestPrice | null) {
-  return price ? `₹${Number(price.price).toFixed(2)}` : 'Not set';
+  return price ? `Rs ${Number(price.price).toFixed(2)}` : 'Not set';
 }
 
 function formatDate(price: LatestPrice | null) {
@@ -44,29 +52,29 @@ export default function PricingPage() {
   const [search, setSearch] = useState('');
   const [editor, setEditor] = useState<PriceEditorState | null>(null);
   const [error, setError] = useState('');
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['pricing-matrix'],
-    queryFn: () => api.get<{ data: PricingRow[] }>('/api/v1/products/pricing-matrix'),
+    queryFn: () => api.get<{ data: PricingMatrixResponse }>('/api/v1/products/pricing-matrix'),
+  });
+
+  const { data: pricingCategoriesData } = useQuery({
+    queryKey: ['pricing-categories-admin'],
+    queryFn: () => api.get<{ data: PricingCategoryOption[] }>('/api/v1/pricing-categories?includeInactive=true'),
   });
 
   const saveMutation = useMutation({
     mutationFn: async (payload: PriceEditorState) => {
       const requests: Promise<unknown>[] = [];
 
-      const entries = [
-        { pricingCategory: null, value: payload.defaultPrice },
-        { pricingCategory: 'cat_1', value: payload.cat1Price },
-        { pricingCategory: 'cat_2', value: payload.cat2Price },
-      ] as const;
-
-      for (const entry of entries) {
-        if (!entry.value.trim()) continue;
+      for (const [categoryCode, value] of Object.entries(payload.prices)) {
+        if (!value.trim()) continue;
         requests.push(
           api.post(`/api/v1/products/${payload.productId}/variants/${payload.variantId}/prices`, {
-            price: Number(entry.value),
+            price: Number(value),
             effectiveDate: payload.effectiveDate,
-            pricingCategory: entry.pricingCategory,
+            pricingCategory: categoryCode === 'default' ? null : categoryCode,
           }),
         );
       }
@@ -87,8 +95,32 @@ export default function PricingPage() {
     },
   });
 
+  const createCategoryMutation = useMutation({
+    mutationFn: (name: string) => api.post('/api/v1/pricing-categories', { name }),
+    onSuccess: () => {
+      setNewCategoryName('');
+      queryClient.invalidateQueries({ queryKey: ['pricing-categories-admin'] });
+      queryClient.invalidateQueries({ queryKey: ['pricing-matrix'] });
+    },
+    onError: (err: { message?: string }) => {
+      setError(err.message ?? 'Failed to create pricing category');
+    },
+  });
+
+  const updateCategoryMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      api.put(`/api/v1/pricing-categories/${id}`, { isActive }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pricing-categories-admin'] });
+      queryClient.invalidateQueries({ queryKey: ['pricing-matrix'] });
+    },
+    onError: (err: { message?: string }) => {
+      setError(err.message ?? 'Failed to update pricing category');
+    },
+  });
+
   const rows = useMemo(() => {
-    const items = data?.data ?? [];
+    const items = data?.data?.rows ?? [];
     const term = search.trim().toLowerCase();
     if (!term) return items;
     return items.filter((row) =>
@@ -98,28 +130,80 @@ export default function PricingPage() {
     );
   }, [data, search]);
 
+  const activeCategories = data?.data?.categories ?? [];
+
   function openEditor(row: PricingRow) {
     setError('');
+    const prices: Record<string, string> = {
+      default: row.latestPrices.default ? String(Number(row.latestPrices.default.price)) : '',
+    };
+
+    activeCategories.forEach((category) => {
+      prices[category.code] = row.latestPrices.categories[category.code]
+        ? String(Number(row.latestPrices.categories[category.code]?.price))
+        : '';
+    });
+
     setEditor({
       variantId: row.id,
       productId: row.product.id,
-      defaultPrice: row.latestPrices.default ? String(Number(row.latestPrices.default.price)) : '',
-      cat1Price: row.latestPrices.cat_1 ? String(Number(row.latestPrices.cat_1.price)) : '',
-      cat2Price: row.latestPrices.cat_2 ? String(Number(row.latestPrices.cat_2.price)) : '',
+      prices,
       effectiveDate:
-        row.latestPrices.cat_1?.effectiveDate ||
-        row.latestPrices.cat_2?.effectiveDate ||
         row.latestPrices.default?.effectiveDate ||
+        activeCategories
+          .map((category) => row.latestPrices.categories[category.code]?.effectiveDate)
+          .find(Boolean) ||
         new Date().toISOString().slice(0, 10),
     });
   }
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Pricing Plan</h1>
-          <p className="text-sm text-gray-500">Manage variant prices in one place, for example: Buffalo Milk - Cat 1 = 65, Cat 2 = 60.</p>
+      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">Pricing Plan</h1>
+            <p className="text-sm text-gray-500">Add your own pricing categories and set different prices per milk type without hardcoded Cat 1 or Cat 2 limits.</p>
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!newCategoryName.trim()) return;
+              createCategoryMutation.mutate(newCategoryName.trim());
+            }}
+            className="flex w-full max-w-md gap-2"
+          >
+            <input
+              type="text"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              placeholder="Add pricing category, e.g. wholesale"
+              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+            />
+            <button
+              type="submit"
+              disabled={createCategoryMutation.isPending}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {createCategoryMutation.isPending ? 'Adding...' : 'Add'}
+            </button>
+          </form>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(pricingCategoriesData?.data ?? []).map((category) => (
+            <div key={category.id} className={`rounded-full border px-3 py-1.5 text-xs ${category.isActive ? 'border-green-200 bg-green-50 text-green-800' : 'border-gray-200 bg-gray-100 text-gray-600'}`}>
+              <span className="font-medium">{category.name}</span>
+              <span className="ml-2 text-[11px] uppercase">{category.code}</span>
+              <button
+                type="button"
+                onClick={() => updateCategoryMutation.mutate({ id: category.id, isActive: !category.isActive })}
+                className="ml-3 underline"
+              >
+                {category.isActive ? 'Deactivate' : 'Activate'}
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -139,12 +223,13 @@ export default function PricingPage() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product Variant</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Default</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cat 1</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cat 2</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Effective</th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Action</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product Variant</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Default</th>
+              {activeCategories.map((category) => (
+                <th key={category.id} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{category.name}</th>
+              ))}
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Effective</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -154,56 +239,37 @@ export default function PricingPage() {
 
               return (
                 <tr key={row.id} className={isEditing ? 'bg-blue-50/50' : 'hover:bg-gray-50'}>
-                  <td className="px-4 py-3 text-sm">
-                    <div className="font-medium text-gray-900">{label}</div>
-                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{label}</td>
                   <td className="px-4 py-3 text-sm">
                     {isEditing ? (
                       <input
                         type="number"
                         step="0.01"
                         min="0.01"
-                        value={editor.defaultPrice}
-                        onChange={(e) => setEditor((current) => current ? { ...current, defaultPrice: e.target.value } : current)}
+                        value={editor.prices.default}
+                        onChange={(e) => setEditor((current) => current ? { ...current, prices: { ...current.prices, default: e.target.value } } : current)}
                         className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-                        placeholder="0.00"
                       />
                     ) : (
-                      <div>
-                        <div className="font-medium">{formatCurrency(row.latestPrices.default)}</div>
-                      </div>
+                      <div className="font-medium">{formatCurrency(row.latestPrices.default)}</div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm">
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        value={editor.cat1Price}
-                        onChange={(e) => setEditor((current) => current ? { ...current, cat1Price: e.target.value } : current)}
-                        className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-                        placeholder="0.00"
-                      />
-                    ) : (
-                      <div className="font-medium">{formatCurrency(row.latestPrices.cat_1)}</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        value={editor.cat2Price}
-                        onChange={(e) => setEditor((current) => current ? { ...current, cat2Price: e.target.value } : current)}
-                        className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-                        placeholder="0.00"
-                      />
-                    ) : (
-                      <div className="font-medium">{formatCurrency(row.latestPrices.cat_2)}</div>
-                    )}
-                  </td>
+                  {activeCategories.map((category) => (
+                    <td key={category.id} className="px-4 py-3 text-sm">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          value={editor.prices[category.code] ?? ''}
+                          onChange={(e) => setEditor((current) => current ? { ...current, prices: { ...current.prices, [category.code]: e.target.value } } : current)}
+                          className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                        />
+                      ) : (
+                        <div className="font-medium">{formatCurrency(row.latestPrices.categories[category.code] ?? null)}</div>
+                      )}
+                    </td>
+                  ))}
                   <td className="px-4 py-3 text-sm text-gray-600">
                     {isEditing ? (
                       <input
@@ -213,26 +279,18 @@ export default function PricingPage() {
                         className="rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                       />
                     ) : (
-                      <div className="text-xs">
+                      <div className="space-y-1 text-xs">
                         <div>Default: {formatDate(row.latestPrices.default)}</div>
-                        <div>Cat 1: {formatDate(row.latestPrices.cat_1)}</div>
-                        <div>Cat 2: {formatDate(row.latestPrices.cat_2)}</div>
+                        {activeCategories.map((category) => (
+                          <div key={category.id}>{category.name}: {formatDate(row.latestPrices.categories[category.code] ?? null)}</div>
+                        ))}
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-right">
+                  <td className="px-4 py-3 text-right text-sm">
                     {isEditing ? (
                       <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditor(null);
-                            setError('');
-                          }}
-                          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-                        >
-                          Cancel
-                        </button>
+                        <button type="button" onClick={() => setEditor(null)} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">Cancel</button>
                         <button
                           type="button"
                           onClick={() => editor && saveMutation.mutate(editor)}
@@ -243,13 +301,7 @@ export default function PricingPage() {
                         </button>
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => openEditor(row)}
-                        className="text-blue-600 hover:underline"
-                      >
-                        Edit Prices
-                      </button>
+                      <button type="button" onClick={() => openEditor(row)} className="text-blue-600 hover:underline">Edit Prices</button>
                     )}
                   </td>
                 </tr>
@@ -257,7 +309,7 @@ export default function PricingPage() {
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">No variants found</td>
+                <td colSpan={activeCategories.length + 4} className="px-4 py-8 text-center text-sm text-gray-500">No variants found</td>
               </tr>
             )}
           </tbody>

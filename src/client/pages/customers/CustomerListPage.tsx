@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { useModalFocusTrap } from '@/hooks/useModalFocusTrap';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Customer {
   id: string;
@@ -20,6 +21,7 @@ interface ListResponse {
 }
 
 export default function CustomerListPage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -29,6 +31,9 @@ export default function CustomerListPage() {
   const [confirmAction, setConfirmAction] = useState<{ id: string; status: string } | null>(null);
   const closeConfirm = useCallback(() => setConfirmAction(null), []);
   const { modalRef: confirmModalRef } = useModalFocusTrap(!!confirmAction, closeConfirm);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const closeResetModal = useCallback(() => setShowResetModal(false), []);
+  const { modalRef: resetModalRef } = useModalFocusTrap(showResetModal, closeResetModal);
   const limit = 20;
 
   const params = new URLSearchParams({ page: String(page), limit: String(limit), sortBy, sortOrder });
@@ -49,6 +54,17 @@ export default function CustomerListPage() {
     },
   });
 
+  const resetMutation = useMutation({
+    mutationFn: () => api.post('/api/v1/customers/reset-operational-data'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['billing'] });
+      setShowResetModal(false);
+    },
+  });
+
   function handleSort(col: string) {
     if (sortBy === col) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     else { setSortBy(col); setSortOrder('asc'); }
@@ -65,9 +81,20 @@ export default function CustomerListPage() {
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <h1 className="text-xl font-semibold text-gray-900">Customers</h1>
-        <Link to="/customers/new" className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
-          + New Customer
-        </Link>
+        <div className="flex gap-2">
+          {(user?.role === 'super_admin' || user?.role === 'admin') && (
+            <button
+              type="button"
+              onClick={() => setShowResetModal(true)}
+              className="inline-flex items-center rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+            >
+              Reset Operational Data
+            </button>
+          )}
+          <Link to="/customers/new" className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            + New Customer
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
@@ -167,6 +194,30 @@ export default function CustomerListPage() {
                 className="rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {statusMutation.isPending ? 'Updating…' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="reset-operational-title">
+          <div ref={resetModalRef} className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <h2 id="reset-operational-title" className="text-lg font-semibold text-gray-900 mb-2">Reset Customer Operational Data</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              This will permanently remove customers, subscriptions, orders, invoices, payments, ledger entries, and related history. Users, products, pricing, and routes will stay.
+            </p>
+            {resetMutation.isError && (
+              <p className="mb-4 text-sm text-red-600">Reset failed. Please try again.</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button onClick={closeResetModal} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">Cancel</button>
+              <button
+                onClick={() => resetMutation.mutate()}
+                disabled={resetMutation.isPending}
+                className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {resetMutation.isPending ? 'Resetting...' : 'Reset Now'}
               </button>
             </div>
           </div>
