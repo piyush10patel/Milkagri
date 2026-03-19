@@ -1,32 +1,24 @@
 # Milk Delivery Platform
 
-A self-hosted, open-source web application for managing the full lifecycle of a milk/dairy delivery business — customer onboarding, product catalog, recurring subscriptions, daily delivery operations, route management, billing, payment collection, reporting, and administration.
+Self-hosted web application for running a milk and dairy delivery business: customers, subscriptions, routes, daily orders, delivery execution, billing, payments, reporting, inventory, and milk collection.
 
-Built with Express.js, React, PostgreSQL, and Redis. Deployed via Docker Compose on a single Linux server with zero dependency on paid SaaS providers.
+Built with Express.js, React, PostgreSQL, Redis, and Prisma.
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Backend | Node.js 20, Express.js, TypeScript |
-| Frontend | React 18, Vite, Tailwind CSS, Shadcn/ui |
-| Database | PostgreSQL 16, Prisma ORM |
-| Background Jobs | BullMQ + Redis 7 |
-| Auth | express-session, passport-local, bcrypt |
-| PDF | PDFKit |
-| Email | Nodemailer (SMTP) |
-| Testing | Vitest, fast-check (property-based) |
+| Backend | Node.js, Express.js, TypeScript |
+| Frontend | React, Vite, Tailwind CSS |
+| Database | PostgreSQL, Prisma ORM |
+| Queue / Jobs | Redis, BullMQ |
+| Auth | express-session, bcrypt |
+| Testing | Vitest |
 | Deployment | Docker, Docker Compose, Nginx |
 
-## Prerequisites
+## Local Development
 
-- [Node.js 20 LTS](https://nodejs.org/) (for local development)
-- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) (for production)
-- Git
-
-## Local Development Setup
-
-### 1. Clone and install dependencies
+### 1. Install
 
 ```bash
 git clone <repository-url>
@@ -40,277 +32,153 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` and set at minimum:
+Set values in `.env`. At minimum you will need:
 
 ```dotenv
-DATABASE_URL=postgresql://milkdelivery:yourpassword@localhost:5432/milkdelivery
+DATABASE_URL=postgresql://<db-user>:<db-password>@localhost:5432/<db-name>
 REDIS_URL=redis://localhost:6379
-SESSION_SECRET=<random-string>
-CSRF_SECRET=<random-string>
-POSTGRES_PASSWORD=yourpassword
+SESSION_SECRET=<generate-a-random-secret>
+POSTGRES_PASSWORD=<set-a-strong-password>
 ```
 
-Generate secrets with:
+Notes:
+- Do not commit `.env`
+- Use strong unique secrets in every environment
+- Rotate any secrets that were previously committed or shared
 
-```bash
-openssl rand -hex 32
-```
-
-### 3. Start PostgreSQL and Redis
-
-Using Docker (recommended):
+### 3. Start local services
 
 ```bash
 docker compose up -d postgres redis
 ```
 
-Or use locally installed instances and update `DATABASE_URL` / `REDIS_URL` accordingly.
-
-### 4. Run database migrations and seed
+### 4. Migrate and seed
 
 ```bash
 npx prisma migrate deploy
 npm run db:seed
 ```
 
-### 5. Start development servers
+The seed script creates sample users and demo operational data. It does not embed fixed passwords in the repository.
 
-In two separate terminals:
+If you want predictable demo passwords for a local run, set them before seeding:
 
 ```bash
-# Terminal 1 — API server (auto-reloads on changes)
-npm run dev:server
+SEED_ADMIN_PASSWORD=<your-demo-admin-password>
+SEED_AGENT_PASSWORD=<your-demo-agent-password>
+npm run db:seed
+```
 
-# Terminal 2 — React frontend (Vite dev server with HMR)
+If these variables are not set, the seed script generates random passwords and prints them once in the console.
+
+### 5. Start the app
+
+Run in two terminals:
+
+```bash
+npm run dev:server
+```
+
+```bash
 npm run dev:client
 ```
 
-The API runs on `http://localhost:3000` and the Vite dev server on `http://localhost:5173` (proxied to the API).
-
-### 6. Run tests
-
-```bash
-npm test
-```
+Default local URLs:
+- API: `http://localhost:3000`
+- App: `http://localhost:5173`
 
 ## Production Deployment
 
-### 1. Prepare the server
-
-Ensure Docker and Docker Compose are installed on your Linux server.
-
-### 2. Configure environment
+### 1. Prepare environment
 
 ```bash
 cp .env.example .env
 ```
 
-Set all required values in `.env`:
+Set production values for all required variables before starting containers.
+
+Key variables:
 
 | Variable | Required | Description |
 |---|---|---|
 | `POSTGRES_PASSWORD` | Yes | PostgreSQL password |
-| `SESSION_SECRET` | Yes | Random string for session signing |
-| `CSRF_SECRET` | Yes | Random string for CSRF tokens |
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `REDIS_URL` | Auto | Defaults to `redis://redis:6379` |
-| `NODE_ENV` | Auto | Set to `production` by Docker Compose |
-| `PORT` | No | App port (default: `3000`) |
-| `SMTP_HOST` | No | SMTP server for email notifications |
-| `SMTP_PORT` | No | SMTP port (default: `587`) |
-| `SMTP_USER` | No | SMTP username |
-| `SMTP_PASS` | No | SMTP password |
-| `SMTP_FROM` | No | Sender email address |
-| `DAILY_ORDER_CRON` | No | Cron for daily order generation (default: `0 2 * * *`) |
-| `MONTHLY_INVOICE_CRON` | No | Cron for monthly invoicing (default: `0 3 1 * *`) |
-| `BILLING_CYCLE_START_DAY` | No | Day of month billing starts (default: `1`) |
-| `CUTOFF_TIME` | No | Subscription change cutoff (default: `22:00`) |
-| `HTTP_PORT` | No | Nginx HTTP port (default: `80`) |
-| `HTTPS_PORT` | No | Nginx HTTPS port (default: `443`) |
-| `SSL_CERT_DIR` | No | Path to SSL cert/key files (default: `./ssl`) |
-| `BACKUP_DIR` | No | Backup storage directory (default: `./backups`) |
-| `BACKUP_RETENTION_DAYS` | No | Days to keep backups (default: `30`) |
+| `REDIS_URL` | Yes | Redis connection string |
+| `SESSION_SECRET` | Yes | Session signing secret |
+| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` | No | Email settings |
+| `SMS_PROVIDER_URL` / `SMS_API_KEY` | No | SMS integration |
+| `WEBHOOK_NOTIFICATION_URL` | No | Outbound webhook target |
 
-### 3. Set up SSL (optional but recommended)
-
-Place your SSL certificate and key in the `ssl/` directory:
-
-```
-ssl/
-├── cert.pem
-└── key.pem
-```
-
-### 4. Build and start
+### 2. Start services
 
 ```bash
 docker compose up -d --build
 ```
 
-This starts all services:
-- **postgres** — PostgreSQL 16 database
-- **redis** — Redis 7 for sessions and job queues
-- **app** — Express API server (auto-runs migrations on startup)
-- **worker** — BullMQ background job processor
-- **nginx** — Reverse proxy with HTTPS termination
-- **backup** — Automated daily database backups via cron
-
-### 5. Seed the database (first run only)
+### 3. Seed optional demo data
 
 ```bash
 docker compose exec app npx tsx prisma/seed.ts
 ```
 
-### 6. Verify
+Use this only for non-production/demo environments unless you explicitly want sample data.
+
+## Database and Backups
+
+### Migrations
 
 ```bash
-curl http://localhost/api/health
+npm run db:migrate
 ```
 
-Should return `{"status":"ok"}` with database connection info.
-
-## Database Migrations
-
-Migrations run automatically on app startup (`prisma migrate deploy` in the Docker CMD). For manual control:
+### Prisma Studio
 
 ```bash
-# Deploy pending migrations
-npm run db:migrate
-
-# Create a new migration during development
-npm run db:migrate:dev
-
-# Open Prisma Studio (visual DB browser)
 npm run db:studio
 ```
 
-## Seeding Data
-
-The seed script (`prisma/seed.ts`) populates the database with sample data for demonstration:
+### Backup
 
 ```bash
-npm run db:seed
-```
-
-This creates:
-- Staff accounts (Super Admin, Admin, Delivery Agents, Billing Staff)
-- Sample customers with addresses
-- Products (Cow Milk, Buffalo Milk, Curd) with variants and prices
-- Sample subscriptions (daily, alternate-day, custom weekday)
-- Two delivery routes with customer and agent assignments
-- System-wide holidays
-- Default system settings
-
-## Creating the First Super Admin Account
-
-After seeding, a Super Admin account is available:
-
-| Field | Value |
-|---|---|
-| Email | `admin@milkdelivery.local` |
-| Password | `Admin@123` |
-
-**Change this password immediately after first login.**
-
-Other seeded accounts:
-
-| Role | Email | Password |
-|---|---|---|
-| Admin | `manager@milkdelivery.local` | `Admin@123` |
-| Delivery Agent | `agent1@milkdelivery.local` | `Agent@123` |
-| Delivery Agent | `agent2@milkdelivery.local` | `Agent@123` |
-| Billing Staff | `billing@milkdelivery.local` | `Admin@123` |
-
-If you prefer to create a Super Admin without seeding, insert directly via Prisma:
-
-```bash
-npx tsx -e "
-const { PrismaClient } = require('@prisma/client');
-const bcrypt = require('bcrypt');
-const prisma = new PrismaClient();
-(async () => {
-  const hash = await bcrypt.hash('YourSecurePassword', 10);
-  await prisma.user.create({
-    data: {
-      email: 'you@example.com',
-      passwordHash: hash,
-      name: 'Your Name',
-      role: 'super_admin',
-    },
-  });
-  console.log('Super Admin created.');
-  await prisma.\$disconnect();
-})();
-"
-```
-
-## Backup and Restore
-
-### Automated Backups
-
-The `backup` service in Docker Compose runs a daily cron job at 2:00 AM that:
-- Creates a compressed PostgreSQL dump in `./backups/`
-- Removes backups older than `BACKUP_RETENTION_DAYS` (default: 30)
-
-Backup files are named `milkdelivery_YYYYMMDD_HHMMSS.dump`.
-
-### Manual Backup
-
-```bash
-# From the host (Docker)
-docker compose exec postgres pg_dump -U milkdelivery -Fc milkdelivery > backup.dump
-
-# Or using the backup script directly
-DATABASE_URL="postgresql://milkdelivery:password@localhost:5432/milkdelivery" ./scripts/backup.sh
+docker compose exec postgres pg_dump -U <db-user> -Fc <db-name> > backup.dump
 ```
 
 ### Restore
 
 ```bash
-# Set DATABASE_URL and run the restore script
-DATABASE_URL="postgresql://milkdelivery:password@localhost:5432/milkdelivery" \
-  ./scripts/restore.sh ./backups/milkdelivery_20260315_020000.dump
+./scripts/restore.sh <path-to-backup>
 ```
 
-The restore script will prompt for confirmation before overwriting data. It uses `pg_restore` with `--clean --single-transaction` for safe, atomic restores.
+Make sure `DATABASE_URL` points to the correct target database before restoring.
 
 ## Available Scripts
 
 | Script | Description |
 |---|---|
-| `npm run dev:server` | Start API server with auto-reload |
-| `npm run dev:client` | Start Vite dev server with HMR |
-| `npm run build` | Build client and server for production |
-| `npm test` | Run all tests (Vitest) |
-| `npm run db:migrate` | Deploy pending migrations |
-| `npm run db:migrate:dev` | Create new migration (development) |
-| `npm run db:seed` | Seed database with sample data |
+| `npm run dev:server` | Start backend in development |
+| `npm run dev:client` | Start frontend in development |
+| `npm run build` | Build client and server |
+| `npm test` | Run tests |
+| `npm run db:migrate` | Apply pending migrations |
+| `npm run db:migrate:dev` | Create a development migration |
+| `npm run db:generate` | Regenerate Prisma client |
+| `npm run db:seed` | Seed sample data |
 | `npm run db:studio` | Open Prisma Studio |
+
+## Security Notes
+
+- `.env` and other local secret files should stay out of version control
+- Never publish real production credentials in docs, scripts, or screenshots
+- If secrets were already pushed, rotate them and clean git history before treating the repo as public-safe
+- Review seeded demo data before using it in shared or customer-facing environments
 
 ## Project Structure
 
-```
-├── prisma/                  # Database schema, migrations, seed
-│   ├── schema.prisma
-│   ├── migrations/
-│   └── seed.ts
-├── scripts/                 # Backup and restore scripts
-├── src/
-│   ├── server/              # Express API
-│   │   ├── modules/         # Feature modules (auth, customers, billing, etc.)
-│   │   ├── middleware/       # Auth, RBAC, CSRF, rate limiting, error handling
-│   │   ├── jobs/            # BullMQ background job processors
-│   │   ├── lib/             # Shared utilities (pricing, pagination, PDF, etc.)
-│   │   └── index.ts         # App entry point
-│   └── client/              # React SPA
-│       ├── pages/           # Route pages
-│       ├── components/      # Shared components
-│       ├── hooks/           # Custom React hooks
-│       └── lib/             # API client utilities
-├── docker-compose.yml
-├── Dockerfile
-├── nginx.conf
-└── .env.example
+```text
+prisma/         Database schema, migrations, seed
+scripts/        Backup and restore helpers
+src/server/     Express API
+src/client/     React application
 ```
 
 ## License

@@ -1,38 +1,43 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import crypto from 'node:crypto';
 
 const prisma = new PrismaClient();
-
 const BCRYPT_ROUNDS = 10;
 
 async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, BCRYPT_ROUNDS);
 }
 
-async function main() {
-  console.log('🌱 Seeding database...');
+function envOrFallback(name: string, fallback: string): string {
+  return process.env[name]?.trim() || fallback;
+}
 
-  // ── Users ──────────────────────────────────────────────────────────────
-  const defaultPassword = await hashPassword('Admin@123');
-  const agentPassword = await hashPassword('Agent@123');
+async function main() {
+  console.log('Seeding database...');
+
+  const adminPasswordPlain = envOrFallback('SEED_ADMIN_PASSWORD', crypto.randomBytes(9).toString('base64url'));
+  const agentPasswordPlain = envOrFallback('SEED_AGENT_PASSWORD', crypto.randomBytes(9).toString('base64url'));
+  const adminPasswordHash = await hashPassword(adminPasswordPlain);
+  const agentPasswordHash = await hashPassword(agentPasswordPlain);
 
   const superAdmin = await prisma.user.upsert({
     where: { email: 'admin@milkdelivery.local' },
     update: {},
     create: {
       email: 'admin@milkdelivery.local',
-      passwordHash: defaultPassword,
+      passwordHash: adminPasswordHash,
       name: 'Super Admin',
       role: 'super_admin',
     },
   });
 
-  const adminUser = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { email: 'manager@milkdelivery.local' },
     update: {},
     create: {
       email: 'manager@milkdelivery.local',
-      passwordHash: defaultPassword,
+      passwordHash: adminPasswordHash,
       name: 'Branch Manager',
       role: 'admin',
     },
@@ -43,7 +48,7 @@ async function main() {
     update: {},
     create: {
       email: 'agent1@milkdelivery.local',
-      passwordHash: agentPassword,
+      passwordHash: agentPasswordHash,
       name: 'Ravi Kumar',
       role: 'delivery_agent',
     },
@@ -54,26 +59,23 @@ async function main() {
     update: {},
     create: {
       email: 'agent2@milkdelivery.local',
-      passwordHash: agentPassword,
+      passwordHash: agentPasswordHash,
       name: 'Suresh Patel',
       role: 'delivery_agent',
     },
   });
 
-  const billingStaff = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { email: 'billing@milkdelivery.local' },
     update: {},
     create: {
       email: 'billing@milkdelivery.local',
-      passwordHash: defaultPassword,
+      passwordHash: adminPasswordHash,
       name: 'Priya Sharma',
       role: 'billing_staff',
     },
   });
 
-  console.log('  ✓ Users seeded');
-
-  // ── Routes ─────────────────────────────────────────────────────────────
   const route1 = await prisma.route.upsert({
     where: { id: '00000000-0000-0000-0000-000000000001' },
     update: {},
@@ -94,9 +96,6 @@ async function main() {
     },
   });
 
-  console.log('  ✓ Routes seeded');
-
-  // ── Customers ──────────────────────────────────────────────────────────
   const customerData = [
     { phone: '9876543210', name: 'Amit Verma', routeId: route1.id },
     { phone: '9876543211', name: 'Neha Gupta', routeId: route1.id },
@@ -106,31 +105,31 @@ async function main() {
   ];
 
   const customers: Awaited<ReturnType<typeof prisma.customer.upsert>>[] = [];
-  for (const c of customerData) {
+  for (const entry of customerData) {
     const customer = await prisma.customer.upsert({
-      where: { phone: c.phone },
+      where: { phone: entry.phone },
       update: {},
       create: {
-        name: c.name,
-        phone: c.phone,
+        name: entry.name,
+        phone: entry.phone,
         status: 'active',
-        routeId: c.routeId,
+        routeId: entry.routeId,
       },
     });
     customers.push(customer);
   }
 
-  // Addresses for each customer
-  for (const [i, customer] of customers.entries()) {
-    const existing = await prisma.customerAddress.findFirst({
+  for (const [index, customer] of customers.entries()) {
+    const existingAddress = await prisma.customerAddress.findFirst({
       where: { customerId: customer.id, isPrimary: true },
     });
-    if (!existing) {
+
+    if (!existingAddress) {
       await prisma.customerAddress.create({
         data: {
           customerId: customer.id,
-          addressLine1: `${100 + i}, Block ${String.fromCharCode(65 + i)}`,
-          addressLine2: `Sector ${i < 3 ? 15 : 22}`,
+          addressLine1: `${100 + index}, Block ${String.fromCharCode(65 + index)}`,
+          addressLine2: `Sector ${index < 3 ? 15 : 22}`,
           city: 'Noida',
           state: 'Uttar Pradesh',
           pincode: '201301',
@@ -140,10 +139,6 @@ async function main() {
     }
   }
 
-  console.log('  ✓ Customers and addresses seeded');
-
-  // ── Products, Variants, Prices ─────────────────────────────────────────
-  // Cow Milk
   const cowMilk = await prisma.product.upsert({
     where: { id: '00000000-0000-0000-0000-000000000010' },
     update: {},
@@ -177,7 +172,6 @@ async function main() {
     },
   });
 
-  // Buffalo Milk
   const buffaloMilk = await prisma.product.upsert({
     where: { id: '00000000-0000-0000-0000-000000000011' },
     update: {},
@@ -200,7 +194,6 @@ async function main() {
     },
   });
 
-  // Curd
   const curd = await prisma.product.upsert({
     where: { id: '00000000-0000-0000-0000-000000000012' },
     update: {},
@@ -223,45 +216,40 @@ async function main() {
     },
   });
 
-  // Prices (effective from 30 days ago)
   const priceDate = new Date();
   priceDate.setDate(priceDate.getDate() - 30);
-  const priceDateStr = priceDate.toISOString().split('T')[0];
+  const effectiveDate = new Date(priceDate.toISOString().split('T')[0] as string);
 
   const priceEntries = [
-    { variantId: cowMilk500ml.id, price: 30, date: priceDateStr },
-    { variantId: cowMilk1L.id, price: 56, date: priceDateStr },
-    { variantId: buffaloMilk1L.id, price: 70, date: priceDateStr },
-    { variantId: curd500g.id, price: 40, date: priceDateStr },
+    { productVariantId: cowMilk500ml.id, price: 30 },
+    { productVariantId: cowMilk1L.id, price: 56 },
+    { productVariantId: buffaloMilk1L.id, price: 70 },
+    { productVariantId: curd500g.id, price: 40 },
   ];
 
-  for (const p of priceEntries) {
-    const existing = await prisma.productPrice.findFirst({
+  for (const entry of priceEntries) {
+    const existingPrice = await prisma.productPrice.findFirst({
       where: {
-        productVariantId: p.variantId,
-        effectiveDate: new Date(p.date),
+        productVariantId: entry.productVariantId,
+        effectiveDate,
         branch: null,
       },
     });
-    if (!existing) {
+
+    if (!existingPrice) {
       await prisma.productPrice.create({
         data: {
-          productVariantId: p.variantId,
-          price: p.price,
-          effectiveDate: new Date(p.date),
+          productVariantId: entry.productVariantId,
+          price: entry.price,
+          effectiveDate,
         },
       });
     }
   }
 
-  console.log('  ✓ Products, variants, and prices seeded');
-
-  // ── Subscriptions ──────────────────────────────────────────────────────
-  const today = new Date();
   const startDate = new Date();
-  startDate.setDate(today.getDate() - 14); // started 2 weeks ago
+  startDate.setDate(startDate.getDate() - 14);
 
-  // Daily subscription - Amit gets cow milk 1L every day
   await prisma.subscription.upsert({
     where: { id: '00000000-0000-0000-0000-000000000020' },
     update: {},
@@ -277,7 +265,6 @@ async function main() {
     },
   });
 
-  // Alternate day subscription - Neha gets buffalo milk every other day
   await prisma.subscription.upsert({
     where: { id: '00000000-0000-0000-0000-000000000021' },
     update: {},
@@ -293,7 +280,6 @@ async function main() {
     },
   });
 
-  // Custom weekday subscription - Rajesh gets curd on Mon, Wed, Fri
   await prisma.subscription.upsert({
     where: { id: '00000000-0000-0000-0000-000000000022' },
     update: {},
@@ -303,95 +289,72 @@ async function main() {
       productVariantId: curd500g.id,
       quantity: 2,
       frequencyType: 'custom_weekday',
-      weekdays: [1, 3, 5], // Mon, Wed, Fri
+      weekdays: [1, 3, 5],
       startDate,
       status: 'active',
     },
   });
 
-  console.log('  ✓ Subscriptions seeded');
-
-  // ── Route Customers (sequence assignments) ─────────────────────────────
   const routeCustomerAssignments = [
-    { routeId: route1.id, customerId: customers[0].id, seq: 1 },
-    { routeId: route1.id, customerId: customers[1].id, seq: 2 },
-    { routeId: route1.id, customerId: customers[2].id, seq: 3 },
-    { routeId: route2.id, customerId: customers[3].id, seq: 1 },
-    { routeId: route2.id, customerId: customers[4].id, seq: 2 },
+    { routeId: route1.id, customerId: customers[0].id, sequenceOrder: 1 },
+    { routeId: route1.id, customerId: customers[1].id, sequenceOrder: 2 },
+    { routeId: route1.id, customerId: customers[2].id, sequenceOrder: 3 },
+    { routeId: route2.id, customerId: customers[3].id, sequenceOrder: 1 },
+    { routeId: route2.id, customerId: customers[4].id, sequenceOrder: 2 },
   ];
 
-  for (const rc of routeCustomerAssignments) {
-    const existing = await prisma.routeCustomer.findFirst({
-      where: { routeId: rc.routeId, customerId: rc.customerId },
+  for (const entry of routeCustomerAssignments) {
+    const existingAssignment = await prisma.routeCustomer.findFirst({
+      where: { routeId: entry.routeId, customerId: entry.customerId },
     });
-    if (!existing) {
+
+    if (!existingAssignment) {
       await prisma.routeCustomer.create({
-        data: {
-          routeId: rc.routeId,
-          customerId: rc.customerId,
-          sequenceOrder: rc.seq,
-        },
+        data: entry,
       });
     }
   }
 
-  // ── Route Agents ───────────────────────────────────────────────────────
   const routeAgentAssignments = [
     { routeId: route1.id, userId: agent1.id },
     { routeId: route2.id, userId: agent2.id },
   ];
 
-  for (const ra of routeAgentAssignments) {
-    const existing = await prisma.routeAgent.findFirst({
-      where: { routeId: ra.routeId, userId: ra.userId },
+  for (const entry of routeAgentAssignments) {
+    const existingAssignment = await prisma.routeAgent.findFirst({
+      where: { routeId: entry.routeId, userId: entry.userId },
     });
-    if (!existing) {
-      await prisma.routeAgent.create({
-        data: { routeId: ra.routeId, userId: ra.userId },
+
+    if (!existingAssignment) {
+      await prisma.routeAgent.create({ data: entry });
+    }
+  }
+
+  const nextMonth = new Date();
+  nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+  const holidayDates = [
+    { date: new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 15), description: 'Holiday 1' },
+    { date: new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 26), description: 'Holiday 2' },
+  ];
+
+  for (const holiday of holidayDates) {
+    const existingHoliday = await prisma.holiday.findFirst({
+      where: { holidayDate: holiday.date, isSystemWide: true },
+    });
+
+    if (!existingHoliday) {
+      await prisma.holiday.create({
+        data: {
+          holidayDate: holiday.date,
+          description: holiday.description,
+          isSystemWide: true,
+          createdBy: superAdmin.id,
+        },
       });
     }
   }
 
-  console.log('  ✓ Route assignments seeded');
-
-  // ── Holidays ───────────────────────────────────────────────────────────
-  const nextMonth = new Date();
-  nextMonth.setMonth(nextMonth.getMonth() + 1);
-
-  const holiday1Date = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 15);
-  const holiday2Date = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 26);
-
-  const existingHoliday1 = await prisma.holiday.findFirst({
-    where: { holidayDate: holiday1Date, isSystemWide: true },
-  });
-  if (!existingHoliday1) {
-    await prisma.holiday.create({
-      data: {
-        holidayDate: holiday1Date,
-        description: 'Independence Day',
-        isSystemWide: true,
-        createdBy: superAdmin.id,
-      },
-    });
-  }
-
-  const existingHoliday2 = await prisma.holiday.findFirst({
-    where: { holidayDate: holiday2Date, isSystemWide: true },
-  });
-  if (!existingHoliday2) {
-    await prisma.holiday.create({
-      data: {
-        holidayDate: holiday2Date,
-        description: 'Republic Day',
-        isSystemWide: true,
-        createdBy: superAdmin.id,
-      },
-    });
-  }
-
-  console.log('  ✓ Holidays seeded');
-
-  // ── System Settings ────────────────────────────────────────────────────
   await prisma.systemSetting.upsert({
     where: { key: 'billing_cycle_start_day' },
     update: {},
@@ -412,13 +375,16 @@ async function main() {
     },
   });
 
-  console.log('  ✓ System settings seeded');
-  console.log('🌱 Seeding complete!');
+  console.log('Seed complete.');
+  console.log('Seed credentials used for this run:');
+  console.log(`  Admin/Billing password: ${adminPasswordPlain}`);
+  console.log(`  Delivery Agent password: ${agentPasswordPlain}`);
+  console.log('Set SEED_ADMIN_PASSWORD and SEED_AGENT_PASSWORD to control these values explicitly.');
 }
 
 main()
-  .catch((e) => {
-    console.error('Seed failed:', e);
+  .catch((error) => {
+    console.error('Seed failed:', error);
     process.exit(1);
   })
   .finally(async () => {
