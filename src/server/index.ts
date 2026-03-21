@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import { execSync } from 'node:child_process';
 import express from 'express';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import helmet from 'helmet';
 import cors from 'cors';
 import session from 'express-session';
@@ -33,6 +35,9 @@ import { startWorker, registerSchedules } from './jobs/index.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const clientDistPath = path.resolve(__dirname, '../../client');
 
 // ---------------------------------------------------------------------------
 // Database client
@@ -181,6 +186,17 @@ app.use('/api/v1/pricing-categories', pricingCategoriesRoutes);
 app.use('/api/v1/milk-collections', milkCollectionsRoutes);
 
 // ---------------------------------------------------------------------------
+// Serve built frontend in production
+// ---------------------------------------------------------------------------
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(clientDistPath));
+
+  app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Error handler — must be last
 // ---------------------------------------------------------------------------
 app.use(errorHandler);
@@ -206,11 +222,12 @@ if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 
-    // Start BullMQ worker and register cron schedules
-    startWorker();
-    registerSchedules().catch((err) =>
-      console.error('Failed to register job schedules:', err),
-    );
+    if (process.env.ENABLE_BACKGROUND_JOBS !== 'false') {
+      startWorker();
+      registerSchedules().catch((err) =>
+        console.error('Failed to register job schedules:', err),
+      );
+    }
   });
 }
 

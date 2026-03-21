@@ -42,6 +42,7 @@ services:
       REDIS_URL: redis://redis:6379
       NODE_ENV: production
       PORT: "3000"
+      ENABLE_BACKGROUND_JOBS: "false"
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,6 +65,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-milkdelivery}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-milkdelivery}
       REDIS_URL: redis://redis:6379
       NODE_ENV: production
+      ENABLE_BACKGROUND_JOBS: "true"
     command: ["node", "dist/server/jobs/index.js"]
     depends_on:
       postgres:
