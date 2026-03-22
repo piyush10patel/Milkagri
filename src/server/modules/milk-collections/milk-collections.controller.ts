@@ -37,6 +37,27 @@ export async function createFarmer(req: Request, res: Response, next: NextFuncti
   }
 }
 
+export async function updateFarmer(req: Request, res: Response, next: NextFunction) {
+  try {
+    const farmer = await service.updateFarmer(param(req, 'id'), req.body);
+    res.json(farmer);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function removeFarmer(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await service.deleteFarmer(param(req, 'id'));
+    res.json({
+      message: result.mode === 'deleted' ? 'Farmer deleted' : 'Farmer deactivated',
+      ...result,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function listSummary(req: Request, res: Response, next: NextFunction) {
   try {
     const summary = await service.getMilkCollectionSummary(req.query.date as string);

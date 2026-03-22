@@ -1,6 +1,6 @@
 import { prisma } from '../../index.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../lib/errors.js';
-import type { CreateFarmerInput, CreateVillageInput, SaveMilkCollectionInput } from './milk-collections.types.js';
+import type { CreateFarmerInput, CreateVillageInput, SaveMilkCollectionInput, UpdateFarmerInput } from './milk-collections.types.js';
 
 export async function listVillages() {
   return prisma.village.findMany({
@@ -44,6 +44,57 @@ export async function createFarmer(input: CreateFarmerInput) {
       name,
     },
   });
+}
+
+export async function updateFarmer(id: string, input: UpdateFarmerInput) {
+  const existing = await prisma.farmer.findUnique({ where: { id } });
+  if (!existing) throw new NotFoundError('Farmer not found');
+
+  const data: { name?: string; isActive?: boolean } = {};
+
+  if (input.name !== undefined) {
+    const name = input.name.trim();
+    const duplicate = await prisma.farmer.findFirst({
+      where: {
+        villageId: existing.villageId,
+        id: { not: id },
+        name: { equals: name, mode: 'insensitive' },
+      },
+    });
+
+    if (duplicate) throw new ConflictError('Farmer already exists for this village');
+    data.name = name;
+  }
+
+  if (input.isActive !== undefined) {
+    data.isActive = input.isActive;
+  }
+
+  return prisma.farmer.update({
+    where: { id },
+    data,
+  });
+}
+
+export async function deleteFarmer(id: string) {
+  const existing = await prisma.farmer.findUnique({
+    where: { id },
+    include: {
+      _count: { select: { milkCollections: true } },
+    },
+  });
+  if (!existing) throw new NotFoundError('Farmer not found');
+
+  if (existing._count.milkCollections > 0) {
+    await prisma.farmer.update({
+      where: { id },
+      data: { isActive: false },
+    });
+    return { id, mode: 'deactivated' as const };
+  }
+
+  await prisma.farmer.delete({ where: { id } });
+  return { id, mode: 'deleted' as const };
 }
 
 export async function saveMilkCollection(input: SaveMilkCollectionInput, userId: string) {

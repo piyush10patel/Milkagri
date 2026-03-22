@@ -23,6 +23,7 @@ export const overviewQuerySchema = z.object({
 export const updateDeliveryStatusSchema = z
   .object({
     status: z.enum(['delivered', 'skipped', 'failed', 'returned']),
+    actualQuantity: z.number().positive('Actual quantity must be positive').optional(),
     skipReason: z
       .enum(['customer_absent', 'customer_refused', 'access_issue', 'other'])
       .optional(),
@@ -30,6 +31,13 @@ export const updateDeliveryStatusSchema = z
     returnedQuantity: z.number().positive('Returned quantity must be positive').optional(),
   })
   .superRefine((data, ctx) => {
+    if (data.status === 'delivered' && data.actualQuantity !== undefined && data.actualQuantity <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Actual quantity must be positive when status is delivered',
+        path: ['actualQuantity'],
+      });
+    }
     if (data.status === 'skipped' && !data.skipReason) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

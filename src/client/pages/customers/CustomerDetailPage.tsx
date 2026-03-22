@@ -28,6 +28,10 @@ interface CustomerDetail {
 }
 interface PricingCategoryOption { id: string; code: string; name: string; }
 
+function formatDateOnly(value?: string) {
+  return value ? value.slice(0, 10) : '—';
+}
+
 export default function CustomerDetailPage() {
   const { id } = useParams();
   const queryClient = useQueryClient();
@@ -148,7 +152,7 @@ export default function CustomerDetailPage() {
                     <td className="px-3 py-2">{s.route?.name ?? '—'}</td>
                     <td className="px-3 py-2">{freqLabel[s.frequencyType] ?? s.frequencyType}</td>
                     <td className="px-3 py-2">{s.status}</td>
-                    <td className="px-3 py-2">{s.startDate}</td>
+                    <td className="px-3 py-2">{formatDateOnly(s.startDate)}</td>
                   </tr>
                 ))}
               </tbody>

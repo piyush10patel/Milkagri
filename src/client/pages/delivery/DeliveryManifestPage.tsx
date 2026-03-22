@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { useAuth } from '@/hooks/useAuth';
 import { useModalFocusTrap } from '@/hooks/useModalFocusTrap';
 
 interface ManifestItem {
@@ -10,9 +9,12 @@ interface ManifestItem {
   customerAddress?: { addressLine1: string; addressLine2?: string; city?: string };
   productVariant: { id: string; product: { name: string }; unitType: string; quantityPerUnit: number };
   quantity: number;
+  actualQuantity: number;
   deliverySession: 'morning' | 'evening';
   packBreakdown?: Array<{ packSize: number | string; packCount: number }>;
   status: 'pending' | 'delivered' | 'skipped' | 'failed' | 'returned';
+  adjustmentType?: 'exact' | 'over' | 'under' | null;
+  adjustmentQuantity?: number;
   skipReason?: string;
   failureReason?: string;
   returnedQuantity?: number;
@@ -51,20 +53,31 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function DeliveryManifestPage() {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('morning');
   const [activeAction, setActiveAction] = useState<{ id: string; action: string } | null>(null);
-  const closeActionModal = useCallback(() => { setActiveAction(null); setSkipReason(''); setFailureReason(''); setReturnedQty(''); }, []);
-  const { modalRef: actionModalRef } = useModalFocusTrap(!!activeAction, closeActionModal);
   const [skipReason, setSkipReason] = useState('');
-  const [failureReason, setFailureReason] = useState('');
+  const [adjustedQty, setAdjustedQty] = useState('');
   const [returnedQty, setReturnedQty] = useState('');
   const [notesTarget, setNotesTarget] = useState<string | null>(null);
-  const closeNotesModal = useCallback(() => { setNotesTarget(null); setNotesText(''); }, []);
-  const { modalRef: notesModalRef } = useModalFocusTrap(!!notesTarget, closeNotesModal);
   const [notesText, setNotesText] = useState('');
   const [showReconciliation, setShowReconciliation] = useState(false);
+
+  const closeActionModal = useCallback(() => {
+    setActiveAction(null);
+    setSkipReason('');
+    setAdjustedQty('');
+    setReturnedQty('');
+  }, []);
+  const { modalRef: actionModalRef } = useModalFocusTrap(!!activeAction, closeActionModal);
+
+  const closeNotesModal = useCallback(() => {
+    setNotesTarget(null);
+    setNotesText('');
+  }, []);
+  const { modalRef: notesModalRef } = useModalFocusTrap(!!notesTarget, closeNotesModal);
+
   const closeReconModal = useCallback(() => setShowReconciliation(false), []);
   const { modalRef: reconModalRef } = useModalFocusTrap(showReconciliation, closeReconModal);
 
@@ -85,10 +98,7 @@ export default function DeliveryManifestPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['delivery-manifest'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-reconciliation'] });
-      setActiveAction(null);
-      setSkipReason('');
-      setFailureReason('');
-      setReturnedQty('');
+      closeActionModal();
     },
   });
 
@@ -97,21 +107,27 @@ export default function DeliveryManifestPage() {
       api.patch(`/api/v1/delivery/orders/${id}/notes`, { deliveryNotes: notes }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['delivery-manifest'] });
-      setNotesTarget(null);
-      setNotesText('');
+      closeNotesModal();
     },
   });
 
   function handleStatusSubmit(id: string, status: string) {
     const data: Record<string, unknown> = { status };
     if (status === 'skipped') data.skipReason = skipReason;
-    if (status === 'failed') data.failureReason = failureReason;
+    if (status === 'delivered' && adjustedQty) data.actualQuantity = Number(adjustedQty);
     if (status === 'returned') data.returnedQuantity = Number(returnedQty);
     statusMutation.mutate({ id, data });
   }
 
   const manifest = manifestData?.data ?? [];
-  const allCompleted = manifest.length > 0 && manifest.every((m) => m.status !== 'pending');
+  const filteredManifest = manifest.filter((item) => item.deliverySession === selectedSession);
+  const completedCount = filteredManifest.filter((m) => m.status !== 'pending').length;
+  const progressPercent = filteredManifest.length > 0 ? Math.round((completedCount / filteredManifest.length) * 100) : 0;
+  const allCompleted = filteredManifest.length > 0 && filteredManifest.every((m) => m.status !== 'pending');
+  const sessionTabs: Array<{ key: 'morning' | 'evening'; label: string; count: number }> = [
+    { key: 'morning', label: 'Morning', count: manifest.filter((item) => item.deliverySession === 'morning').length },
+    { key: 'evening', label: 'Evening', count: manifest.filter((item) => item.deliverySession === 'evening').length },
+  ];
 
   return (
     <div className="max-w-lg mx-auto">
@@ -128,43 +144,53 @@ export default function DeliveryManifestPage() {
         )}
       </div>
 
-      {/* Date picker - large touch target */}
       <div className="mb-4 print:hidden">
         <input
           type="date"
           value={date}
-          onChange={(e) => { setDate(e.target.value); setShowReconciliation(false); }}
+          onChange={(e) => {
+            setDate(e.target.value);
+            setShowReconciliation(false);
+          }}
           className="w-full rounded-md border border-gray-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
           aria-label="Select delivery date"
         />
       </div>
 
-      {/* Progress bar */}
-      {manifest.length > 0 && (
+      <div className="mb-4 grid grid-cols-2 gap-2 print:hidden">
+        {sessionTabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setSelectedSession(tab.key)}
+            className={`rounded-lg border px-4 py-3 text-sm font-medium min-h-[48px] ${
+              selectedSession === tab.key
+                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            {tab.label} ({tab.count})
+          </button>
+        ))}
+      </div>
+
+      {filteredManifest.length > 0 && (
         <div className="mb-4 print:hidden">
           <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span>{manifest.filter((m) => m.status !== 'pending').length} of {manifest.length} completed</span>
-            <span>{Math.round((manifest.filter((m) => m.status !== 'pending').length / manifest.length) * 100)}%</span>
+            <span className="capitalize">{selectedSession}: {completedCount} of {filteredManifest.length} completed</span>
+            <span>{progressPercent}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-green-500 h-2 rounded-full transition-all"
-              style={{ width: `${(manifest.filter((m) => m.status !== 'pending').length / manifest.length) * 100}%` }}
-            />
+            <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${progressPercent}%` }} />
           </div>
         </div>
       )}
 
-      {isLoading && <p className="text-sm text-gray-500 text-center py-8" aria-live="polite">Loading manifest…</p>}
+      {isLoading && <p className="text-sm text-gray-500 text-center py-8" aria-live="polite">Loading manifest...</p>}
 
-      {/* Manifest cards - mobile optimized */}
       <div className="space-y-3">
-        {manifest.map((item, idx) => (
-          <div
-            key={item.id}
-            className={`bg-white rounded-lg border-2 p-4 ${STATUS_COLORS[item.status] ?? 'border-gray-200'}`}
-          >
-            {/* Stop number and customer */}
+        {filteredManifest.map((item, idx) => (
+          <div key={item.id} className={`bg-white rounded-lg border-2 p-4 ${STATUS_COLORS[item.status] ?? 'border-gray-200'}`}>
             <div className="flex items-start justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-800 text-white text-xs font-bold">{idx + 1}</span>
@@ -178,23 +204,26 @@ export default function DeliveryManifestPage() {
               </span>
             </div>
 
-            {/* Address */}
             {item.customerAddress && (
               <p className="text-sm text-gray-600 mb-2">
-                📍 {[item.customerAddress.addressLine1, item.customerAddress.addressLine2, item.customerAddress.city].filter(Boolean).join(', ')}
+                {[item.customerAddress.addressLine1, item.customerAddress.addressLine2, item.customerAddress.city].filter(Boolean).join(', ')}
               </p>
             )}
 
-            {/* Delivery notes */}
             {item.customer.deliveryNotes && (
-              <p className="text-xs text-blue-700 bg-blue-50 rounded px-2 py-1 mb-2">📝 {item.customer.deliveryNotes}</p>
+              <p className="text-xs text-blue-700 bg-blue-50 rounded px-2 py-1 mb-2">{item.customer.deliveryNotes}</p>
             )}
 
-            {/* Product and quantity */}
             <div className="bg-gray-50 rounded px-3 py-2 mb-3">
-              <p className="text-sm font-medium">{item.productVariant?.product?.name}</p>
-              <p className="text-sm text-gray-600">{item.quantity} × {item.productVariant?.quantityPerUnit} {item.productVariant?.unitType}</p>
+              <p className="text-sm font-medium">{item.productVariant.product.name}</p>
+              <p className="text-sm text-gray-600">{item.quantity} x {item.productVariant.quantityPerUnit} {item.productVariant.unitType}</p>
               <p className="text-xs text-gray-500 capitalize">Session: {item.deliverySession}</p>
+              {item.status === 'delivered' && (
+                <p className="text-xs text-gray-500">
+                  Delivered: {item.actualQuantity}
+                  {item.adjustmentType && item.adjustmentType !== 'exact' ? ` (${item.adjustmentType} by ${item.adjustmentQuantity ?? 0})` : ''}
+                </p>
+              )}
               {item.packBreakdown?.length ? (
                 <p className="text-xs text-gray-500">
                   Packs: {item.packBreakdown.map((pack) => `${pack.packCount} x ${Number(pack.packSize)}L`).join(', ')}
@@ -202,73 +231,70 @@ export default function DeliveryManifestPage() {
               ) : null}
             </div>
 
-            {/* Action buttons - large tap targets */}
             {item.status === 'pending' && (
               <div className="grid grid-cols-2 gap-2 print:hidden">
                 <button
                   onClick={() => handleStatusSubmit(item.id, 'delivered')}
                   disabled={statusMutation.isPending}
-                  className="rounded-md bg-green-600 px-3 py-3 text-sm font-medium text-white hover:bg-green-700 min-h-[48px] active:bg-green-800"
-                  aria-label={`Mark delivered for ${item.customer.name}`}
+                  className="rounded-md bg-green-600 px-3 py-3 text-sm font-medium text-white hover:bg-green-700 min-h-[48px]"
                 >
-                  ✓ Delivered
+                  Delivered
                 </button>
                 <button
                   onClick={() => setActiveAction({ id: item.id, action: 'skipped' })}
-                  className="rounded-md bg-yellow-500 px-3 py-3 text-sm font-medium text-white hover:bg-yellow-600 min-h-[48px] active:bg-yellow-700"
-                  aria-label={`Mark skipped for ${item.customer.name}`}
+                  className="rounded-md bg-yellow-500 px-3 py-3 text-sm font-medium text-white hover:bg-yellow-600 min-h-[48px]"
                 >
-                  ⏭ Skipped
+                  Skipped
                 </button>
                 <button
-                  onClick={() => setActiveAction({ id: item.id, action: 'failed' })}
-                  className="rounded-md bg-red-600 px-3 py-3 text-sm font-medium text-white hover:bg-red-700 min-h-[48px] active:bg-red-800"
-                  aria-label={`Mark failed for ${item.customer.name}`}
+                  onClick={() => {
+                    setAdjustedQty(String(item.quantity));
+                    setActiveAction({ id: item.id, action: 'delivered' });
+                  }}
+                  className="rounded-md bg-blue-600 px-3 py-3 text-sm font-medium text-white hover:bg-blue-700 min-h-[48px]"
                 >
-                  ✗ Failed
+                  Edit Qty
                 </button>
                 <button
                   onClick={() => setActiveAction({ id: item.id, action: 'returned' })}
-                  className="rounded-md bg-purple-600 px-3 py-3 text-sm font-medium text-white hover:bg-purple-700 min-h-[48px] active:bg-purple-800"
-                  aria-label={`Mark returned for ${item.customer.name}`}
+                  className="rounded-md bg-purple-600 px-3 py-3 text-sm font-medium text-white hover:bg-purple-700 min-h-[48px]"
                 >
-                  ↩ Returned
+                  Returned
                 </button>
               </div>
             )}
 
-            {/* Notes button */}
             <button
-              onClick={() => { setNotesTarget(item.id); setNotesText(item.deliveryNotes ?? ''); }}
+              onClick={() => {
+                setNotesTarget(item.id);
+                setNotesText(item.deliveryNotes ?? '');
+              }}
               className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 min-h-[44px] print:hidden"
-              aria-label={`Add notes for ${item.customer.name}`}
             >
-              {item.deliveryNotes ? '📝 Edit Notes' : '+ Add Notes'}
+              {item.deliveryNotes ? 'Edit Notes' : '+ Add Notes'}
             </button>
           </div>
         ))}
 
-        {manifest.length === 0 && !isLoading && (
-          <p className="text-center text-sm text-gray-500 py-8">No deliveries assigned for this date</p>
+        {filteredManifest.length === 0 && !isLoading && (
+          <p className="text-center text-sm text-gray-500 py-8">No {selectedSession} deliveries assigned for this date</p>
         )}
       </div>
 
-      {/* Skip reason dialog */}
       {activeAction?.action === 'skipped' && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="skip-title">
           <div ref={actionModalRef} className="bg-white rounded-t-xl sm:rounded-lg p-6 w-full sm:max-w-sm sm:mx-4 shadow-xl">
             <h2 id="skip-title" className="text-lg font-semibold text-gray-900 mb-3">Skip Reason</h2>
             <div className="space-y-2 mb-4">
-              {SKIP_REASONS.map((r) => (
+              {SKIP_REASONS.map((reason) => (
                 <button
-                  key={r.value}
-                  onClick={() => setSkipReason(r.value)}
+                  key={reason.value}
+                  onClick={() => setSkipReason(reason.value)}
                   className={`w-full text-left rounded-md border px-4 py-3 text-sm min-h-[48px] ${
-                    skipReason === r.value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:bg-gray-50'
+                    skipReason === reason.value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:bg-gray-50'
                   }`}
-                  aria-label={`Select reason: ${r.label}`}
                 >
-                  {r.label}
+                  {reason.label}
                 </button>
               ))}
             </div>
@@ -279,40 +305,41 @@ export default function DeliveryManifestPage() {
                 disabled={!skipReason || statusMutation.isPending}
                 className="flex-1 rounded-md bg-yellow-500 px-3 py-3 text-sm text-white font-medium hover:bg-yellow-600 disabled:opacity-50 min-h-[48px]"
               >
-                {statusMutation.isPending ? 'Saving…' : 'Confirm Skip'}
+                {statusMutation.isPending ? 'Saving...' : 'Confirm Skip'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Failed reason dialog */}
-      {activeAction?.action === 'failed' && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="fail-title">
+      {activeAction?.action === 'delivered' && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="adjust-title">
           <div ref={actionModalRef} className="bg-white rounded-t-xl sm:rounded-lg p-6 w-full sm:max-w-sm sm:mx-4 shadow-xl">
-            <h2 id="fail-title" className="text-lg font-semibold text-gray-900 mb-3">Failure Reason</h2>
-            <textarea
-              value={failureReason}
-              onChange={(e) => setFailureReason(e.target.value)}
-              placeholder="Describe the reason for failure…"
-              className="w-full rounded-md border border-gray-300 px-4 py-3 text-sm min-h-[100px] mb-4"
-              aria-label="Failure reason"
+            <h2 id="adjust-title" className="text-lg font-semibold text-gray-900 mb-1">Adjust Delivered Quantity</h2>
+            <p className="text-sm text-gray-500 mb-4">Record the actual delivered quantity. The order will be marked as exact, over, or under against the planned quantity.</p>
+            <input
+              type="number"
+              step="0.001"
+              min="0.001"
+              value={adjustedQty}
+              onChange={(e) => setAdjustedQty(e.target.value)}
+              placeholder="Enter actual delivered quantity"
+              className="w-full rounded-md border border-gray-300 px-4 py-3 text-base min-h-[48px] mb-4"
             />
             <div className="flex gap-2">
               <button onClick={closeActionModal} className="flex-1 rounded-md border border-gray-300 px-3 py-3 text-sm min-h-[48px]">Cancel</button>
               <button
-                onClick={() => handleStatusSubmit(activeAction.id, 'failed')}
-                disabled={!failureReason || statusMutation.isPending}
-                className="flex-1 rounded-md bg-red-600 px-3 py-3 text-sm text-white font-medium hover:bg-red-700 disabled:opacity-50 min-h-[48px]"
+                onClick={() => handleStatusSubmit(activeAction.id, 'delivered')}
+                disabled={!adjustedQty || statusMutation.isPending}
+                className="flex-1 rounded-md bg-blue-600 px-3 py-3 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 min-h-[48px]"
               >
-                {statusMutation.isPending ? 'Saving…' : 'Confirm Failed'}
+                {statusMutation.isPending ? 'Saving...' : 'Save Delivery'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Returned quantity dialog */}
       {activeAction?.action === 'returned' && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="return-title">
           <div ref={actionModalRef} className="bg-white rounded-t-xl sm:rounded-lg p-6 w-full sm:max-w-sm sm:mx-4 shadow-xl">
@@ -325,7 +352,6 @@ export default function DeliveryManifestPage() {
               onChange={(e) => setReturnedQty(e.target.value)}
               placeholder="Enter returned quantity"
               className="w-full rounded-md border border-gray-300 px-4 py-3 text-base min-h-[48px] mb-4"
-              aria-label="Returned quantity"
             />
             <div className="flex gap-2">
               <button onClick={closeActionModal} className="flex-1 rounded-md border border-gray-300 px-3 py-3 text-sm min-h-[48px]">Cancel</button>
@@ -334,14 +360,13 @@ export default function DeliveryManifestPage() {
                 disabled={!returnedQty || statusMutation.isPending}
                 className="flex-1 rounded-md bg-purple-600 px-3 py-3 text-sm text-white font-medium hover:bg-purple-700 disabled:opacity-50 min-h-[48px]"
               >
-                {statusMutation.isPending ? 'Saving…' : 'Confirm Return'}
+                {statusMutation.isPending ? 'Saving...' : 'Confirm Return'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Notes dialog */}
       {notesTarget && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="notes-title">
           <div ref={notesModalRef} className="bg-white rounded-t-xl sm:rounded-lg p-6 w-full sm:max-w-sm sm:mx-4 shadow-xl">
@@ -349,9 +374,8 @@ export default function DeliveryManifestPage() {
             <textarea
               value={notesText}
               onChange={(e) => setNotesText(e.target.value)}
-              placeholder="Add delivery notes…"
+              placeholder="Add delivery notes..."
               className="w-full rounded-md border border-gray-300 px-4 py-3 text-sm min-h-[100px] mb-4"
-              aria-label="Delivery notes"
             />
             <div className="flex gap-2">
               <button onClick={closeNotesModal} className="flex-1 rounded-md border border-gray-300 px-3 py-3 text-sm min-h-[48px]">Cancel</button>
@@ -360,23 +384,21 @@ export default function DeliveryManifestPage() {
                 disabled={notesMutation.isPending}
                 className="flex-1 rounded-md bg-blue-600 px-3 py-3 text-sm text-white font-medium hover:bg-blue-700 disabled:opacity-50 min-h-[48px]"
               >
-                {notesMutation.isPending ? 'Saving…' : 'Save Notes'}
+                {notesMutation.isPending ? 'Saving...' : 'Save Notes'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Reconciliation summary */}
       {showReconciliation && reconciliationData && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="recon-title">
           <div ref={reconModalRef} className="bg-white rounded-t-xl sm:rounded-lg p-6 w-full sm:max-w-md sm:mx-4 shadow-xl max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 id="recon-title" className="text-lg font-semibold text-gray-900">End-of-Day Summary</h2>
-              <button onClick={closeReconModal} className="text-gray-400 hover:text-gray-600 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Close summary">✕</button>
+              <button onClick={closeReconModal} className="text-gray-400 hover:text-gray-600 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Close summary">x</button>
             </div>
 
-            {/* Totals */}
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="bg-green-50 rounded-lg p-3 text-center">
                 <p className="text-2xl font-bold text-green-700">{reconciliationData.totalDelivered}</p>
@@ -396,19 +418,18 @@ export default function DeliveryManifestPage() {
               </div>
             </div>
 
-            {/* By product */}
             {reconciliationData.byProduct?.length > 0 && (
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 mb-2">By Product</h3>
                 <div className="space-y-2">
-                  {reconciliationData.byProduct.map((p, i) => (
-                    <div key={i} className="bg-gray-50 rounded p-3 text-sm">
-                      <p className="font-medium">{p.productName} ({p.unitType})</p>
+                  {reconciliationData.byProduct.map((product, index) => (
+                    <div key={index} className="bg-gray-50 rounded p-3 text-sm">
+                      <p className="font-medium">{product.productName} ({product.unitType})</p>
                       <div className="flex gap-3 mt-1 text-xs text-gray-600">
-                        <span className="text-green-700">✓ {p.delivered}</span>
-                        <span className="text-yellow-700">⏭ {p.skipped}</span>
-                        <span className="text-red-700">✗ {p.failed}</span>
-                        <span className="text-purple-700">↩ {p.returned}</span>
+                        <span className="text-green-700">Delivered {product.delivered}</span>
+                        <span className="text-yellow-700">Skipped {product.skipped}</span>
+                        <span className="text-red-700">Failed {product.failed}</span>
+                        <span className="text-purple-700">Returned {product.returned}</span>
                       </div>
                     </div>
                   ))}

@@ -14,6 +14,7 @@ import SubscriptionFormPage from '@/pages/subscriptions/SubscriptionFormPage';
 import DailyOperationsPage from '@/pages/orders/DailyOperationsPage';
 import OrderMilkSummaryPage from '@/pages/orders/OrderMilkSummaryPage';
 import MilkCollectionPage from '@/pages/milk-collections/MilkCollectionPage';
+import VillageCollectionDetailPage from '@/pages/milk-collections/VillageCollectionDetailPage';
 import DeliveryManifestPage from '@/pages/delivery/DeliveryManifestPage';
 import RouteListPage from '@/pages/routes/RouteListPage';
 import RouteFormPage from '@/pages/routes/RouteFormPage';
@@ -80,6 +81,7 @@ export default function App() {
           <Route path="orders" element={<DailyOperationsPage />} />
           <Route path="orders/summary" element={<OrderMilkSummaryPage />} />
           <Route path="milk-collections" element={<MilkCollectionPage />} />
+          <Route path="milk-collections/:villageId" element={<VillageCollectionDetailPage />} />
           <Route path="deliveries" element={<DeliveryManifestPage />} />
           <Route path="routes" element={<RouteListPage />} />
           <Route path="routes/new" element={<RouteFormPage />} />

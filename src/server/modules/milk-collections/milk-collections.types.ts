@@ -13,6 +13,13 @@ export const createFarmerSchema = z.object({
   name: z.string().trim().min(1, 'Farmer name is required').max(255, 'Farmer name is too long'),
 });
 
+export const updateFarmerSchema = z.object({
+  name: z.string().trim().min(1, 'Farmer name is required').max(255, 'Farmer name is too long').optional(),
+  isActive: z.boolean().optional(),
+}).refine((value) => value.name !== undefined || value.isActive !== undefined, {
+  message: 'At least one field must be provided',
+});
+
 export const saveMilkCollectionSchema = z.object({
   villageId: z.string().uuid('Invalid village ID'),
   farmerId: z.string().uuid('Invalid farmer ID'),
@@ -24,4 +31,5 @@ export const saveMilkCollectionSchema = z.object({
 
 export type CreateVillageInput = z.infer<typeof createVillageSchema>;
 export type CreateFarmerInput = z.infer<typeof createFarmerSchema>;
+export type UpdateFarmerInput = z.infer<typeof updateFarmerSchema>;
 export type SaveMilkCollectionInput = z.infer<typeof saveMilkCollectionSchema>;

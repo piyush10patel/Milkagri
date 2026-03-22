@@ -1,7 +1,44 @@
 import { prisma } from '../../index.js';
 import { NotFoundError, ValidationError } from '../../lib/errors.js';
 import type { UpdateDeliveryStatusInput } from './delivery.types.js';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+
+function getDeliveredQuantity(order: { quantity: Prisma.Decimal; actualQuantity?: Prisma.Decimal | null }) {
+  return Number(order.actualQuantity ?? order.quantity);
+}
+
+function getAdjustment(
+  plannedQuantity: Prisma.Decimal,
+  actualQuantity: Prisma.Decimal,
+): {
+  actualQuantity: Prisma.Decimal;
+  adjustmentType: 'exact' | 'over' | 'under';
+  adjustmentQuantity: Prisma.Decimal;
+} {
+  const difference = actualQuantity.sub(plannedQuantity);
+
+  if (difference.gt(0)) {
+    return {
+      actualQuantity,
+      adjustmentType: 'over',
+      adjustmentQuantity: difference,
+    };
+  }
+
+  if (difference.lt(0)) {
+    return {
+      actualQuantity,
+      adjustmentType: 'under',
+      adjustmentQuantity: difference.abs(),
+    };
+  }
+
+  return {
+    actualQuantity,
+    adjustmentType: 'exact',
+    adjustmentQuantity: new Prisma.Decimal(0),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Get flat manifest for the delivery page (used by both agents and admins).
@@ -82,7 +119,10 @@ export async function getManifestFlat(userId: string, date: string, isAdmin: boo
       packCount: pack.packCount,
     })),
     quantity: Number(o.quantity),
+    actualQuantity: getDeliveredQuantity(o as { quantity: Prisma.Decimal; actualQuantity?: Prisma.Decimal | null }),
     status: o.status,
+    adjustmentType: (o as { adjustmentType?: 'exact' | 'over' | 'under' | null }).adjustmentType,
+    adjustmentQuantity: Number((o as { adjustmentQuantity?: Prisma.Decimal | null }).adjustmentQuantity ?? 0),
     skipReason: o.skipReason,
     failureReason: o.failureReason,
     returnedQuantity: o.returnedQuantity ? Number(o.returnedQuantity) : undefined,
@@ -195,6 +235,7 @@ export async function getAgentManifest(agentId: string, date: string) {
             unitType: o.productVariant.unitType,
             quantityPerUnit: o.productVariant.quantityPerUnit,
             quantity: o.quantity,
+            actualQuantity: (o as { actualQuantity?: Prisma.Decimal | null }).actualQuantity,
             deliverySession: o.deliverySession,
             packBreakdown: o.packs.map((pack) => ({
               id: pack.id,
@@ -202,6 +243,8 @@ export async function getAgentManifest(agentId: string, date: string) {
               packCount: pack.packCount,
             })),
             status: o.status,
+            adjustmentType: (o as { adjustmentType?: 'exact' | 'over' | 'under' | null }).adjustmentType,
+            adjustmentQuantity: (o as { adjustmentQuantity?: Prisma.Decimal | null }).adjustmentQuantity,
             skipReason: o.skipReason,
             failureReason: o.failureReason,
             returnedQuantity: o.returnedQuantity,
@@ -237,20 +280,53 @@ export async function markDeliveryStatus(
     });
   }
 
-  const data: Prisma.DeliveryOrderUpdateInput = {
+  const data: Prisma.DeliveryOrderUpdateInput & {
+    actualQuantity?: Prisma.Decimal | null;
+    adjustmentType?: 'exact' | 'over' | 'under' | null;
+    adjustmentQuantity?: Prisma.Decimal | null;
+  } = {
     status: input.status,
     deliverer: { connect: { id: agentId } },
     deliveredAt: new Date(),
   };
 
+  if (input.status === 'delivered') {
+    const actualQuantity = new Prisma.Decimal(
+      (input.actualQuantity ?? Number(order.quantity)).toString(),
+    );
+    const adjustment = getAdjustment(order.quantity, actualQuantity);
+
+    data.actualQuantity = adjustment.actualQuantity;
+    data.adjustmentType = adjustment.adjustmentType;
+    data.adjustmentQuantity = adjustment.adjustmentQuantity;
+    data.skipReason = null;
+    data.failureReason = null;
+    data.returnedQuantity = null;
+  }
+
   if (input.status === 'skipped') {
     data.skipReason = input.skipReason ?? null;
+    data.actualQuantity = null;
+    data.adjustmentType = null;
+    data.adjustmentQuantity = null;
+    data.failureReason = null;
+    data.returnedQuantity = null;
   }
   if (input.status === 'failed') {
     data.failureReason = input.failureReason ?? null;
+    data.actualQuantity = null;
+    data.adjustmentType = null;
+    data.adjustmentQuantity = null;
+    data.skipReason = null;
+    data.returnedQuantity = null;
   }
   if (input.status === 'returned') {
     data.returnedQuantity = input.returnedQuantity ?? null;
+    data.actualQuantity = null;
+    data.adjustmentType = null;
+    data.adjustmentQuantity = null;
+    data.skipReason = null;
+    data.failureReason = null;
   }
 
   return prisma.deliveryOrder.update({
@@ -351,7 +427,7 @@ export async function getReconciliation(agentId: string, date: string) {
 
     switch (order.status) {
       case 'delivered':
-        entry.delivered += qty;
+        entry.delivered += getDeliveredQuantity(order as { quantity: Prisma.Decimal; actualQuantity?: Prisma.Decimal | null });
         overallSummary.delivered++;
         break;
       case 'skipped':

@@ -9,6 +9,7 @@ import {
   createVillageSchema,
   milkCollectionDateQuerySchema,
   saveMilkCollectionSchema,
+  updateFarmerSchema,
 } from './milk-collections.types.js';
 import * as controller from './milk-collections.controller.js';
 
@@ -23,6 +24,8 @@ router.get('/', authorize(viewRoles), validate({ query: milkCollectionDateQueryS
 router.get('/villages', authorize(viewRoles), controller.listVillages);
 router.post('/villages', authorize(editRoles), csrfProtection, validate({ body: createVillageSchema }), controller.createVillage);
 router.post('/farmers', authorize(editRoles), csrfProtection, validate({ body: createFarmerSchema }), controller.createFarmer);
+router.put('/farmers/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema, body: updateFarmerSchema }), controller.updateFarmer);
+router.delete('/farmers/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.removeFarmer);
 router.post('/', authorize(editRoles), csrfProtection, validate({ body: saveMilkCollectionSchema }), controller.saveEntry);
 router.delete('/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.removeEntry);
 

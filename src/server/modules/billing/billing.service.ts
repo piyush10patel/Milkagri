@@ -7,6 +7,10 @@ import type { ListInvoicesQuery, AddAdjustmentInput, AddDiscountInput } from './
 import { createLedgerEntry } from '../ledger/ledger.service.js';
 import { getNextCycle, getCycleForDate, isCycleComplete } from '../../lib/billingCycle.js';
 
+function getBillableQuantity(order: { quantity: Prisma.Decimal; actualQuantity?: Prisma.Decimal | null }) {
+  return new Prisma.Decimal((order.actualQuantity ?? order.quantity).toString());
+}
+
 // ---------------------------------------------------------------------------
 // Generate invoices for a billing cycle (Req 9.1, 9.2, 9.3, 9.4, 9.7, 9.8)
 // ---------------------------------------------------------------------------
@@ -43,6 +47,28 @@ export async function generateInvoicesForCycle(cycleStart: string, cycleEnd: str
   const invoicesCreated: string[] = [];
 
   for (const [customerId, orders] of ordersByCustomer) {
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { id: true, pricingCategory: true },
+    });
+    if (!customer) throw new NotFoundError('Customer not found');
+
+    const existingCycleInvoice = await prisma.invoice.findFirst({
+      where: {
+        customerId,
+        isCurrent: true,
+        billingCycleStart: cycleStartDate,
+        billingCycleEnd: cycleEndDate,
+      },
+      orderBy: { version: 'desc' },
+    });
+
+    if (existingCycleInvoice) {
+      const regenerated = await regenerateInvoice(existingCycleInvoice.id);
+      invoicesCreated.push(regenerated.id);
+      continue;
+    }
+
     // Get previous invoice closing balance as opening balance (Req 9.7)
     const previousInvoice = await prisma.invoice.findFirst({
       where: { customerId, isCurrent: true },
@@ -71,9 +97,11 @@ export async function generateInvoicesForCycle(cycleStart: string, cycleEnd: str
       const priceRecord = await getEffectivePrice(
         order.productVariantId,
         order.deliveryDate,
+        null,
+        customer.pricingCategory,
       );
 
-      const qty = new Prisma.Decimal(order.quantity.toString());
+      const qty = getBillableQuantity(order);
       const unitPrice = new Prisma.Decimal(priceRecord.price.toString());
       const lineTotal = qty.mul(unitPrice);
 
@@ -185,6 +213,12 @@ export async function regenerateInvoice(invoiceId: string) {
 
   const cycleStart = existing.billingCycleStart;
   const cycleEnd = existing.billingCycleEnd;
+  const customer = await prisma.customer.findUnique({
+    where: { id: existing.customerId },
+    select: { id: true, pricingCategory: true },
+  });
+
+  if (!customer) throw new NotFoundError('Customer not found');
 
   // Get delivered orders for this customer in the cycle
   const deliveredOrders = await prisma.deliveryOrder.findMany({
@@ -213,9 +247,11 @@ export async function regenerateInvoice(invoiceId: string) {
     const priceRecord = await getEffectivePrice(
       order.productVariantId,
       order.deliveryDate,
+      null,
+      customer.pricingCategory,
     );
 
-    const qty = new Prisma.Decimal(order.quantity.toString());
+    const qty = getBillableQuantity(order);
     const unitPrice = new Prisma.Decimal(priceRecord.price.toString());
     const lineTotal = qty.mul(unitPrice);
 
@@ -345,7 +381,7 @@ export async function getInvoice(invoiceId: string) {
   const invoice = await prisma.invoice.findUnique({
     where: { id: invoiceId },
     include: {
-      customer: { select: { id: true, name: true, phone: true, email: true } },
+      customer: { select: { id: true, name: true, phone: true, email: true, pricingCategory: true } },
       lineItems: {
         include: {
           productVariant: {
@@ -572,6 +608,20 @@ export async function generateInvoiceForCustomer(
   cycleStart: Date,
   cycleEnd: Date,
 ) {
+  const existingCycleInvoice = await prisma.invoice.findFirst({
+    where: {
+      customerId,
+      isCurrent: true,
+      billingCycleStart: cycleStart,
+      billingCycleEnd: cycleEnd,
+    },
+    orderBy: { version: 'desc' },
+  });
+
+  if (existingCycleInvoice) {
+    return regenerateInvoice(existingCycleInvoice.id);
+  }
+
   // Fetch customer with pricing category
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },
@@ -621,7 +671,7 @@ export async function generateInvoiceForCustomer(
       customer.pricingCategory,
     );
 
-    const qty = new Prisma.Decimal(order.quantity.toString());
+    const qty = getBillableQuantity(order);
     const unitPrice = new Prisma.Decimal(priceRecord.price.toString());
     const lineTotal = qty.mul(unitPrice);
 
@@ -743,7 +793,11 @@ export async function runDailyBillingJob(today: Date = new Date()) {
           billingCycleEnd: nextCycle.end,
         },
       });
-      if (existingInvoice) continue;
+      if (existingInvoice) {
+        await regenerateInvoice(existingInvoice.id);
+        invoicesCreated++;
+        continue;
+      }
 
       await generateInvoiceForCustomer(customer.id, nextCycle.start, nextCycle.end);
       invoicesCreated++;

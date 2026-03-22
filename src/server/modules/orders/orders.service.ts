@@ -7,11 +7,15 @@ import type {
   CreateOneTimeOrderInput,
   UpdateOrderInput,
 } from './orders.types.js';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { shouldDeliverOnDate, isOnVacationHold } from '../../lib/frequency.js';
 import { isSystemHoliday, isRouteHoliday } from '../holidays/holidays.service.js';
 import { applyPendingQuantityChanges } from '../subscriptions/subscriptions.service.js';
 import { getMilkCollectionTotalsByDate } from '../milk-collections/milk-collections.service.js';
+
+function getDeliveredQuantity(order: { quantity: Prisma.Decimal; actualQuantity?: Prisma.Decimal | null }) {
+  return Number(order.actualQuantity ?? order.quantity);
+}
 
 const orderInclude = {
   customer: { select: { id: true, name: true, phone: true, status: true } },
@@ -368,6 +372,8 @@ export async function getMilkSummary(date: Date) {
     skipped: 0,
     failed: 0,
     returned: 0,
+    over: 0,
+    under: 0,
   };
 
   const byProductSession = new Map<
@@ -382,6 +388,8 @@ export async function getMilkSummary(date: Date) {
       skipped: number;
       failed: number;
       returned: number;
+      over: number;
+      under: number;
     }
   >();
 
@@ -389,11 +397,13 @@ export async function getMilkSummary(date: Date) {
     const quantity = Number(order.quantity);
     totals.planned += quantity;
 
-    if (order.status === 'delivered') totals.delivered += quantity;
+    if (order.status === 'delivered') totals.delivered += getDeliveredQuantity(order as { quantity: Prisma.Decimal; actualQuantity?: Prisma.Decimal | null });
     if (order.status === 'pending') totals.pending += quantity;
     if (order.status === 'skipped') totals.skipped += quantity;
     if (order.status === 'failed') totals.failed += quantity;
     if (order.status === 'returned') totals.returned += quantity;
+    if ((order as { adjustmentType?: string }).adjustmentType === 'over') totals.over += Number((order as { adjustmentQuantity?: Prisma.Decimal | null }).adjustmentQuantity ?? 0);
+    if ((order as { adjustmentType?: string }).adjustmentType === 'under') totals.under += Number((order as { adjustmentQuantity?: Prisma.Decimal | null }).adjustmentQuantity ?? 0);
 
     const key = [
       order.productVariant.product.name,
@@ -412,16 +422,20 @@ export async function getMilkSummary(date: Date) {
         skipped: 0,
         failed: 0,
         returned: 0,
+        over: 0,
+        under: 0,
       });
     }
 
     const row = byProductSession.get(key)!;
     row.planned += quantity;
-    if (order.status === 'delivered') row.delivered += quantity;
+    if (order.status === 'delivered') row.delivered += getDeliveredQuantity(order as { quantity: Prisma.Decimal; actualQuantity?: Prisma.Decimal | null });
     if (order.status === 'pending') row.pending += quantity;
     if (order.status === 'skipped') row.skipped += quantity;
     if (order.status === 'failed') row.failed += quantity;
     if (order.status === 'returned') row.returned += quantity;
+    if ((order as { adjustmentType?: string }).adjustmentType === 'over') row.over += Number((order as { adjustmentQuantity?: Prisma.Decimal | null }).adjustmentQuantity ?? 0);
+    if ((order as { adjustmentType?: string }).adjustmentType === 'under') row.under += Number((order as { adjustmentQuantity?: Prisma.Decimal | null }).adjustmentQuantity ?? 0);
   }
 
   const rows = [...byProductSession.values()]
@@ -444,7 +458,10 @@ export async function getMilkSummary(date: Date) {
       routeName: order.route?.name ?? 'Unassigned',
       deliverySession: order.deliverySession,
       quantity: Number(order.quantity),
+      actualQuantity: order.status === 'delivered' ? getDeliveredQuantity(order as { quantity: Prisma.Decimal; actualQuantity?: Prisma.Decimal | null }) : null,
       status: order.status,
+      adjustmentType: (order as { adjustmentType?: 'exact' | 'over' | 'under' | null }).adjustmentType,
+      adjustmentQuantity: Number((order as { adjustmentQuantity?: Prisma.Decimal | null }).adjustmentQuantity ?? 0),
       returnedQuantity: Number(order.returnedQuantity ?? 0),
     }))
     .sort((a, b) =>
@@ -462,6 +479,8 @@ export async function getMilkSummary(date: Date) {
       skipped: 0,
       failed: 0,
       returned: 0,
+      over: 0,
+      under: 0,
       discrepancy: 0,
       received: collectionTotals.morning,
       receivedVsDelivered: 0,
@@ -473,6 +492,8 @@ export async function getMilkSummary(date: Date) {
       skipped: 0,
       failed: 0,
       returned: 0,
+      over: 0,
+      under: 0,
       discrepancy: 0,
       received: collectionTotals.evening,
       receivedVsDelivered: 0,
@@ -487,6 +508,8 @@ export async function getMilkSummary(date: Date) {
     target.skipped += row.skipped;
     target.failed += row.failed;
     target.returned += row.returned;
+    target.over += row.over;
+    target.under += row.under;
     target.discrepancy += row.discrepancy;
   }
 
@@ -497,6 +520,8 @@ export async function getMilkSummary(date: Date) {
     bySession[session].skipped = Number(bySession[session].skipped.toFixed(3));
     bySession[session].failed = Number(bySession[session].failed.toFixed(3));
     bySession[session].returned = Number(bySession[session].returned.toFixed(3));
+    bySession[session].over = Number(bySession[session].over.toFixed(3));
+    bySession[session].under = Number(bySession[session].under.toFixed(3));
     bySession[session].discrepancy = Number(bySession[session].discrepancy.toFixed(3));
     bySession[session].receivedVsDelivered = Number(
       (bySession[session].received - bySession[session].delivered).toFixed(3),

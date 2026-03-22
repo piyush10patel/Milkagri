@@ -47,6 +47,10 @@ function formatPackSummary(packs: Array<{ packSize: string; packCount: string }>
     .join(', ');
 }
 
+function formatDateOnly(value?: string) {
+  return value ? value.slice(0, 10) : '';
+}
+
 export default function SubscriptionFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -107,7 +111,7 @@ export default function SubscriptionFormPage() {
         deliverySession: existing.deliverySession ?? 'morning',
         frequencyType: existing.frequencyType,
         weekdays: existing.weekdays ?? [],
-        startDate: existing.startDate,
+        startDate: formatDateOnly(existing.startDate),
       });
       setPackRows(
         existing.packs?.length

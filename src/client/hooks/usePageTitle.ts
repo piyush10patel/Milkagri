@@ -41,6 +41,7 @@ function getTitleForPath(pathname: string): string {
   if (/^\/subscriptions\/[^/]+\/edit$/.test(pathname)) return 'Edit Subscription';
   if (/^\/routes\/[^/]+\/edit$/.test(pathname)) return 'Edit Route';
   if (/^\/users\/[^/]+\/edit$/.test(pathname)) return 'Edit User';
+  if (/^\/milk-collections\/[^/]+$/.test(pathname)) return 'Village Collection';
   if (/^\/billing\/[^/]+$/.test(pathname)) return 'Invoice Details';
   if (/^\/reports\/[^/]+$/.test(pathname)) return 'Report';
   if (/^\/ledger\/[^/]+$/.test(pathname)) return 'Customer Ledger';

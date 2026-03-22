@@ -23,6 +23,10 @@ interface ListResponse { data: Subscription[]; pagination: { page: number; limit
 const FREQ_LABELS: Record<string, string> = { daily: 'Daily', alternate_day: 'Alternate Day', custom_weekday: 'Custom Weekday' };
 const STATUS_COLORS: Record<string, string> = { active: 'bg-green-100 text-green-800', paused: 'bg-yellow-100 text-yellow-800', cancelled: 'bg-red-100 text-red-800' };
 
+function formatDateOnly(value?: string) {
+  return value ? value.slice(0, 10) : '—';
+}
+
 export default function SubscriptionListPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
@@ -126,7 +130,7 @@ export default function SubscriptionListPage() {
                 <td className="px-4 py-3 text-sm">{s.route?.name ?? '—'}</td>
                 <td className="px-4 py-3 text-sm">{FREQ_LABELS[s.frequencyType] ?? s.frequencyType}</td>
                 <td className="px-4 py-3 text-sm"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[s.status] ?? ''}`}>{s.status}</span></td>
-                <td className="px-4 py-3 text-sm">{s.startDate}</td>
+                <td className="px-4 py-3 text-sm">{formatDateOnly(s.startDate)}</td>
                 <td className="px-4 py-3 text-sm text-right space-x-1">
                   <Link to={`/subscriptions/${s.id}/edit`} className="text-blue-600 hover:underline text-xs">Edit</Link>
                   {s.status === 'active' && (

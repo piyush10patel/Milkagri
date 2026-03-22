@@ -13,6 +13,8 @@ interface MilkSummaryRow {
   skipped: number;
   failed: number;
   returned: number;
+  over: number;
+  under: number;
   discrepancy: number;
 }
 
@@ -23,7 +25,10 @@ interface MilkSummaryCustomerRow {
   routeName: string;
   deliverySession: 'morning' | 'evening';
   quantity: number;
+  actualQuantity: number | null;
   status: 'pending' | 'delivered' | 'skipped' | 'failed' | 'returned';
+  adjustmentType?: 'exact' | 'over' | 'under' | null;
+  adjustmentQuantity: number;
   returnedQuantity: number;
 }
 
@@ -36,6 +41,8 @@ interface MilkSummaryResponse {
     skipped: number;
     failed: number;
     returned: number;
+    over: number;
+    under: number;
     discrepancy: number;
   };
   collectionTotals: {
@@ -50,6 +57,8 @@ interface MilkSummaryResponse {
     skipped: number;
     failed: number;
     returned: number;
+    over: number;
+    under: number;
     discrepancy: number;
     received: number;
     receivedVsDelivered: number;
@@ -77,6 +86,8 @@ export default function OrderMilkSummaryPage() {
       skipped: 0,
       failed: 0,
       returned: 0,
+      over: 0,
+      under: 0,
       discrepancy: 0,
       received: data?.collectionTotals?.morning ?? 0,
       receivedVsDelivered: 0,
@@ -88,6 +99,8 @@ export default function OrderMilkSummaryPage() {
       skipped: 0,
       failed: 0,
       returned: 0,
+      over: 0,
+      under: 0,
       discrepancy: 0,
       received: data?.collectionTotals?.evening ?? 0,
       receivedVsDelivered: 0,
@@ -100,24 +113,26 @@ export default function OrderMilkSummaryPage() {
     skipped: 0,
     failed: 0,
     returned: 0,
+    over: 0,
+    under: 0,
     discrepancy: 0,
     received: 0,
     receivedVsDelivered: 0,
   };
+
   const shiftCards: Array<{ key: 'morning' | 'evening'; label: string }> = [
     { key: 'morning', label: 'Morning' },
     { key: 'evening', label: 'Evening' },
   ];
-  const hasRowsForSelectedShift = shiftRows.length > 0;
 
   return (
     <div>
       <div className="flex flex-col gap-3 mb-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Milk Summary</h1>
-          <p className="text-sm text-gray-500">Compare milk received, planned, and delivered to spot shift-wise discrepancies by session, route, and product.</p>
-        </div>
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">Milk Summary</h1>
+            <p className="text-sm text-gray-500">Compare milk received, planned, delivered, and over or under adjustments for each shift.</p>
+          </div>
           <div className="flex items-center gap-3">
             <Link
               to="/milk-collections"
@@ -135,39 +150,32 @@ export default function OrderMilkSummaryPage() {
         </div>
       </div>
 
-      {isLoading && <p className="text-sm text-gray-500">Loading…</p>}
+      {isLoading && <p className="text-sm text-gray-500">Loading...</p>}
 
       {data && (
         <>
           <div className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
             <h2 className="text-base font-semibold text-gray-900">Select Shift</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Choose `Morning` or `Evening` for {data.date}. Clicking a shift opens its delivery summary below.
-            </p>
+            <p className="mt-1 text-sm text-gray-500">Choose Morning or Evening for {data.date}. The summary and customer list below update to that shift.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
             {shiftCards.map((shift) => {
               const totals = sessionTotals[shift.key];
-
               return (
                 <button
                   key={shift.key}
                   type="button"
                   onClick={() => setSelectedShift(shift.key)}
                   className={`rounded-lg border p-4 text-left ${
-                    selectedShift === shift.key
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 bg-white hover:bg-gray-50'
+                    selectedShift === shift.key ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-gray-900">{shift.label}</p>
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                        selectedShift === shift.key ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
-                      }`}
-                    >
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                      selectedShift === shift.key ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
                       {selectedShift === shift.key ? 'Selected' : 'Open Summary'}
                     </span>
                   </div>
@@ -177,8 +185,6 @@ export default function OrderMilkSummaryPage() {
                   <p className="text-lg font-semibold text-indigo-700">{totals.received}</p>
                   <p className="mt-2 text-xs text-gray-500">Delivered</p>
                   <p className="text-lg font-semibold text-green-700">{totals.delivered}</p>
-                  <p className="mt-2 text-xs text-gray-500">Pending</p>
-                  <p className="text-sm font-semibold text-amber-700">{totals.pending}</p>
                   <p className="mt-2 text-xs text-gray-500">Received vs Delivered</p>
                   <p className={`text-lg font-semibold ${totals.receivedVsDelivered < 0 ? 'text-red-700' : 'text-green-700'}`}>
                     {totals.receivedVsDelivered}
@@ -191,7 +197,7 @@ export default function OrderMilkSummaryPage() {
           <div className="mb-4">
             <h2 className="text-lg font-semibold text-gray-900 capitalize">{selectedShift} Summary</h2>
             <p className="text-sm text-gray-500">
-              {hasRowsForSelectedShift
+              {shiftRows.length > 0
                 ? `Showing route and product totals for the ${selectedShift} shift on ${data.date}.`
                 : `No ${selectedShift} orders found for ${data.date}.`}
             </p>
@@ -205,6 +211,8 @@ export default function OrderMilkSummaryPage() {
             <SummaryCard label="Skipped" value={shiftTotals.skipped} />
             <SummaryCard label="Failed" value={shiftTotals.failed} />
             <SummaryCard label="Returned" value={shiftTotals.returned} />
+            <SummaryCard label="Overs" value={shiftTotals.over} />
+            <SummaryCard label="Unders" value={shiftTotals.under} />
             <SummaryCard label="Planned Gap" value={shiftTotals.discrepancy} highlight />
             <SummaryCard label="Received Gap" value={shiftTotals.receivedVsDelivered} highlight />
           </div>
@@ -222,6 +230,8 @@ export default function OrderMilkSummaryPage() {
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Skipped</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Failed</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Returned</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Over</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Under</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Gap</th>
                 </tr>
               </thead>
@@ -237,12 +247,14 @@ export default function OrderMilkSummaryPage() {
                     <td className="px-4 py-3 text-sm text-right">{row.skipped}</td>
                     <td className="px-4 py-3 text-sm text-right">{row.failed}</td>
                     <td className="px-4 py-3 text-sm text-right">{row.returned}</td>
+                    <td className="px-4 py-3 text-sm text-right text-green-700">{row.over}</td>
+                    <td className="px-4 py-3 text-sm text-right text-red-700">{row.under}</td>
                     <td className={`px-4 py-3 text-sm text-right font-medium ${row.discrepancy > 0 ? 'text-red-700' : 'text-green-700'}`}>{row.discrepancy}</td>
                   </tr>
                 ))}
                 {shiftRows.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-4 py-8 text-center text-sm text-gray-500">
+                    <td colSpan={12} className="px-4 py-8 text-center text-sm text-gray-500">
                       No {selectedShift} orders found for this date
                     </td>
                   </tr>
@@ -254,7 +266,7 @@ export default function OrderMilkSummaryPage() {
           <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
             <div className="border-b border-gray-200 px-4 py-3">
               <h3 className="text-base font-semibold text-gray-900 capitalize">{selectedShift} Customer Deliveries</h3>
-              <p className="text-sm text-gray-500">Customer-wise orders for the selected shift and date.</p>
+              <p className="text-sm text-gray-500">Customer-wise orders for the selected shift, including exact, over, and under adjustments.</p>
             </div>
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -262,7 +274,9 @@ export default function OrderMilkSummaryPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Route</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Planned</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Delivered</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Adjustment</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Returned</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 </tr>
@@ -274,6 +288,14 @@ export default function OrderMilkSummaryPage() {
                     <td className="px-4 py-3 text-sm text-gray-600">{row.routeName}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{row.productName}</td>
                     <td className="px-4 py-3 text-sm text-right">{row.quantity}</td>
+                    <td className="px-4 py-3 text-sm text-right">{row.actualQuantity ?? '—'}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {row.adjustmentType && row.adjustmentType !== 'exact'
+                        ? `${row.adjustmentType} ${row.adjustmentQuantity}`
+                        : row.status === 'delivered'
+                          ? 'Exact'
+                          : '—'}
+                    </td>
                     <td className="px-4 py-3 text-sm text-right">{row.returnedQuantity > 0 ? row.returnedQuantity : '—'}</td>
                     <td className="px-4 py-3 text-sm capitalize">
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -294,7 +316,7 @@ export default function OrderMilkSummaryPage() {
                 ))}
                 {shiftCustomerRows.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">
+                    <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
                       No customer deliveries found for this shift on this date
                     </td>
                   </tr>

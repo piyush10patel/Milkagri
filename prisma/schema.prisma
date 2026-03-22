@@ -310,8 +310,11 @@ model DeliveryOrder {
   routeId          String?             @map("route_id") @db.Uuid
   deliveryDate     DateTime            @map("delivery_date") @db.Date
   quantity         Decimal             @db.Decimal(10, 3)
+  actualQuantity   Decimal?            @map("actual_quantity") @db.Decimal(10, 3)
   deliverySession  DeliverySession     @default(morning) @map("delivery_session")
   status           DeliveryOrderStatus @default(pending)
+  adjustmentType   DeliveryAdjustmentType? @map("adjustment_type")
+  adjustmentQuantity Decimal?          @map("adjustment_quantity") @db.Decimal(10, 3)
   skipReason       String?             @map("skip_reason") @db.VarChar(50)
   failureReason    String?             @map("failure_reason") @db.Text
   returnedQuantity Decimal?            @map("returned_quantity") @db.Decimal(10, 3)
@@ -358,6 +361,12 @@ enum DeliveryOrderStatus {
   skipped
   failed
   returned
+}
+
+enum DeliveryAdjustmentType {
+  exact
+  over
+  under
 }
 
 // ─── Route Tables ────────────────────────────────────────────────────────────
