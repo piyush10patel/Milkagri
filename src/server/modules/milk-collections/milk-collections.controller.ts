@@ -28,6 +28,15 @@ export async function createVillage(req: Request, res: Response, next: NextFunct
   }
 }
 
+export async function createFarmer(req: Request, res: Response, next: NextFunction) {
+  try {
+    const farmer = await service.createFarmer(req.body);
+    res.status(201).json(farmer);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function listSummary(req: Request, res: Response, next: NextFunction) {
   try {
     const summary = await service.getMilkCollectionSummary(req.query.date as string);

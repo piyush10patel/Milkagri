@@ -418,14 +418,31 @@ model Village {
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
+  farmers         Farmer[]
   milkCollections MilkCollection[]
 
   @@map("villages")
 }
 
+model Farmer {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  villageId       String           @map("village_id") @db.Uuid
+  name            String           @db.VarChar(255)
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  village         Village          @relation(fields: [villageId], references: [id], onDelete: Cascade)
+  milkCollections MilkCollection[]
+
+  @@unique([villageId, name], map: "uq_farmers_village_name")
+  @@map("farmers")
+}
+
 model MilkCollection {
   id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   villageId       String          @map("village_id") @db.Uuid
+  farmerId        String          @map("farmer_id") @db.Uuid
   collectionDate  DateTime        @map("collection_date") @db.Date
   deliverySession DeliverySession @default(morning) @map("delivery_session")
   quantity        Decimal         @db.Decimal(10, 3)
@@ -435,9 +452,10 @@ model MilkCollection {
   updatedAt       DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   village  Village @relation(fields: [villageId], references: [id])
+  farmer   Farmer  @relation(fields: [farmerId], references: [id], onDelete: Cascade)
   recorder User    @relation("MilkCollectionRecorder", fields: [recordedBy], references: [id])
 
-  @@unique([villageId, collectionDate, deliverySession], map: "uq_milk_collection_village_date_session")
+  @@unique([farmerId, collectionDate, deliverySession], map: "uq_milk_collection_farmer_date_session")
   @@index([collectionDate, deliverySession], map: "idx_milk_collection_date_session")
   @@map("milk_collections")
 }

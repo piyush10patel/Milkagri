@@ -5,6 +5,7 @@ import { csrfProtection } from '../../middleware/csrf.js';
 import { validate } from '../../lib/validation.js';
 import { uuidParamSchema } from '../../lib/paramSchemas.js';
 import {
+  createFarmerSchema,
   createVillageSchema,
   milkCollectionDateQuerySchema,
   saveMilkCollectionSchema,
@@ -21,6 +22,7 @@ const editRoles = ['super_admin', 'admin', 'billing_staff'];
 router.get('/', authorize(viewRoles), validate({ query: milkCollectionDateQuerySchema }), controller.listSummary);
 router.get('/villages', authorize(viewRoles), controller.listVillages);
 router.post('/villages', authorize(editRoles), csrfProtection, validate({ body: createVillageSchema }), controller.createVillage);
+router.post('/farmers', authorize(editRoles), csrfProtection, validate({ body: createFarmerSchema }), controller.createFarmer);
 router.post('/', authorize(editRoles), csrfProtection, validate({ body: saveMilkCollectionSchema }), controller.saveEntry);
 router.delete('/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.removeEntry);
 

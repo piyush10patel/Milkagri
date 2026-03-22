@@ -1,9 +1,14 @@
 import { prisma } from '../../index.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../lib/errors.js';
-import type { CreateVillageInput, SaveMilkCollectionInput } from './milk-collections.types.js';
+import type { CreateFarmerInput, CreateVillageInput, SaveMilkCollectionInput } from './milk-collections.types.js';
 
 export async function listVillages() {
   return prisma.village.findMany({
+    include: {
+      farmers: {
+        orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+      },
+    },
     orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
   });
 }
@@ -14,40 +19,63 @@ export async function createVillage(input: CreateVillageInput) {
     where: { name: { equals: name, mode: 'insensitive' } },
   });
 
-  if (existing) {
-    throw new ConflictError('Village already exists');
-  }
+  if (existing) throw new ConflictError('Village already exists');
 
-  return prisma.village.create({
-    data: { name },
+  return prisma.village.create({ data: { name } });
+}
+
+export async function createFarmer(input: CreateFarmerInput) {
+  const village = await prisma.village.findUnique({ where: { id: input.villageId } });
+  if (!village) throw new NotFoundError('Village not found');
+
+  const name = input.name.trim();
+  const existing = await prisma.farmer.findFirst({
+    where: {
+      villageId: input.villageId,
+      name: { equals: name, mode: 'insensitive' },
+    },
+  });
+
+  if (existing) throw new ConflictError('Farmer already exists for this village');
+
+  return prisma.farmer.create({
+    data: {
+      villageId: input.villageId,
+      name,
+    },
   });
 }
 
 export async function saveMilkCollection(input: SaveMilkCollectionInput, userId: string) {
-  const village = await prisma.village.findUnique({
-    where: { id: input.villageId },
+  const farmer = await prisma.farmer.findUnique({
+    where: { id: input.farmerId },
+    include: { village: true },
   });
 
-  if (!village) throw new NotFoundError('Village not found');
-  if (!village.isActive) throw new ValidationError('Cannot record collection for an inactive village');
+  if (!farmer) throw new NotFoundError('Farmer not found');
+  if (farmer.villageId !== input.villageId) throw new ValidationError('Selected farmer does not belong to the selected village');
+  if (!farmer.village.isActive) throw new ValidationError('Cannot record collection for an inactive village');
+  if (!farmer.isActive) throw new ValidationError('Cannot record collection for an inactive farmer');
 
   const collectionDate = new Date(input.collectionDate);
 
   return prisma.milkCollection.upsert({
     where: {
-      villageId_collectionDate_deliverySession: {
-        villageId: input.villageId,
+      farmerId_collectionDate_deliverySession: {
+        farmerId: input.farmerId,
         collectionDate,
         deliverySession: input.deliverySession,
       },
     },
     update: {
+      villageId: input.villageId,
       quantity: input.quantity,
       notes: input.notes?.trim() || null,
       recordedBy: userId,
     },
     create: {
       villageId: input.villageId,
+      farmerId: input.farmerId,
       collectionDate,
       deliverySession: input.deliverySession,
       quantity: input.quantity,
@@ -56,6 +84,7 @@ export async function saveMilkCollection(input: SaveMilkCollectionInput, userId:
     },
     include: {
       village: true,
+      farmer: true,
       recorder: { select: { id: true, name: true } },
     },
   });
@@ -73,25 +102,29 @@ export async function getMilkCollectionSummary(date: string) {
   const targetDate = new Date(date);
   const [villages, entries] = await Promise.all([
     prisma.village.findMany({
+      include: {
+        farmers: {
+          orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+        },
+      },
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
     }),
     prisma.milkCollection.findMany({
       where: { collectionDate: targetDate },
       include: {
         village: true,
+        farmer: true,
         recorder: { select: { id: true, name: true } },
       },
       orderBy: [
         { deliverySession: 'asc' },
         { village: { name: 'asc' } },
+        { farmer: { name: 'asc' } },
       ],
     }),
   ]);
 
-  const shiftTotals = {
-    morning: 0,
-    evening: 0,
-  };
+  const shiftTotals = { morning: 0, evening: 0 };
 
   const villageRows = villages.map((village) => ({
     villageId: village.id,
@@ -102,18 +135,39 @@ export async function getMilkCollectionSummary(date: string) {
     totalQuantity: 0,
   }));
 
+  const farmerRows = villages.flatMap((village) =>
+    village.farmers.map((farmer) => ({
+      farmerId: farmer.id,
+      farmerName: farmer.name,
+      villageId: village.id,
+      villageName: village.name,
+      isActive: farmer.isActive,
+      morningQuantity: 0,
+      eveningQuantity: 0,
+      totalQuantity: 0,
+    })),
+  );
+
   const villageRowMap = new Map(villageRows.map((row) => [row.villageId, row]));
+  const farmerRowMap = new Map(farmerRows.map((row) => [row.farmerId, row]));
 
   for (const entry of entries) {
     const quantity = Number(entry.quantity);
     shiftTotals[entry.deliverySession] += quantity;
 
-    const row = villageRowMap.get(entry.villageId);
-    if (!row) continue;
+    const villageRow = villageRowMap.get(entry.villageId);
+    if (villageRow) {
+      if (entry.deliverySession === 'morning') villageRow.morningQuantity += quantity;
+      if (entry.deliverySession === 'evening') villageRow.eveningQuantity += quantity;
+      villageRow.totalQuantity += quantity;
+    }
 
-    if (entry.deliverySession === 'morning') row.morningQuantity += quantity;
-    if (entry.deliverySession === 'evening') row.eveningQuantity += quantity;
-    row.totalQuantity += quantity;
+    const farmerRow = farmerRowMap.get(entry.farmerId);
+    if (farmerRow) {
+      if (entry.deliverySession === 'morning') farmerRow.morningQuantity += quantity;
+      if (entry.deliverySession === 'evening') farmerRow.eveningQuantity += quantity;
+      farmerRow.totalQuantity += quantity;
+    }
   }
 
   return {
@@ -125,10 +179,13 @@ export async function getMilkCollectionSummary(date: string) {
     },
     villages,
     villageRows,
+    farmerRows,
     entries: entries.map((entry) => ({
       id: entry.id,
       villageId: entry.villageId,
       villageName: entry.village.name,
+      farmerId: entry.farmerId,
+      farmerName: entry.farmer.name,
       deliverySession: entry.deliverySession,
       quantity: Number(entry.quantity),
       notes: entry.notes,
@@ -145,11 +202,7 @@ export async function getMilkCollectionTotalsByDate(date: Date) {
     _sum: { quantity: true },
   });
 
-  const totals = {
-    morning: 0,
-    evening: 0,
-    total: 0,
-  };
+  const totals = { morning: 0, evening: 0, total: 0 };
 
   for (const row of grouped) {
     const quantity = Number(row._sum.quantity ?? 0);
