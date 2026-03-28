@@ -7,11 +7,21 @@ import { z } from 'zod';
 export const createRouteSchema = z.object({
   name: z.string().min(1, 'Route name is required').max(255),
   description: z.string().optional(),
+  startLocationMode: z.enum(['none', 'existing_stop', 'custom']).optional(),
+  startCustomerId: z.string().uuid('Invalid customer ID').optional().nullable(),
+  startLatitude: z.number().min(-90).max(90).optional().nullable(),
+  startLongitude: z.number().min(-180).max(180).optional().nullable(),
+  startLabel: z.string().max(255).optional().nullable(),
 });
 
 export const updateRouteSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().optional(),
+  startLocationMode: z.enum(['none', 'existing_stop', 'custom']).optional(),
+  startCustomerId: z.string().uuid('Invalid customer ID').optional().nullable(),
+  startLatitude: z.number().min(-90).max(90).optional().nullable(),
+  startLongitude: z.number().min(-180).max(180).optional().nullable(),
+  startLabel: z.string().max(255).optional().nullable(),
 });
 
 export const routeQuerySchema = z.object({

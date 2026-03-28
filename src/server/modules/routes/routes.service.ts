@@ -10,6 +10,56 @@ import type {
 } from './routes.types.js';
 import type { Prisma } from '@prisma/client';
 
+function normalizeStartLocationInput(
+  input: Partial<{
+    startLocationMode: 'none' | 'existing_stop' | 'custom';
+    startCustomerId: string | null;
+    startLatitude: number | null;
+    startLongitude: number | null;
+    startLabel: string | null;
+  }>,
+) {
+  if (input.startLocationMode === undefined) return {};
+
+  if (input.startLocationMode === 'none') {
+    return {
+      startLocationMode: 'none',
+      startCustomerId: null,
+      startLatitude: null,
+      startLongitude: null,
+      startLabel: null,
+    };
+  }
+
+  if (input.startLocationMode === 'existing_stop') {
+    if (!input.startCustomerId) {
+      throw new ValidationError('Start customer is required when using existing stop');
+    }
+    return {
+      startLocationMode: 'existing_stop',
+      startCustomerId: input.startCustomerId,
+      startLatitude: null,
+      startLongitude: null,
+      startLabel: input.startLabel ?? null,
+    };
+  }
+
+  if (input.startLocationMode === 'custom') {
+    if (input.startLatitude === null || input.startLatitude === undefined || input.startLongitude === null || input.startLongitude === undefined) {
+      throw new ValidationError('Start latitude and longitude are required for custom start location');
+    }
+    return {
+      startLocationMode: 'custom',
+      startCustomerId: null,
+      startLatitude: input.startLatitude,
+      startLongitude: input.startLongitude,
+      startLabel: input.startLabel ?? null,
+    };
+  }
+
+  return {};
+}
+
 // Shared include for consistent response shape
 const routeInclude = {
   routeCustomers: {
@@ -76,8 +126,9 @@ export async function getRoute(id: string) {
 // Create route
 // ---------------------------------------------------------------------------
 export async function createRoute(input: CreateRouteInput) {
+  const startLocation = normalizeStartLocationInput(input as any);
   return prisma.route.create({
-    data: input,
+    data: { ...input, ...startLocation },
     include: routeInclude,
   });
 }
@@ -91,9 +142,10 @@ export async function updateRoute(id: string, input: UpdateRouteInput) {
     throw new NotFoundError('Route not found');
   }
 
+  const startLocation = normalizeStartLocationInput(input as any);
   return prisma.route.update({
     where: { id },
-    data: input,
+    data: { ...input, ...startLocation },
     include: routeInclude,
   });
 }

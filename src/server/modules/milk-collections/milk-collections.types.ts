@@ -4,6 +4,28 @@ export const milkCollectionDateQuerySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
 });
 
+export const collectionRouteStopsQuerySchema = z.object({
+  routeId: z.string().uuid('Invalid route ID'),
+  deliverySession: z.enum(['morning', 'evening']),
+});
+
+export const saveCollectionRouteStopsSchema = z.object({
+  routeId: z.string().uuid('Invalid route ID'),
+  deliverySession: z.enum(['morning', 'evening']),
+  stops: z.array(
+    z.object({
+      villageId: z.string().uuid('Invalid village ID'),
+      sequenceOrder: z.number().int().min(1, 'Sequence order must be >= 1'),
+    }),
+  ),
+});
+
+export const collectionRouteManifestQuerySchema = z.object({
+  routeId: z.string().uuid('Invalid route ID'),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+  deliverySession: z.enum(['morning', 'evening']),
+});
+
 export const createVillageSchema = z.object({
   name: z.string().trim().min(1, 'Village name is required').max(255, 'Village name is too long'),
 });
@@ -61,3 +83,6 @@ export type SaveMilkCollectionInput = z.infer<typeof saveMilkCollectionSchema>;
 export type SaveVillageIndividualCollectionInput = z.infer<typeof saveVillageIndividualCollectionSchema>;
 export type SaveMilkVehicleLoadInput = z.infer<typeof saveMilkVehicleLoadSchema>;
 export type SaveMilkVehicleShiftLoadInput = z.infer<typeof saveMilkVehicleShiftLoadSchema>;
+export type CollectionRouteStopsQuery = z.infer<typeof collectionRouteStopsQuerySchema>;
+export type SaveCollectionRouteStopsInput = z.infer<typeof saveCollectionRouteStopsSchema>;
+export type CollectionRouteManifestQuery = z.infer<typeof collectionRouteManifestQuerySchema>;

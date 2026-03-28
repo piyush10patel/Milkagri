@@ -14,6 +14,12 @@ import type { Prisma } from '@prisma/client';
 
 const subscriptionInclude = {
   customer: { select: { id: true, name: true, phone: true, status: true } },
+  parentSubscription: {
+    select: {
+      id: true,
+      customer: { select: { id: true, name: true } },
+    },
+  },
   route: { select: { id: true, name: true } },
   productVariant: {
     select: {
@@ -113,6 +119,27 @@ export async function createSubscription(input: CreateSubscriptionInput, userId:
     }
   }
 
+  const subscriptionType = input.subscriptionType ?? 'regular';
+  const parentSubscriptionId = input.parentSubscriptionId ?? null;
+  if (subscriptionType === 'sub_subscription' && !parentSubscriptionId) {
+    throw new ValidationError('Sub-subscription requires a parent subscription');
+  }
+  if (parentSubscriptionId) {
+    const parent = await prisma.subscription.findUnique({
+      where: { id: parentSubscriptionId },
+      select: { id: true, customerId: true, status: true },
+    });
+    if (!parent) {
+      throw new NotFoundError('Parent subscription not found');
+    }
+    if (parent.customerId === input.customerId) {
+      throw new ValidationError('Parent and child subscription customer must be different');
+    }
+    if (parent.status !== 'active') {
+      throw new ValidationError('Parent subscription must be active');
+    }
+  }
+
   // Validate weekdays for custom_weekday
   if (input.frequencyType === 'custom_weekday' && (!input.weekdays || input.weekdays.length === 0)) {
     throw new ValidationError('Custom weekday frequency requires at least one weekday');
@@ -125,6 +152,8 @@ export async function createSubscription(input: CreateSubscriptionInput, userId:
       data: {
         customerId: input.customerId,
         productVariantId: input.productVariantId,
+        subscriptionType,
+        parentSubscriptionId,
         routeId: input.routeId ?? customer.routeId ?? null,
         quantity: input.quantity,
         deliverySession: input.deliverySession,
@@ -150,6 +179,8 @@ export async function createSubscription(input: CreateSubscriptionInput, userId:
         changeType: 'created',
         newValue: JSON.stringify({
           quantity: input.quantity,
+          subscriptionType,
+          parentSubscriptionId,
           routeId: input.routeId ?? customer.routeId ?? null,
           deliverySession: input.deliverySession,
           frequencyType: input.frequencyType,
@@ -192,6 +223,32 @@ export async function updateSubscription(id: string, input: UpdateSubscriptionIn
     }
   }
 
+  const nextSubscriptionType = input.subscriptionType ?? existing.subscriptionType;
+  const nextParentSubscriptionId = input.parentSubscriptionId === undefined
+    ? existing.parentSubscriptionId
+    : input.parentSubscriptionId;
+  if (nextSubscriptionType === 'sub_subscription' && !nextParentSubscriptionId) {
+    throw new ValidationError('Sub-subscription requires a parent subscription');
+  }
+  if (nextParentSubscriptionId) {
+    if (nextParentSubscriptionId === id) {
+      throw new ValidationError('Subscription cannot be its own parent');
+    }
+    const parent = await prisma.subscription.findUnique({
+      where: { id: nextParentSubscriptionId },
+      select: { id: true, customerId: true, status: true },
+    });
+    if (!parent) {
+      throw new NotFoundError('Parent subscription not found');
+    }
+    if (parent.customerId === existing.customerId) {
+      throw new ValidationError('Parent and child subscription customer must be different');
+    }
+    if (parent.status !== 'active') {
+      throw new ValidationError('Parent subscription must be active');
+    }
+  }
+
   return prisma.$transaction(async (tx) => {
     const nextQuantity = input.quantity !== undefined ? input.quantity : Number(existing.quantity);
     const packs = input.packBreakdown !== undefined
@@ -201,6 +258,8 @@ export async function updateSubscription(id: string, input: UpdateSubscriptionIn
     const subscription = await tx.subscription.update({
       where: { id },
       data: {
+        ...(input.subscriptionType !== undefined ? { subscriptionType: input.subscriptionType } : {}),
+        ...(input.parentSubscriptionId !== undefined ? { parentSubscriptionId: input.parentSubscriptionId } : {}),
         ...(input.routeId !== undefined ? { routeId: input.routeId } : {}),
         ...(input.quantity !== undefined ? { quantity: input.quantity } : {}),
         ...(input.deliverySession !== undefined ? { deliverySession: input.deliverySession } : {}),
@@ -239,6 +298,12 @@ export async function updateSubscription(id: string, input: UpdateSubscriptionIn
     }
     if (input.routeId !== undefined && existing.routeId !== input.routeId) {
       changes.routeId = { old: existing.routeId, new: input.routeId };
+    }
+    if (input.subscriptionType !== undefined && existing.subscriptionType !== input.subscriptionType) {
+      changes.subscriptionType = { old: existing.subscriptionType, new: input.subscriptionType };
+    }
+    if (input.parentSubscriptionId !== undefined && existing.parentSubscriptionId !== input.parentSubscriptionId) {
+      changes.parentSubscriptionId = { old: existing.parentSubscriptionId, new: input.parentSubscriptionId };
     }
     if (input.deliverySession !== undefined && existing.deliverySession !== input.deliverySession) {
       changes.deliverySession = { old: existing.deliverySession, new: input.deliverySession };

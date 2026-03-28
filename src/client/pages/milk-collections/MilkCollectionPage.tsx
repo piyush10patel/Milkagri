@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
 interface Village {
@@ -50,6 +50,38 @@ interface MilkCollectionSummary {
   vehicleShiftLoads: VehicleShiftLoadEntry[];
 }
 
+interface CollectionRoute {
+  id: string;
+  name: string;
+}
+
+interface CollectionRouteStopsResponse {
+  route: { id: string; name: string; isActive: boolean };
+  deliverySession: 'morning' | 'evening';
+  stops: Array<{
+    id: string;
+    villageId: string;
+    villageName: string;
+    sequenceOrder: number;
+    farmerNames: string[];
+  }>;
+}
+
+interface CollectionRouteManifestResponse {
+  routeId: string;
+  routeName: string;
+  date: string;
+  deliverySession: 'morning' | 'evening';
+  totalStops: number;
+  stops: Array<{
+    sequenceOrder: number;
+    villageId: string;
+    villageName: string;
+    farmerNames: string[];
+    farmerCount: number;
+  }>;
+}
+
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -64,6 +96,12 @@ export default function MilkCollectionPage() {
   const [showVillageModal, setShowVillageModal] = useState(false);
   const [individualVillageId, setIndividualVillageId] = useState<string | null>(null);
   const [showVehicleShiftModal, setShowVehicleShiftModal] = useState(false);
+  const [collectionSession, setCollectionSession] = useState<'morning' | 'evening'>('morning');
+  const [selectedCollectionRouteId, setSelectedCollectionRouteId] = useState('');
+  const [newStopVillageId, setNewStopVillageId] = useState('');
+  const [routeStopsDraft, setRouteStopsDraft] = useState<
+    Array<{ villageId: string; villageName: string; sequenceOrder: number; farmerNames: string[] }>
+  >([]);
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
@@ -71,10 +109,111 @@ export default function MilkCollectionPage() {
     queryFn: () => api.get<MilkCollectionSummary>(`/api/v1/milk-collections?date=${date}`),
   });
 
+  const { data: collectionRoutesData } = useQuery({
+    queryKey: ['milk-collection-routes'],
+    queryFn: () => api.get<{ items: CollectionRoute[] }>('/api/v1/milk-collections/routes'),
+  });
+
+  const { data: routeStopsData, isLoading: routeStopsLoading } = useQuery({
+    queryKey: ['milk-collection-route-stops', selectedCollectionRouteId, collectionSession],
+    queryFn: () =>
+      api.get<CollectionRouteStopsResponse>(
+        `/api/v1/milk-collections/route-stops?routeId=${selectedCollectionRouteId}&deliverySession=${collectionSession}`,
+      ),
+    enabled: Boolean(selectedCollectionRouteId),
+  });
+
+  const { data: routeManifestData, isLoading: routeManifestLoading } = useQuery({
+    queryKey: ['milk-collection-route-manifest', selectedCollectionRouteId, collectionSession, date],
+    queryFn: () =>
+      api.get<CollectionRouteManifestResponse>(
+        `/api/v1/milk-collections/route-manifest?routeId=${selectedCollectionRouteId}&deliverySession=${collectionSession}&date=${date}`,
+      ),
+    enabled: Boolean(selectedCollectionRouteId),
+  });
+
+  const saveRouteStopsMutation = useMutation({
+    mutationFn: () =>
+      api.put('/api/v1/milk-collections/route-stops', {
+        routeId: selectedCollectionRouteId,
+        deliverySession: collectionSession,
+        stops: routeStopsDraft.map((stop) => ({
+          villageId: stop.villageId,
+          sequenceOrder: stop.sequenceOrder,
+        })),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['milk-collection-route-stops', selectedCollectionRouteId, collectionSession] });
+      queryClient.invalidateQueries({ queryKey: ['milk-collection-route-manifest', selectedCollectionRouteId, collectionSession, date] });
+    },
+  });
+
+  useEffect(() => {
+    if (!selectedCollectionRouteId && collectionRoutesData?.items?.length) {
+      setSelectedCollectionRouteId(collectionRoutesData.items[0].id);
+    }
+  }, [collectionRoutesData, selectedCollectionRouteId]);
+
+  useEffect(() => {
+    if (!routeStopsData) {
+      setRouteStopsDraft([]);
+      return;
+    }
+    setRouteStopsDraft(
+      routeStopsData.stops
+        .map((stop) => ({
+          villageId: stop.villageId,
+          villageName: stop.villageName,
+          sequenceOrder: stop.sequenceOrder,
+          farmerNames: stop.farmerNames,
+        }))
+        .sort((a, b) => a.sequenceOrder - b.sequenceOrder),
+    );
+  }, [routeStopsData]);
+
   const villageRows = useMemo(
     () => (data?.villageRows ?? []).filter((row) => row.isActive || row.totalQuantity > 0).sort((a, b) => a.villageName.localeCompare(b.villageName)),
     [data?.villageRows],
   );
+
+  const activeVillages = useMemo(
+    () => (data?.villages ?? []).filter((village) => village.isActive).sort((a, b) => a.name.localeCompare(b.name)),
+    [data?.villages],
+  );
+
+  const availableRouteStopVillages = useMemo(
+    () => activeVillages.filter((village) => !routeStopsDraft.some((stop) => stop.villageId === village.id)),
+    [activeVillages, routeStopsDraft],
+  );
+
+  function addCollectionStop(villageId: string) {
+    const village = activeVillages.find((item) => item.id === villageId);
+    if (!village || routeStopsDraft.some((stop) => stop.villageId === villageId)) return;
+    setRouteStopsDraft((prev) => [
+      ...prev,
+      {
+        villageId: village.id,
+        villageName: village.name,
+        sequenceOrder: prev.length + 1,
+        farmerNames: village.farmers.filter((farmer) => farmer.isActive).map((farmer) => farmer.name),
+      },
+    ]);
+    setNewStopVillageId('');
+  }
+
+  function moveCollectionStop(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= routeStopsDraft.length) return;
+    const next = [...routeStopsDraft];
+    [next[index], next[target]] = [next[target], next[index]];
+    setRouteStopsDraft(next.map((stop, idx) => ({ ...stop, sequenceOrder: idx + 1 })));
+  }
+
+  function removeCollectionStop(index: number) {
+    setRouteStopsDraft((prev) =>
+      prev.filter((_, idx) => idx !== index).map((stop, idx) => ({ ...stop, sequenceOrder: idx + 1 })),
+    );
+  }
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['milk-collections', date] });
 
@@ -116,6 +255,119 @@ export default function MilkCollectionPage() {
         <SummaryCard label="Evening Received" value={data?.shiftTotals.evening ?? 0} tone="amber" />
         <SummaryCard label="Daily Received" value={data?.shiftTotals.total ?? 0} tone="emerald" />
       </div>
+
+      <section className="rounded-lg border border-gray-200 bg-white">
+        <div className="border-b border-gray-200 px-4 py-3">
+          <h2 className="text-lg font-semibold text-gray-900">Milk Collection Route (Location + Farmers)</h2>
+          <p className="text-sm text-gray-500">Plan sequence by shift and view farmer names at each collection stop.</p>
+        </div>
+        <div className="space-y-4 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={selectedCollectionRouteId}
+              onChange={(e) => setSelectedCollectionRouteId(e.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+            >
+              {(collectionRoutesData?.items ?? []).map((route) => (
+                <option key={route.id} value={route.id}>{route.name}</option>
+              ))}
+              {!collectionRoutesData?.items?.length && <option value="">No active routes</option>}
+            </select>
+            <div className="grid grid-cols-2 gap-2">
+              {(['morning', 'evening'] as const).map((session) => (
+                <button
+                  key={session}
+                  type="button"
+                  onClick={() => setCollectionSession(session)}
+                  className={`rounded-md border px-3 py-2 text-xs font-medium capitalize ${
+                    collectionSession === session
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {session}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => saveRouteStopsMutation.mutate()}
+              disabled={!selectedCollectionRouteId || saveRouteStopsMutation.isPending}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {saveRouteStopsMutation.isPending ? 'Saving...' : 'Save Collection Route'}
+            </button>
+          </div>
+
+          {selectedCollectionRouteId && (
+            <>
+              <div className="flex flex-wrap items-center gap-3">
+                <select
+                  value={newStopVillageId}
+                  onChange={(e) => setNewStopVillageId(e.target.value)}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                >
+                  <option value="">Add village stop...</option>
+                  {availableRouteStopVillages.map((village) => (
+                    <option key={village.id} value={village.id}>{village.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => addCollectionStop(newStopVillageId)}
+                  disabled={!newStopVillageId}
+                  className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Add Stop
+                </button>
+              </div>
+
+              {routeStopsLoading && <p className="text-sm text-gray-500">Loading route stops...</p>}
+
+              <div className="space-y-2">
+                {routeStopsDraft.map((stop, index) => (
+                  <div key={stop.villageId} className="rounded-md border border-gray-200 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">#{stop.sequenceOrder} {stop.villageName}</p>
+                        <p className="text-xs text-gray-500">
+                          Farmers to collect from: {stop.farmerNames.length ? stop.farmerNames.join(', ') : 'No active farmers'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => moveCollectionStop(index, -1)} disabled={index === 0} className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 disabled:opacity-30">↑</button>
+                        <button type="button" onClick={() => moveCollectionStop(index, 1)} disabled={index === routeStopsDraft.length - 1} className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 disabled:opacity-30">↓</button>
+                        <button type="button" onClick={() => removeCollectionStop(index)} className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-700">Remove</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!routeStopsDraft.length && (
+                  <p className="text-sm text-gray-500">No stops set for this route and shift.</p>
+                )}
+              </div>
+
+              <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+                <p className="text-sm font-medium text-gray-900">Collection Manifest for {date} ({collectionSession})</p>
+                {routeManifestLoading && <p className="mt-2 text-sm text-gray-500">Loading manifest...</p>}
+                {!routeManifestLoading && routeManifestData && (
+                  <div className="mt-2 space-y-2">
+                    {routeManifestData.stops.map((stop) => (
+                      <div key={`${stop.villageId}-${stop.sequenceOrder}`} className="rounded border border-gray-200 bg-white p-2">
+                        <p className="text-sm font-medium text-gray-900">#{stop.sequenceOrder} {stop.villageName}</p>
+                        <p className="text-xs text-gray-600">{stop.farmerNames.length ? stop.farmerNames.join(', ') : 'No active farmers'}</p>
+                      </div>
+                    ))}
+                    {routeManifestData.stops.length === 0 && (
+                      <p className="text-sm text-gray-500">No stops mapped for selected route/shift.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </section>
 
       {data && (
         <section className="rounded-lg border border-gray-200 bg-white">

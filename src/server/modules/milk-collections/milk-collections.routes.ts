@@ -7,8 +7,11 @@ import { uuidParamSchema } from '../../lib/paramSchemas.js';
 import {
   createFarmerSchema,
   createVillageSchema,
+  collectionRouteManifestQuerySchema,
+  collectionRouteStopsQuerySchema,
   milkCollectionDateQuerySchema,
   saveMilkCollectionSchema,
+  saveCollectionRouteStopsSchema,
   saveMilkVehicleLoadSchema,
   saveMilkVehicleShiftLoadSchema,
   saveVillageIndividualCollectionSchema,
@@ -24,7 +27,11 @@ const viewRoles = ['super_admin', 'admin', 'billing_staff', 'read_only'];
 const editRoles = ['super_admin', 'admin', 'billing_staff'];
 
 router.get('/', authorize(viewRoles), validate({ query: milkCollectionDateQuerySchema }), controller.listSummary);
+router.get('/routes', authorize(viewRoles), controller.listCollectionRoutes);
+router.get('/route-stops', authorize(viewRoles), validate({ query: collectionRouteStopsQuerySchema }), controller.getCollectionRouteStops);
+router.get('/route-manifest', authorize(viewRoles), validate({ query: collectionRouteManifestQuerySchema }), controller.getCollectionRouteManifest);
 router.get('/villages', authorize(viewRoles), controller.listVillages);
+router.put('/route-stops', authorize(editRoles), csrfProtection, validate({ body: saveCollectionRouteStopsSchema }), controller.saveCollectionRouteStops);
 router.post('/villages', authorize(editRoles), csrfProtection, validate({ body: createVillageSchema }), controller.createVillage);
 router.post('/farmers', authorize(editRoles), csrfProtection, validate({ body: createFarmerSchema }), controller.createFarmer);
 router.put('/farmers/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema, body: updateFarmerSchema }), controller.updateFarmer);

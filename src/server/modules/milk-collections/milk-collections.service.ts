@@ -1,14 +1,20 @@
 import { prisma } from '../../index.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../lib/errors.js';
 import type {
+  CollectionRouteManifestQuery,
   CreateFarmerInput,
   CreateVillageInput,
+  SaveCollectionRouteStopsInput,
   SaveMilkCollectionInput,
   SaveMilkVehicleLoadInput,
   SaveMilkVehicleShiftLoadInput,
   SaveVillageIndividualCollectionInput,
   UpdateFarmerInput,
 } from './milk-collections.types.js';
+
+function prismaAny() {
+  return prisma as any;
+}
 
 export async function listVillages() {
   return prisma.village.findMany({
@@ -19,6 +25,151 @@ export async function listVillages() {
     },
     orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
   });
+}
+
+export async function listCollectionRoutes() {
+  return prisma.route.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+}
+
+export async function getCollectionRouteStops(
+  routeId: string,
+  deliverySession: 'morning' | 'evening',
+) {
+  const route = await prisma.route.findUnique({
+    where: { id: routeId },
+    select: { id: true, name: true, isActive: true },
+  });
+  if (!route) throw new NotFoundError('Route not found');
+
+  const stops = await prismaAny().milkCollectionRouteStop.findMany({
+    where: { routeId, deliverySession },
+    include: {
+      village: {
+        select: {
+          id: true,
+          name: true,
+          isActive: true,
+          farmers: {
+            where: { isActive: true },
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' },
+          },
+        },
+      },
+    },
+    orderBy: { sequenceOrder: 'asc' },
+  });
+
+  return {
+    route: { id: route.id, name: route.name, isActive: route.isActive },
+    deliverySession,
+    stops: stops.map((stop: any) => ({
+      id: stop.id,
+      villageId: stop.villageId,
+      villageName: stop.village.name,
+      sequenceOrder: stop.sequenceOrder,
+      farmerNames: stop.village.farmers.map((farmer: any) => farmer.name),
+    })),
+  };
+}
+
+export async function saveCollectionRouteStops(input: SaveCollectionRouteStopsInput) {
+  const route = await prisma.route.findUnique({
+    where: { id: input.routeId },
+    select: { id: true, name: true, isActive: true },
+  });
+  if (!route) throw new NotFoundError('Route not found');
+
+  const villageIds = input.stops.map((stop) => stop.villageId);
+  if (new Set(villageIds).size !== villageIds.length) {
+    throw new ValidationError('Duplicate villages in collection route stops');
+  }
+
+  const sequenceOrders = input.stops.map((stop) => stop.sequenceOrder);
+  if (new Set(sequenceOrders).size !== sequenceOrders.length) {
+    throw new ValidationError('Duplicate sequence orders in collection route stops');
+  }
+
+  if (villageIds.length > 0) {
+    const villages = await prisma.village.findMany({
+      where: { id: { in: villageIds } },
+      select: { id: true, isActive: true },
+    });
+    if (villages.length !== villageIds.length) {
+      throw new NotFoundError('One or more villages were not found');
+    }
+    const inactive = villages.find((village) => !village.isActive);
+    if (inactive) {
+      throw new ValidationError('Inactive villages cannot be added to collection route');
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await (tx as any).milkCollectionRouteStop.deleteMany({
+      where: { routeId: input.routeId, deliverySession: input.deliverySession },
+    });
+
+    if (input.stops.length > 0) {
+      await (tx as any).milkCollectionRouteStop.createMany({
+        data: input.stops.map((stop) => ({
+          routeId: input.routeId,
+          villageId: stop.villageId,
+          deliverySession: input.deliverySession,
+          sequenceOrder: stop.sequenceOrder,
+        })),
+      });
+    }
+  });
+
+  return getCollectionRouteStops(input.routeId, input.deliverySession);
+}
+
+export async function getCollectionRouteManifest(query: CollectionRouteManifestQuery) {
+  const route = await prisma.route.findUnique({
+    where: { id: query.routeId },
+    select: { id: true, name: true },
+  });
+  if (!route) throw new NotFoundError('Route not found');
+
+  const stops = await prismaAny().milkCollectionRouteStop.findMany({
+    where: {
+      routeId: query.routeId,
+      deliverySession: query.deliverySession,
+    },
+    include: {
+      village: {
+        select: {
+          id: true,
+          name: true,
+          farmers: {
+            where: { isActive: true },
+            select: { id: true, name: true },
+            orderBy: { name: 'asc' },
+          },
+        },
+      },
+    },
+    orderBy: { sequenceOrder: 'asc' },
+  });
+
+  return {
+    routeId: route.id,
+    routeName: route.name,
+    date: query.date,
+    deliverySession: query.deliverySession,
+    totalStops: stops.length,
+    stops: stops.map((stop: any) => ({
+      sequenceOrder: stop.sequenceOrder,
+      villageId: stop.villageId,
+      villageName: stop.village.name,
+      farmerNames: stop.village.farmers.map((farmer: any) => farmer.name),
+      farmerCount: stop.village.farmers.length,
+    })),
+  };
 }
 
 export async function createVillage(input: CreateVillageInput) {

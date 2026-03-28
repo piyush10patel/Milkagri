@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
@@ -24,6 +25,24 @@ interface ManifestItem {
   sequenceOrder: number;
 }
 
+interface RouteNavigationSummary {
+  source: 'road' | 'straight-line';
+  distanceKm: number;
+  durationMin: number;
+  steps: string[];
+  unroutableSegments?: number;
+}
+
+interface RouteDetailStartConfig {
+  id: string;
+  name: string;
+  startLocationMode?: 'none' | 'existing_stop' | 'custom';
+  startCustomerId?: string | null;
+  startLatitude?: number | null;
+  startLongitude?: number | null;
+  startLabel?: string | null;
+}
+
 declare global {
   interface Window {
     L?: any;
@@ -32,6 +51,26 @@ declare global {
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function getStopLatLng(item: ManifestItem): [number, number] | null {
+  const lat = item.dropLocation?.latitude ?? item.customerAddress?.latitude;
+  const lon = item.dropLocation?.longitude ?? item.customerAddress?.longitude;
+  if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+  return [lat, lon];
+}
+
+async function fetchRoadSegment(from: [number, number], to: [number, number]) {
+  const waypointStr = `${from[1]},${from[0]};${to[1]},${to[0]}`;
+  const response = await fetch(
+    `https://router.project-osrm.org/route/v1/driving/${waypointStr}?overview=full&geometries=geojson&steps=true`,
+  );
+  const payload = await response.json();
+  const route = payload?.routes?.[0];
+  if (!route?.geometry?.coordinates?.length) {
+    throw new Error('No route geometry');
+  }
+  return route;
 }
 
 function buildOsmStopUrl(item: ManifestItem) {
@@ -112,6 +151,7 @@ export default function RouteMapPage() {
   const [selectedSession, setSelectedSession] = useState<DeliverySession>('morning');
   const [selectedRouteId, setSelectedRouteId] = useState<string>('all');
   const [mapError, setMapError] = useState<string>('');
+  const [navSummary, setNavSummary] = useState<RouteNavigationSummary | null>(null);
   const mapRef = useRef<any>(null);
   const drawLayerRef = useRef<any>(null);
   const mapElRef = useRef<HTMLDivElement | null>(null);
@@ -119,6 +159,12 @@ export default function RouteMapPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['route-map-manifest', date],
     queryFn: () => api.get<{ data: ManifestItem[] }>(`/api/v1/delivery/manifest?date=${date}`),
+  });
+
+  const { data: selectedRouteDetail } = useQuery({
+    queryKey: ['route-start-config', selectedRouteId],
+    queryFn: () => api.get<RouteDetailStartConfig>(`/api/v1/routes/${selectedRouteId}`),
+    enabled: selectedRouteId !== 'all',
   });
 
   const manifest = data?.data ?? [];
@@ -154,7 +200,38 @@ export default function RouteMapPage() {
     [filteredStops],
   );
 
+  const startPoint = useMemo(() => {
+    if (!selectedRouteDetail || selectedRouteDetail.startLocationMode === 'none' || !mappedStops.length) return null;
+    if (selectedRouteDetail.startLocationMode === 'custom') {
+      if (
+        typeof selectedRouteDetail.startLatitude === 'number' &&
+        typeof selectedRouteDetail.startLongitude === 'number'
+      ) {
+        return {
+          lat: selectedRouteDetail.startLatitude,
+          lon: selectedRouteDetail.startLongitude,
+          label: selectedRouteDetail.startLabel || 'Custom Start',
+        };
+      }
+      return null;
+    }
+
+    const matched = mappedStops.find((stop) => stop.customer.id === selectedRouteDetail.startCustomerId);
+    const coords = matched ? getStopLatLng(matched) : null;
+    if (!coords) return null;
+    const matchedLabel = matched ? matched.customer.name : 'Existing Stop';
+    return {
+      lat: coords[0],
+      lon: coords[1],
+      label: selectedRouteDetail.startLabel || `Start: ${matchedLabel}`,
+    };
+  }, [mappedStops, selectedRouteDetail]);
+
   const directionsUrl = useMemo(() => buildRouteDirectionsUrl(filteredStops), [filteredStops]);
+  const totalPlannedQty = useMemo(
+    () => filteredStops.reduce((sum, item) => sum + Number(item.plannedDropQuantity ?? item.quantity ?? 0), 0),
+    [filteredStops],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -183,58 +260,139 @@ export default function RouteMapPage() {
   useEffect(() => {
     if (!mapRef.current || !window.L) return;
     const L = window.L;
+    let cancelled = false;
 
-    if (drawLayerRef.current) {
-      drawLayerRef.current.remove();
-      drawLayerRef.current = null;
-    }
+    async function draw() {
+      if (drawLayerRef.current) {
+        drawLayerRef.current.remove();
+        drawLayerRef.current = null;
+      }
 
-    const layerGroup = L.layerGroup();
-    const latLngs: Array<[number, number]> = [];
+      const layerGroup = L.layerGroup();
+      const latLngs: Array<[number, number]> = [];
+      if (startPoint) {
+        latLngs.push([startPoint.lat, startPoint.lon]);
+        const startMarker = L.marker([startPoint.lat, startPoint.lon], { title: startPoint.label });
+        startMarker.bindPopup(
+          `<div style="font-size:12px;line-height:1.4;"><strong>${startPoint.label}</strong><br/>Route start location</div>`,
+        );
+        startMarker.addTo(layerGroup);
+      }
 
-    mappedStops.forEach((item) => {
-      const lat = (item.dropLocation?.latitude ?? item.customerAddress!.latitude) as number;
-      const lon = (item.dropLocation?.longitude ?? item.customerAddress!.longitude) as number;
-      latLngs.push([lat, lon]);
+      mappedStops.forEach((item) => {
+        const coords = getStopLatLng(item);
+        if (!coords) return;
+        const [lat, lon] = coords;
+        latLngs.push([lat, lon]);
 
-      const marker = L.circleMarker([lat, lon], {
-        radius: 8,
-        color: '#1d4ed8',
-        fillColor: '#2563eb',
-        fillOpacity: 0.8,
-        weight: 2,
+        const marker = L.circleMarker([lat, lon], {
+          radius: 8,
+          color: '#1d4ed8',
+          fillColor: '#2563eb',
+          fillOpacity: 0.8,
+          weight: 2,
+        });
+
+        const address = [item.customerAddress?.addressLine1, item.customerAddress?.addressLine2, item.customerAddress?.city]
+          .filter(Boolean)
+          .join(', ');
+
+        marker.bindTooltip(`#${item.sequenceOrder}`, { permanent: true, direction: 'top', offset: [0, -10] });
+        marker.bindPopup(
+          `<div style="font-size:12px;line-height:1.4;">
+            <strong>#${item.sequenceOrder} ${item.customer.name}</strong><br/>
+            Phone: ${item.customer.phone}<br/>
+            Status: ${item.status}<br/>
+            ${address || 'Address not available'}<br/>
+            Planned Drop: ${item.plannedDropQuantity ?? item.quantity}<br/>
+            Notes: ${item.customer.deliveryNotes ?? '-'}
+          </div>`,
+        );
+        marker.addTo(layerGroup);
       });
 
-      const address = [item.customerAddress?.addressLine1, item.customerAddress?.addressLine2, item.customerAddress?.city]
-        .filter(Boolean)
-        .join(', ');
+      if (latLngs.length >= 2) {
+        const mergedPath: Array<[number, number]> = [];
+        let totalDistance = 0;
+        let totalDuration = 0;
+        let usedRoadSegments = 0;
+        let unroutableSegments = 0;
+        const turnSteps: string[] = [];
 
-      marker.bindTooltip(`#${item.sequenceOrder}`, { permanent: true, direction: 'top', offset: [0, -10] });
-      marker.bindPopup(
-        `<div style="font-size:12px;line-height:1.4;">
-          <strong>#${item.sequenceOrder} ${item.customer.name}</strong><br/>
-          ${address || 'Address not available'}<br/>
-          Qty: ${item.quantity}<br/>
-          Planned Drop: ${item.plannedDropQuantity ?? '-'}<br/>
-          <a href="${buildOsmStopUrl(item) ?? '#'}" target="_blank" rel="noreferrer">Open in OSM</a>
-        </div>`,
-      );
-      marker.addTo(layerGroup);
-    });
+        for (let idx = 0; idx < latLngs.length - 1; idx++) {
+          const from = latLngs[idx];
+          const to = latLngs[idx + 1];
+          try {
+            const route = await fetchRoadSegment(from, to);
+            const roadCoords: Array<[number, number]> = route.geometry.coordinates.map(
+              (coord: [number, number]) => [coord[1], coord[0]] as [number, number],
+            );
+            if (mergedPath.length > 0 && roadCoords.length > 0) {
+              roadCoords.shift();
+            }
+            mergedPath.push(...roadCoords);
+            totalDistance += Number(route.distance ?? 0);
+            totalDuration += Number(route.duration ?? 0);
+            usedRoadSegments += 1;
 
-    if (latLngs.length >= 2) {
-      L.polyline(latLngs, { color: '#0f766e', weight: 4, opacity: 0.8 }).addTo(layerGroup);
+            const localSteps = (route.legs ?? [])
+              .flatMap((leg: any) => leg.steps ?? [])
+              .slice(0, 2)
+              .map((step: any) => {
+                const maneuverType = step?.maneuver?.type ?? 'Continue';
+                const road = step?.name ? ` on ${step.name}` : '';
+                return `${maneuverType}${road}`;
+              });
+            turnSteps.push(...localSteps);
+          } catch {
+            if (mergedPath.length > 0) {
+              const last = mergedPath[mergedPath.length - 1];
+              if (last[0] === from[0] && last[1] === from[1]) mergedPath.push(to);
+              else mergedPath.push(from, to);
+            } else {
+              mergedPath.push(from, to);
+            }
+            unroutableSegments += 1;
+          }
+        }
+
+        const hasRoad = usedRoadSegments > 0;
+        L.polyline(mergedPath, {
+          color: '#0f766e',
+          weight: 5,
+          opacity: 0.85,
+          dashArray: hasRoad ? undefined : '6,6',
+        }).addTo(layerGroup);
+
+        setNavSummary({
+          source: hasRoad ? 'road' : 'straight-line',
+          distanceKm: Number((totalDistance / 1000).toFixed(2)),
+          durationMin: Math.round(totalDuration / 60),
+          steps: turnSteps.slice(0, 10).length
+            ? turnSteps.slice(0, 10)
+            : ['Road routing unavailable for selected segments. Straight-line fallback shown.'],
+          unroutableSegments,
+        });
+      } else {
+        setNavSummary(null);
+      }
+
+      if (!cancelled) {
+        layerGroup.addTo(mapRef.current);
+        drawLayerRef.current = layerGroup;
+        if (latLngs.length > 0) {
+          mapRef.current.fitBounds(latLngs, { padding: [20, 20] });
+        } else {
+          mapRef.current.setView([20.5937, 78.9629], 5);
+        }
+      }
     }
 
-    layerGroup.addTo(mapRef.current);
-    drawLayerRef.current = layerGroup;
-
-    if (latLngs.length > 0) {
-      mapRef.current.fitBounds(latLngs, { padding: [20, 20] });
-    } else {
-      mapRef.current.setView([20.5937, 78.9629], 5);
-    }
-  }, [mappedStops]);
+    draw();
+    return () => {
+      cancelled = true;
+    };
+  }, [mappedStops, startPoint]);
 
   useEffect(() => {
     return () => {
@@ -255,7 +413,7 @@ export default function RouteMapPage() {
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Route Map</h1>
-          <p className="text-sm text-gray-500">Custom stoppages on OpenStreetMap with delivery sequence.</p>
+          <p className="text-sm text-gray-500">Custom stoppages on OpenStreetMap with sequence, customer and drop details.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -286,7 +444,21 @@ export default function RouteMapPage() {
               Open Route Navigation
             </a>
           )}
+          {selectedRouteId !== 'all' && (
+            <Link
+              to={`/routes/${selectedRouteId}/edit`}
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Manage Stop Priority
+            </Link>
+          )}
         </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard label="Stops" value={filteredStops.length} />
+        <StatCard label="Mapped Stops" value={mappedStops.length} />
+        <StatCard label="Planned Qty" value={Number(totalPlannedQty.toFixed(3))} />
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -310,6 +482,31 @@ export default function RouteMapPage() {
         <div ref={mapElRef} className="h-[420px] w-full rounded-md border border-gray-200" />
       </div>
 
+      {navSummary && (
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <p className="text-sm font-semibold text-gray-900">
+            In-app Driver Route {navSummary.source === 'road' ? '(Road-based)' : '(Fallback)'}
+          </p>
+          <p className="mt-1 text-xs text-gray-600">
+            Distance: {navSummary.distanceKm} km | Est. time: {navSummary.durationMin} min
+          </p>
+          {navSummary.unroutableSegments && navSummary.unroutableSegments > 0 && (
+            <p className="mt-1 text-xs text-amber-700">
+              {navSummary.unroutableSegments} segment(s) had no road path and were shown with fallback lines.
+            </p>
+          )}
+          {navSummary.steps.length > 0 && (
+            <div className="mt-2 grid gap-1">
+              {navSummary.steps.map((step, idx) => (
+                <p key={`${step}-${idx}`} className="text-xs text-gray-700">
+                  {idx + 1}. {step}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {mapError && <p className="text-sm text-red-600">{mapError}</p>}
       {error && <p className="text-sm text-red-600">Failed to load delivery data for map.</p>}
       {isLoading && <p className="text-sm text-gray-500">Loading map data...</p>}
@@ -331,33 +528,58 @@ export default function RouteMapPage() {
           ) : (
             <ul className="divide-y divide-gray-200">
               {filteredStops.map((item) => (
-                <li key={item.id} className="flex items-start justify-between gap-3 px-4 py-3 text-sm">
+                <li
+                  key={item.id}
+                  className={`flex items-start justify-between gap-3 px-4 py-3 text-sm ${
+                    getStopLatLng(item) ? '' : 'bg-red-50'
+                  }`}
+                >
                   <div>
                     <p className="font-medium text-gray-900">
                       #{item.sequenceOrder} {item.customer.name}
                     </p>
-                    <p className="text-xs text-gray-500">{item.routeName ?? 'Unassigned Route'}</p>
-                    <p className="text-xs text-gray-500">Planned: {item.plannedDropQuantity ?? '-'}</p>
+                    <p className="text-xs text-gray-500">{item.customer.phone} | {item.routeName ?? 'Unassigned Route'}</p>
+                    <p className="text-xs text-gray-500">Status: {item.status} | Planned: {item.plannedDropQuantity ?? item.quantity}</p>
+                    <p className="text-xs text-gray-500">
+                      Coords: {getStopLatLng(item)?.[0]?.toFixed(6) ?? 'NA'}, {getStopLatLng(item)?.[1]?.toFixed(6) ?? 'NA'}
+                    </p>
                     <p className="text-xs text-gray-500">
                       {[item.customerAddress?.addressLine1, item.customerAddress?.addressLine2, item.customerAddress?.city].filter(Boolean).join(', ') || 'Address not available'}
                     </p>
+                    {!getStopLatLng(item) && (
+                      <p className="text-xs font-medium text-red-700">
+                        Missing stop coordinates. Set drop pin or customer pin.
+                      </p>
+                    )}
                   </div>
-                  {buildOsmStopUrl(item) && (
-                    <a
-                      href={buildOsmStopUrl(item)!}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                    >
-                      Open OSM
-                    </a>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {item.routeId && (
+                      <Link
+                        to={`/routes/${item.routeId}/edit`}
+                        className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Edit Stop
+                      </Link>
+                    )}
+                    <span className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600">
+                      In-App
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-gray-900">{value}</p>
     </div>
   );
 }

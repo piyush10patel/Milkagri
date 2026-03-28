@@ -19,6 +19,49 @@ export async function listVillages(_req: Request, res: Response, next: NextFunct
   }
 }
 
+export async function listCollectionRoutes(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const routes = await service.listCollectionRoutes();
+    res.json({ items: routes });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getCollectionRouteStops(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await service.getCollectionRouteStops(
+      req.query.routeId as string,
+      req.query.deliverySession as 'morning' | 'evening',
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function saveCollectionRouteStops(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await service.saveCollectionRouteStops(req.body);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getCollectionRouteManifest(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await service.getCollectionRouteManifest({
+      routeId: req.query.routeId as string,
+      date: req.query.date as string,
+      deliverySession: req.query.deliverySession as 'morning' | 'evening',
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function createVillage(req: Request, res: Response, next: NextFunction) {
   try {
     const village = await service.createVillage(req.body);

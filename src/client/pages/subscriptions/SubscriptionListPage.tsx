@@ -7,6 +7,8 @@ import { useModalFocusTrap } from '@/hooks/useModalFocusTrap';
 interface Subscription {
   id: string;
   customer: { id: string; name: string };
+  subscriptionType?: 'regular' | 'sub_subscription';
+  parentSubscription?: { id: string; customer?: { id: string; name: string } } | null;
   route?: { id: string; name: string } | null;
   productVariant: { id: string; product: { name: string }; unitType: string; quantityPerUnit: number };
   quantity: number;
@@ -105,6 +107,7 @@ export default function SubscriptionListPage() {
           <thead className="bg-gray-50">
             <tr>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Session</th>
@@ -119,6 +122,18 @@ export default function SubscriptionListPage() {
             {data?.data?.map((s) => (
               <tr key={s.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-sm"><Link to={`/customers/${s.customer.id}`} className="text-blue-600 hover:underline">{s.customer.name}</Link></td>
+                <td className="px-4 py-3 text-sm">
+                  {s.subscriptionType === 'sub_subscription' ? (
+                    <div>
+                      <span className="inline-block rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">Sub-subscription</span>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Parent: {s.parentSubscription?.customer?.name ?? 'Linked'}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">Regular</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-sm">{s.productVariant?.product?.name} ({s.productVariant?.quantityPerUnit} {s.productVariant?.unitType})</td>
                 <td className="px-4 py-3 text-sm">
                   <div>{s.quantity}</div>
@@ -145,7 +160,7 @@ export default function SubscriptionListPage() {
                 </td>
               </tr>
             ))}
-            {data?.data?.length === 0 && <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-gray-500">No subscriptions found</td></tr>}
+            {data?.data?.length === 0 && <tr><td colSpan={10} className="px-4 py-8 text-center text-sm text-gray-500">No subscriptions found</td></tr>}
           </tbody>
         </table>
       </div>

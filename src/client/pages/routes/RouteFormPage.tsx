@@ -1,9 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ApiError } from '@/lib/api';
 
-interface RouteData { id: string; name: string; description?: string; isActive: boolean; }
+interface RouteData {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  startLocationMode?: 'none' | 'existing_stop' | 'custom';
+  startCustomerId?: string | null;
+  startLatitude?: number | null;
+  startLongitude?: number | null;
+  startLabel?: string | null;
+}
 interface RouteCustomer {
   customerId: string;
   sequenceOrder: number;
@@ -38,16 +48,69 @@ type RouteStop = {
   dropLongitude: string;
 };
 
+type PinPoint = { lat: number; lng: number };
+
+declare global {
+  interface Window {
+    L?: any;
+  }
+}
+
+async function loadLeaflet() {
+  if (window.L) return window.L;
+
+  if (!document.getElementById('leaflet-css')) {
+    const link = document.createElement('link');
+    link.id = 'leaflet-css';
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const existing = document.getElementById('leaflet-js') as HTMLScriptElement | null;
+    if (existing) {
+      if (window.L) {
+        resolve();
+        return;
+      }
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error('Failed to load map script')), { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = 'leaflet-js';
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load map script'));
+    document.body.appendChild(script);
+  });
+
+  if (!window.L) throw new Error('Leaflet not available');
+  return window.L;
+}
+
 export default function RouteFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [form, setForm] = useState({ name: '', description: '' });
+  const [form, setForm] = useState({
+    name: '',
+    description: '',
+    startLocationMode: 'none' as 'none' | 'existing_stop' | 'custom',
+    startCustomerId: '',
+    startLatitude: '',
+    startLongitude: '',
+    startLabel: '',
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [customers, setCustomers] = useState<RouteStop[]>([]);
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
+  const [showStartPinModal, setShowStartPinModal] = useState(false);
 
   const { data: existing } = useQuery({
     queryKey: ['route', id],
@@ -67,7 +130,21 @@ export default function RouteFormPage() {
 
   useEffect(() => {
     if (existing) {
-      setForm({ name: existing.name, description: existing.description ?? '' });
+      setForm({
+        name: existing.name,
+        description: existing.description ?? '',
+        startLocationMode: existing.startLocationMode ?? 'none',
+        startCustomerId: existing.startCustomerId ?? '',
+        startLatitude:
+          existing.startLatitude === null || existing.startLatitude === undefined
+            ? ''
+            : String(existing.startLatitude),
+        startLongitude:
+          existing.startLongitude === null || existing.startLongitude === undefined
+            ? ''
+            : String(existing.startLongitude),
+        startLabel: existing.startLabel ?? '',
+      });
       setCustomers(
         existing.routeCustomers.map((rc) => ({
           customerId: rc.customerId,
@@ -136,7 +213,32 @@ export default function RouteFormPage() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrors({});
-    routeMutation.mutate({ name: form.name, description: form.description || undefined });
+    const payload: Record<string, unknown> = {
+      name: form.name,
+      description: form.description || undefined,
+      startLocationMode: form.startLocationMode,
+      startLabel: form.startLabel || null,
+    };
+    if (form.startLocationMode === 'existing_stop') {
+      payload.startCustomerId = form.startCustomerId || null;
+      payload.startLatitude = null;
+      payload.startLongitude = null;
+    } else if (form.startLocationMode === 'custom') {
+      payload.startCustomerId = null;
+      payload.startLatitude =
+        form.startLatitude.trim() !== '' && !Number.isNaN(Number(form.startLatitude))
+          ? Number(form.startLatitude)
+          : null;
+      payload.startLongitude =
+        form.startLongitude.trim() !== '' && !Number.isNaN(Number(form.startLongitude))
+          ? Number(form.startLongitude)
+          : null;
+    } else {
+      payload.startCustomerId = null;
+      payload.startLatitude = null;
+      payload.startLongitude = null;
+    }
+    routeMutation.mutate(payload);
   }
 
   function moveCustomer(index: number, direction: -1 | 1) {
@@ -240,6 +342,88 @@ export default function RouteFormPage() {
           <label htmlFor="rdesc" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
           <textarea id="rdesc" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={fieldClass('description')} rows={2} />
         </div>
+        <fieldset className="rounded-md border border-gray-200 p-3">
+          <legend className="px-1 text-xs font-medium text-gray-700">Route Start Location</legend>
+          <div className="mt-2 space-y-3">
+            <div>
+              <label className="mb-1 block text-sm text-gray-700">Start Type</label>
+              <select
+                value={form.startLocationMode}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    startLocationMode: e.target.value as 'none' | 'existing_stop' | 'custom',
+                  }))
+                }
+                className={fieldClass('startLocationMode')}
+              >
+                <option value="none">No explicit start</option>
+                <option value="existing_stop">Existing stop</option>
+                <option value="custom">Custom location</option>
+              </select>
+            </div>
+            {form.startLocationMode === 'existing_stop' && (
+              <div>
+                <label className="mb-1 block text-sm text-gray-700">Start from Stop</label>
+                <select
+                  value={form.startCustomerId}
+                  onChange={(e) => setForm((prev) => ({ ...prev, startCustomerId: e.target.value }))}
+                  className={fieldClass('startCustomerId')}
+                >
+                  <option value="">Select customer stop</option>
+                  {customers.map((stop) => (
+                    <option key={stop.customerId} value={stop.customerId}>
+                      #{stop.sequenceOrder} {stop.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {form.startLocationMode === 'custom' && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-500">Set custom start by map pin or manual coordinates.</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowStartPinModal(true)}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Pin on Map
+                  </button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm text-gray-700">Start Latitude</label>
+                    <input
+                      value={form.startLatitude}
+                      onChange={(e) => setForm((prev) => ({ ...prev, startLatitude: e.target.value }))}
+                      className={fieldClass('startLatitude')}
+                      placeholder="e.g. 12.9715987"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm text-gray-700">Start Longitude</label>
+                    <input
+                      value={form.startLongitude}
+                      onChange={(e) => setForm((prev) => ({ ...prev, startLongitude: e.target.value }))}
+                      className={fieldClass('startLongitude')}
+                      placeholder="e.g. 77.594566"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            <div>
+              <label className="mb-1 block text-sm text-gray-700">Start Label (optional)</label>
+              <input
+                value={form.startLabel}
+                onChange={(e) => setForm((prev) => ({ ...prev, startLabel: e.target.value }))}
+                className={fieldClass('startLabel')}
+                placeholder="Dairy Plant / Depot / Home"
+              />
+            </div>
+          </div>
+        </fieldset>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={() => navigate('/routes')} className="rounded-md border border-gray-300 px-4 py-2 text-sm">Cancel</button>
           <button type="submit" disabled={routeMutation.isPending} className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
@@ -330,6 +514,108 @@ export default function RouteFormPage() {
           </div>
         </div>
       )}
+      {showStartPinModal && (
+        <StartLocationPinModal
+          initial={
+            form.startLatitude.trim() !== '' && form.startLongitude.trim() !== ''
+              ? { lat: Number(form.startLatitude), lng: Number(form.startLongitude) }
+              : undefined
+          }
+          onClose={() => setShowStartPinModal(false)}
+          onSelect={(point) => {
+            setForm((prev) => ({
+              ...prev,
+              startLatitude: point.lat.toFixed(8),
+              startLongitude: point.lng.toFixed(8),
+              startLocationMode: 'custom',
+            }));
+            setShowStartPinModal(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function StartLocationPinModal({
+  initial,
+  onClose,
+  onSelect,
+}: {
+  initial?: PinPoint;
+  onClose: () => void;
+  onSelect: (point: PinPoint) => void;
+}) {
+  const mapElRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const [selected, setSelected] = useState<PinPoint | null>(initial ?? null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function init() {
+      try {
+        const L = await loadLeaflet();
+        if (cancelled || !mapElRef.current || mapRef.current) return;
+        const center: [number, number] = selected ? [selected.lat, selected.lng] : [20.5937, 78.9629];
+        mapRef.current = L.map(mapElRef.current).setView(center, selected ? 15 : 5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors',
+        }).addTo(mapRef.current);
+
+        if (selected) {
+          markerRef.current = L.marker([selected.lat, selected.lng]).addTo(mapRef.current);
+        }
+
+        mapRef.current.on('click', (evt: any) => {
+          const point = { lat: evt.latlng.lat, lng: evt.latlng.lng };
+          setSelected(point);
+          if (markerRef.current) markerRef.current.remove();
+          markerRef.current = L.marker([point.lat, point.lng]).addTo(mapRef.current);
+        });
+      } catch (err: any) {
+        setError(err.message || 'Failed to load map');
+      }
+    }
+
+    init();
+    return () => {
+      cancelled = true;
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" role="dialog" aria-modal="true">
+      <div className="w-full max-w-3xl rounded-lg bg-white p-4 shadow-xl">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">Pin Route Start Location</h2>
+          <button type="button" onClick={onClose} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+            Close
+          </button>
+        </div>
+        <div ref={mapElRef} className="h-[420px] w-full rounded-md border border-gray-200" />
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-sm text-gray-600">
+            {selected ? `Selected: ${selected.lat.toFixed(8)}, ${selected.lng.toFixed(8)}` : 'Click on map to drop start pin.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => selected && onSelect(selected)}
+            disabled={!selected}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            Use This Start Point
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -7,6 +7,8 @@ import { z } from 'zod';
 export const createSubscriptionSchema = z.object({
   customerId: z.string().uuid('Invalid customer ID'),
   productVariantId: z.string().uuid('Invalid product variant ID'),
+  subscriptionType: z.enum(['regular', 'sub_subscription']).optional().default('regular'),
+  parentSubscriptionId: z.string().uuid('Invalid parent subscription ID').nullable().optional(),
   routeId: z.string().uuid('Invalid route ID').optional(),
   quantity: z.number().positive('Quantity must be positive'),
   deliverySession: z.enum(['morning', 'evening']).default('morning'),
@@ -28,6 +30,8 @@ export const createSubscriptionSchema = z.object({
 });
 
 export const updateSubscriptionSchema = z.object({
+  subscriptionType: z.enum(['regular', 'sub_subscription']).optional(),
+  parentSubscriptionId: z.string().uuid('Invalid parent subscription ID').nullable().optional(),
   routeId: z.string().uuid('Invalid route ID').nullable().optional(),
   quantity: z.number().positive('Quantity must be positive').optional(),
   deliverySession: z.enum(['morning', 'evening']).optional(),

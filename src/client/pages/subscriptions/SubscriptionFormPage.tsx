@@ -27,6 +27,8 @@ interface PackRow {
 interface SubscriptionDetail {
   customerId: string;
   productVariantId: string;
+  subscriptionType?: 'regular' | 'sub_subscription';
+  parentSubscription?: { id: string; customer?: { name: string } } | null;
   routeId?: string | null;
   quantity: number;
   deliverySession: 'morning' | 'evening';
@@ -60,6 +62,8 @@ export default function SubscriptionFormPage() {
   const [form, setForm] = useState({
     customerId: '',
     productVariantId: '',
+    subscriptionType: 'regular',
+    parentSubscriptionId: '',
     routeId: '',
     quantity: '',
     deliverySession: 'morning',
@@ -91,6 +95,19 @@ export default function SubscriptionFormPage() {
     queryFn: () => api.get<{ data: RouteOption[] }>('/api/v1/routes?limit=200&isActive=true'),
   });
 
+  const { data: parentSubscriptionsData } = useQuery({
+    queryKey: ['subscriptions-parent-options'],
+    queryFn: () =>
+      api.get<{
+        data: Array<{
+          id: string;
+          customer: { id: string; name: string };
+          productVariant: { product: { name: string }; unitType: string; quantityPerUnit: number };
+          deliverySession: 'morning' | 'evening';
+        }>;
+      }>('/api/v1/subscriptions?status=active&limit=500'),
+  });
+
   const { data: pricingData } = useQuery({
     queryKey: ['pricing-matrix'],
     queryFn: () => api.get<{ data: { categories: PricingCategoryOption[]; rows: PricingRow[] } }>('/api/v1/products/pricing-matrix'),
@@ -106,6 +123,8 @@ export default function SubscriptionFormPage() {
       setForm({
         customerId: existing.customerId,
         productVariantId: existing.productVariantId,
+        subscriptionType: existing.subscriptionType ?? 'regular',
+        parentSubscriptionId: existing.parentSubscription?.id ?? '',
         routeId: existing.routeId ?? '',
         quantity: String(existing.quantity),
         deliverySession: existing.deliverySession ?? 'morning',
@@ -133,6 +152,9 @@ export default function SubscriptionFormPage() {
   });
 
   const selectedCustomer = customersData?.data?.find((customer) => customer.id === form.customerId);
+  const parentSubscriptions = (parentSubscriptionsData?.data ?? []).filter(
+    (subscription) => subscription.id !== id && subscription.customer.id !== form.customerId,
+  );
   const selectedPricing = pricingData?.data?.rows?.find((variant) => variant.id === form.productVariantId);
   const appliedCategory = selectedCustomer?.pricingCategory ?? pricingCategoriesData?.data?.[0]?.code ?? '';
   const appliedPrice =
@@ -162,6 +184,10 @@ export default function SubscriptionFormPage() {
     e.preventDefault();
     setErrors({});
     const payload: Record<string, unknown> = {
+      subscriptionType: form.subscriptionType,
+      parentSubscriptionId: form.subscriptionType === 'sub_subscription'
+        ? (form.parentSubscriptionId || null)
+        : null,
       quantity: Number(form.quantity),
       routeId: form.routeId || null,
       deliverySession: form.deliverySession,
@@ -252,6 +278,45 @@ export default function SubscriptionFormPage() {
               {errors.startDate && <p className="text-xs text-red-600 mt-1">{errors.startDate}</p>}
             </div>
           </>
+        )}
+
+        <div>
+          <label htmlFor="subscriptionType" className="block text-sm font-medium text-gray-700 mb-1">Subscription Type *</label>
+          <select
+            id="subscriptionType"
+            value={form.subscriptionType}
+            onChange={(e) => setForm((prev) => ({
+              ...prev,
+              subscriptionType: e.target.value,
+              parentSubscriptionId: e.target.value === 'sub_subscription' ? prev.parentSubscriptionId : '',
+            }))}
+            className={fieldClass('subscriptionType')}
+          >
+            <option value="regular">Regular</option>
+            <option value="sub_subscription">Sub-subscription</option>
+          </select>
+          {errors.subscriptionType && <p className="text-xs text-red-600 mt-1">{errors.subscriptionType}</p>}
+        </div>
+
+        {form.subscriptionType === 'sub_subscription' && (
+          <div>
+            <label htmlFor="parentSubscriptionId" className="block text-sm font-medium text-gray-700 mb-1">Parent Subscription *</label>
+            <select
+              id="parentSubscriptionId"
+              value={form.parentSubscriptionId}
+              onChange={(e) => setForm({ ...form, parentSubscriptionId: e.target.value })}
+              className={fieldClass('parentSubscriptionId')}
+              required
+            >
+              <option value="">Select parent subscription</option>
+              {parentSubscriptions.map((subscription) => (
+                <option key={subscription.id} value={subscription.id}>
+                  {subscription.customer.name} | {subscription.productVariant.product.name} ({subscription.productVariant.quantityPerUnit} {subscription.productVariant.unitType}) | {subscription.deliverySession}
+                </option>
+              ))}
+            </select>
+            {errors.parentSubscriptionId && <p className="text-xs text-red-600 mt-1">{errors.parentSubscriptionId}</p>}
+          </div>
         )}
 
         <div>
