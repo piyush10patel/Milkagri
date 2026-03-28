@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import ReportPage from './ReportPage';
 
-const currency = (v: unknown) => v == null ? '—' : `₹${Number(v).toFixed(2)}`;
+const currency = (v: unknown) => (v == null ? '—' : `₹${Number(v).toFixed(2)}`);
 
 const COLUMNS = [
   { key: 'period', label: 'Period' },
-  { key: 'total_revenue', label: 'Revenue', align: 'right' as const, format: currency },
-  { key: 'invoice_count', label: 'Invoices', align: 'right' as const },
+  { key: 'revenue', label: 'Revenue', align: 'right' as const, format: currency },
 ];
 
 export default function RevenueReportPage() {
@@ -21,7 +20,10 @@ export default function RevenueReportPage() {
       renderFilters={({ setExtra }) => (
         <select
           value={groupBy}
-          onChange={(e) => { setGroupBy(e.target.value); setExtra('groupBy', e.target.value); }}
+          onChange={(e) => {
+            setGroupBy(e.target.value);
+            setExtra('groupBy', e.target.value);
+          }}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           aria-label="Group by"
         >

@@ -22,6 +22,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Milk Collection', to: '/milk-collections', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
   { label: 'Deliveries', to: '/deliveries', roles: ['super_admin', 'admin', 'delivery_agent'] },
   { label: 'Routes', to: '/routes', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
+  { label: 'Route Map', to: '/routes/map', roles: ['super_admin', 'admin', 'billing_staff', 'delivery_agent', 'read_only'] },
+  { label: 'Live GPS', to: '/tracking/live-gps', roles: ['super_admin'] },
   { label: 'Billing', to: '/billing', roles: ['super_admin', 'admin', 'billing_staff'] },
   { label: 'Payments', to: '/payments', roles: ['super_admin', 'admin', 'billing_staff'] },
   { label: 'Reports', to: '/reports', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },

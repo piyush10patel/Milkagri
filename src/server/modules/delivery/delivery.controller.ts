@@ -81,3 +81,29 @@ export async function overview(req: Request, res: Response, next: NextFunction) 
     next(err);
   }
 }
+
+// ---------------------------------------------------------------------------
+// POST /delivery/location/ping
+// ---------------------------------------------------------------------------
+export async function saveLocationPing(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = sessionUserId(req);
+    const result = await deliveryService.saveLocationPing(userId, req.body);
+    res.status(201).json({ data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /delivery/location/live?minutes=120
+// ---------------------------------------------------------------------------
+export async function liveLocations(req: Request, res: Response, next: NextFunction) {
+  try {
+    const minutes = req.query.minutes ? Number(req.query.minutes) : undefined;
+    const result = await deliveryService.getLiveLocations(minutes);
+    res.json({ data: result });
+  } catch (err) {
+    next(err);
+  }
+}

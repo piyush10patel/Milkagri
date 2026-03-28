@@ -29,7 +29,35 @@ export const saveMilkCollectionSchema = z.object({
   notes: z.string().trim().max(2000, 'Notes are too long').optional().or(z.literal('')),
 });
 
+export const saveVillageIndividualCollectionSchema = z.object({
+  villageId: z.string().uuid('Invalid village ID'),
+  collectionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Collection date must be YYYY-MM-DD'),
+  deliverySession: z.enum(['morning', 'evening']),
+  quantity: z.number().positive('Quantity must be positive'),
+  notes: z.string().trim().max(2000, 'Notes are too long').optional().or(z.literal('')),
+});
+
+export const saveMilkVehicleLoadSchema = z.object({
+  villageId: z.string().uuid('Invalid village ID'),
+  loadDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Load date must be YYYY-MM-DD'),
+  deliverySession: z.enum(['morning', 'evening']),
+  milkType: z.enum(['buffalo', 'cow']),
+  quantity: z.number().positive('Quantity must be positive'),
+  notes: z.string().trim().max(2000, 'Notes are too long').optional().or(z.literal('')),
+});
+
+export const saveMilkVehicleShiftLoadSchema = z.object({
+  loadDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Load date must be YYYY-MM-DD'),
+  deliverySession: z.enum(['morning', 'evening']),
+  milkType: z.enum(['buffalo', 'cow']),
+  quantity: z.number().positive('Quantity must be positive'),
+  notes: z.string().trim().max(2000, 'Notes are too long').optional().or(z.literal('')),
+});
+
 export type CreateVillageInput = z.infer<typeof createVillageSchema>;
 export type CreateFarmerInput = z.infer<typeof createFarmerSchema>;
 export type UpdateFarmerInput = z.infer<typeof updateFarmerSchema>;
 export type SaveMilkCollectionInput = z.infer<typeof saveMilkCollectionSchema>;
+export type SaveVillageIndividualCollectionInput = z.infer<typeof saveVillageIndividualCollectionSchema>;
+export type SaveMilkVehicleLoadInput = z.infer<typeof saveMilkVehicleLoadSchema>;
+export type SaveMilkVehicleShiftLoadInput = z.infer<typeof saveMilkVehicleShiftLoadSchema>;

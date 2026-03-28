@@ -1,7 +1,12 @@
 import { prisma } from '../../index.js';
 import { NotFoundError, ValidationError } from '../../lib/errors.js';
-import type { UpdateDeliveryStatusInput } from './delivery.types.js';
+import type { GpsLocationPingInput, UpdateDeliveryStatusInput } from './delivery.types.js';
 import { Prisma } from '@prisma/client';
+
+function isMissingGpsTableError(error: unknown): boolean {
+  const maybeError = error as { code?: string; meta?: { table?: string } };
+  return maybeError?.code === 'P2021' && maybeError?.meta?.table === 'public.vehicle_gps_pings';
+}
 
 function getDeliveredQuantity(order: { quantity: Prisma.Decimal; actualQuantity?: Prisma.Decimal | null }) {
   return Number(order.actualQuantity ?? order.quantity);
@@ -91,7 +96,54 @@ export async function getManifestFlat(userId: string, date: string, isAdmin: boo
     },
   });
 
-  const data = orders.map((o, idx) => ({
+  const routeCustomerFilters = orders
+    .filter((order) => order.routeId)
+    .map((order) => ({
+      routeId: order.routeId!,
+      customerId: order.customerId,
+    }));
+
+  const routeCustomerSequences =
+    routeCustomerFilters.length > 0
+      ? await prisma.routeCustomer.findMany({
+          where: { OR: routeCustomerFilters },
+          select: {
+            routeId: true,
+            customerId: true,
+            sequenceOrder: true,
+            plannedDropQuantity: true,
+            dropLatitude: true,
+            dropLongitude: true,
+          },
+        })
+      : [];
+
+  const sequenceMap = new Map<
+    string,
+    {
+      sequenceOrder: number;
+      plannedDropQuantity: number | null;
+      dropLatitude: number | null;
+      dropLongitude: number | null;
+    }
+  >();
+  for (const routeCustomer of routeCustomerSequences) {
+    sequenceMap.set(`${routeCustomer.routeId}:${routeCustomer.customerId}`, {
+      sequenceOrder: routeCustomer.sequenceOrder,
+      plannedDropQuantity:
+        routeCustomer.plannedDropQuantity !== null ? Number(routeCustomer.plannedDropQuantity) : null,
+      dropLatitude: routeCustomer.dropLatitude !== null ? Number(routeCustomer.dropLatitude) : null,
+      dropLongitude: routeCustomer.dropLongitude !== null ? Number(routeCustomer.dropLongitude) : null,
+    });
+  }
+
+  const data = orders.map((o, idx) => {
+    const stopMeta = o.routeId ? sequenceMap.get(`${o.routeId}:${o.customerId}`) : null;
+    const hasDropCoords =
+      typeof stopMeta?.dropLatitude === 'number' && typeof stopMeta?.dropLongitude === 'number';
+    return ({
+    routeId: o.route?.id ?? null,
+    routeName: o.route?.name ?? null,
     id: o.id,
     customer: {
       id: o.customer.id,
@@ -104,6 +156,8 @@ export async function getManifestFlat(userId: string, date: string, isAdmin: boo
           addressLine1: o.customer.addresses[0].addressLine1,
           addressLine2: o.customer.addresses[0].addressLine2,
           city: o.customer.addresses[0].city,
+          latitude: o.customer.addresses[0].latitude ? Number(o.customer.addresses[0].latitude) : null,
+          longitude: o.customer.addresses[0].longitude ? Number(o.customer.addresses[0].longitude) : null,
         }
       : undefined,
     productVariant: {
@@ -127,8 +181,15 @@ export async function getManifestFlat(userId: string, date: string, isAdmin: boo
     failureReason: o.failureReason,
     returnedQuantity: o.returnedQuantity ? Number(o.returnedQuantity) : undefined,
     deliveryNotes: o.deliveryNotes,
-    sequenceOrder: idx + 1,
-  }));
+    sequenceOrder: stopMeta?.sequenceOrder ?? idx + 1,
+    plannedDropQuantity: stopMeta?.plannedDropQuantity ?? null,
+    dropLocation: hasDropCoords
+      ? {
+          latitude: stopMeta.dropLatitude,
+          longitude: stopMeta.dropLongitude,
+        }
+      : null,
+  })});
 
   return { data };
 }
@@ -520,5 +581,180 @@ export async function getAdminOverview(date: string) {
       totalOrders: unassigned.length,
       ...unassignedCounts,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Save GPS location ping from app/device
+// ---------------------------------------------------------------------------
+export async function saveLocationPing(userId: string, input: GpsLocationPingInput) {
+  if (input.routeId) {
+    const route = await prisma.route.findUnique({
+      where: { id: input.routeId },
+      select: { id: true },
+    });
+    if (!route) throw new NotFoundError('Route not found');
+  }
+
+  const pingAt = input.capturedAt ? new Date(input.capturedAt) : new Date();
+
+  let ping;
+  try {
+    ping = await prisma.vehicleGpsPing.create({
+      data: {
+        userId,
+        routeId: input.routeId,
+        latitude: new Prisma.Decimal(input.latitude),
+        longitude: new Prisma.Decimal(input.longitude),
+        accuracyMeters:
+          input.accuracyMeters === undefined ? null : new Prisma.Decimal(input.accuracyMeters),
+        speedKmph: input.speedKmph === undefined ? null : new Prisma.Decimal(input.speedKmph),
+        headingDegrees:
+          input.headingDegrees === undefined ? null : new Prisma.Decimal(input.headingDegrees),
+        deliverySession: input.deliverySession,
+        pingAt,
+      },
+      select: {
+        id: true,
+        userId: true,
+        routeId: true,
+        latitude: true,
+        longitude: true,
+        accuracyMeters: true,
+        speedKmph: true,
+        headingDegrees: true,
+        deliverySession: true,
+        pingAt: true,
+      },
+    });
+  } catch (error) {
+    if (isMissingGpsTableError(error)) {
+      throw new ValidationError('GPS tracking is not initialized. Run database migration and restart server.');
+    }
+    throw error;
+  }
+
+  return {
+    ...ping,
+    latitude: Number(ping.latitude),
+    longitude: Number(ping.longitude),
+    accuracyMeters: ping.accuracyMeters ? Number(ping.accuracyMeters) : null,
+    speedKmph: ping.speedKmph ? Number(ping.speedKmph) : null,
+    headingDegrees: ping.headingDegrees ? Number(ping.headingDegrees) : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Live vehicle locations for super_admin/admin monitoring
+// ---------------------------------------------------------------------------
+export async function getLiveLocations(minutes = 120) {
+  const now = new Date();
+  const clampedMinutes = Math.max(5, Math.min(720, minutes));
+  const since = new Date(now.getTime() - clampedMinutes * 60 * 1000);
+
+  let pings: Array<{
+    id: string;
+    userId: string;
+    routeId: string | null;
+    deliverySession: 'morning' | 'evening' | null;
+    latitude: Prisma.Decimal;
+    longitude: Prisma.Decimal;
+    accuracyMeters: Prisma.Decimal | null;
+    speedKmph: Prisma.Decimal | null;
+    headingDegrees: Prisma.Decimal | null;
+    pingAt: Date;
+    recorder: { id: string; name: string; role: string };
+    route: { id: string; name: string } | null;
+  }> = [];
+  try {
+    pings = await prisma.vehicleGpsPing.findMany({
+      where: { pingAt: { gte: since } },
+      orderBy: [{ pingAt: 'desc' }],
+      include: {
+        recorder: {
+          select: { id: true, name: true, role: true },
+        },
+        route: {
+          select: { id: true, name: true },
+        },
+      },
+      take: 4000,
+    });
+  } catch (error) {
+    if (!isMissingGpsTableError(error)) {
+      throw error;
+    }
+    return {
+      generatedAt: now.toISOString(),
+      minutesWindow: clampedMinutes,
+      activeVehicles: 0,
+      vehicles: [],
+      trackingReady: false,
+    };
+  }
+
+  const byUser = new Map<
+    string,
+    {
+      user: { id: string; name: string; role: string };
+      latestPingAt: string;
+      latest: {
+        latitude: number;
+        longitude: number;
+        accuracyMeters: number | null;
+        speedKmph: number | null;
+        headingDegrees: number | null;
+        routeId: string | null;
+        routeName: string | null;
+        deliverySession: 'morning' | 'evening' | null;
+      };
+      trail: Array<{
+        latitude: number;
+        longitude: number;
+        pingAt: string;
+      }>;
+    }
+  >();
+
+  for (const ping of pings) {
+    const key = ping.userId;
+    if (!byUser.has(key)) {
+      byUser.set(key, {
+        user: {
+          id: ping.recorder.id,
+          name: ping.recorder.name,
+          role: ping.recorder.role,
+        },
+        latestPingAt: ping.pingAt.toISOString(),
+        latest: {
+          latitude: Number(ping.latitude),
+          longitude: Number(ping.longitude),
+          accuracyMeters: ping.accuracyMeters ? Number(ping.accuracyMeters) : null,
+          speedKmph: ping.speedKmph ? Number(ping.speedKmph) : null,
+          headingDegrees: ping.headingDegrees ? Number(ping.headingDegrees) : null,
+          routeId: ping.routeId ?? null,
+          routeName: ping.route?.name ?? null,
+          deliverySession: ping.deliverySession ?? null,
+        },
+        trail: [],
+      });
+    }
+
+    const existing = byUser.get(key)!;
+    if (existing.trail.length < 40) {
+      existing.trail.push({
+        latitude: Number(ping.latitude),
+        longitude: Number(ping.longitude),
+        pingAt: ping.pingAt.toISOString(),
+      });
+    }
+  }
+
+  return {
+    generatedAt: now.toISOString(),
+    minutesWindow: clampedMinutes,
+    activeVehicles: byUser.size,
+    vehicles: Array.from(byUser.values()).sort((a, b) => a.user.name.localeCompare(b.user.name)),
+    trackingReady: true,
   };
 }

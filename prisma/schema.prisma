@@ -25,24 +25,28 @@ model User {
   updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  auditLogs          AuditLog[]
-  notifications      Notification[]
-  routeAgents        RouteAgent[]
-  vacationHolds      VacationHold[]     @relation("VacationHoldCreator")
-  quantityChanges    QuantityChange[]   @relation("QuantityChangeCreator")
-  subscriptionChanges SubscriptionChange[] @relation("SubscriptionChangeCreator")
-  invoiceAdjustments InvoiceAdjustment[] @relation("AdjustmentCreator")
-  invoiceDiscounts   InvoiceDiscount[]  @relation("DiscountCreator")
-  deliveredOrders    DeliveryOrder[]    @relation("DeliveredBy")
-  collectedPayments  Payment[]          @relation("CollectedBy")
-  recordedPayments   Payment[]          @relation("RecordedBy")
-  createdHolidays    Holiday[]          @relation("HolidayCreator")
-  createdRouteHolidays RouteHoliday[]   @relation("RouteHolidayCreator")
-  updatedSettings    SystemSetting[]    @relation("SettingUpdater")
-  jobExecutions      JobExecution[]     @relation("JobUser")
-  inwardStocks       InwardStock[]      @relation("InwardStockRecorder")
-  wastages           Wastage[]          @relation("WastageRecorder")
-  milkCollections    MilkCollection[]   @relation("MilkCollectionRecorder")
+  auditLogs                    AuditLog[]
+  notifications                Notification[]
+  routeAgents                  RouteAgent[]
+  vacationHolds                VacationHold[]                @relation("VacationHoldCreator")
+  quantityChanges              QuantityChange[]              @relation("QuantityChangeCreator")
+  subscriptionChanges          SubscriptionChange[]          @relation("SubscriptionChangeCreator")
+  invoiceAdjustments           InvoiceAdjustment[]           @relation("AdjustmentCreator")
+  invoiceDiscounts             InvoiceDiscount[]             @relation("DiscountCreator")
+  deliveredOrders              DeliveryOrder[]               @relation("DeliveredBy")
+  collectedPayments            Payment[]                     @relation("CollectedBy")
+  recordedPayments             Payment[]                     @relation("RecordedBy")
+  createdHolidays              Holiday[]                     @relation("HolidayCreator")
+  createdRouteHolidays         RouteHoliday[]                @relation("RouteHolidayCreator")
+  updatedSettings              SystemSetting[]               @relation("SettingUpdater")
+  jobExecutions                JobExecution[]                @relation("JobUser")
+  inwardStocks                 InwardStock[]                 @relation("InwardStockRecorder")
+  wastages                     Wastage[]                     @relation("WastageRecorder")
+  milkCollections              MilkCollection[]              @relation("MilkCollectionRecorder")
+  villageIndividualCollections VillageIndividualCollection[] @relation("VillageIndividualCollectionRecorder")
+  milkVehicleLoads             MilkVehicleLoad[]             @relation("MilkVehicleLoadRecorder")
+  milkVehicleShiftLoads        MilkVehicleShiftLoad[]        @relation("MilkVehicleShiftLoadRecorder")
+  vehicleGpsPings              VehicleGpsPing[]              @relation("VehicleGpsPingRecorder")
 
   @@map("users")
 }
@@ -56,21 +60,21 @@ enum UserRole {
 }
 
 model Customer {
-  id                     String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name                   String         @db.VarChar(255)
-  phone                  String         @unique @db.VarChar(20)
-  email                  String?        @db.VarChar(255)
-  status                 CustomerStatus @default(active)
-  deliveryNotes          String?        @map("delivery_notes") @db.Text
-  preferredDeliveryWindow String?       @map("preferred_delivery_window") @db.VarChar(50)
-  pricingCategory        String          @default("cat_1") @map("pricing_category") @db.VarChar(100)
-  billingFrequency       BillingFrequency @default(monthly) @map("billing_frequency")
-  routeId                String?        @map("route_id") @db.Uuid
-  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt              DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id                      String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                    String           @db.VarChar(255)
+  phone                   String           @unique @db.VarChar(20)
+  email                   String?          @db.VarChar(255)
+  status                  CustomerStatus   @default(active)
+  deliveryNotes           String?          @map("delivery_notes") @db.Text
+  preferredDeliveryWindow String?          @map("preferred_delivery_window") @db.VarChar(50)
+  pricingCategory         String           @default("cat_1") @map("pricing_category") @db.VarChar(100)
+  billingFrequency        BillingFrequency @default(monthly) @map("billing_frequency")
+  routeId                 String?          @map("route_id") @db.Uuid
+  createdAt               DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  route          Route?           @relation(fields: [routeId], references: [id])
+  route          Route?            @relation(fields: [routeId], references: [id])
   addresses      CustomerAddress[]
   subscriptions  Subscription[]
   deliveryOrders DeliveryOrder[]
@@ -149,7 +153,7 @@ model ProductVariant {
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  product          Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product          Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
   prices           ProductPrice[]
   subscriptions    Subscription[]
   deliveryOrders   DeliveryOrder[]
@@ -169,13 +173,13 @@ enum UnitType {
 }
 
 model ProductPrice {
-  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  productVariantId String           @map("product_variant_id") @db.Uuid
-  price            Decimal          @db.Decimal(10, 2)
-  effectiveDate    DateTime         @map("effective_date") @db.Date
-  branch           String?          @db.VarChar(100)
-  pricingCategory  String?          @map("pricing_category") @db.VarChar(100)
-  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productVariantId String   @map("product_variant_id") @db.Uuid
+  price            Decimal  @db.Decimal(10, 2)
+  effectiveDate    DateTime @map("effective_date") @db.Date
+  branch           String?  @db.VarChar(100)
+  pricingCategory  String?  @map("pricing_category") @db.VarChar(100)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   // Relations
   productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
@@ -214,25 +218,25 @@ model Subscription {
   updatedAt        DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  customer       Customer             @relation(fields: [customerId], references: [id])
-  productVariant ProductVariant       @relation(fields: [productVariantId], references: [id])
-  route          Route?               @relation(fields: [routeId], references: [id])
-  vacationHolds  VacationHold[]
+  customer        Customer             @relation(fields: [customerId], references: [id])
+  productVariant  ProductVariant       @relation(fields: [productVariantId], references: [id])
+  route           Route?               @relation(fields: [routeId], references: [id])
+  vacationHolds   VacationHold[]
   quantityChanges QuantityChange[]
-  changes        SubscriptionChange[]
-  deliveryOrders DeliveryOrder[]
-  packs          SubscriptionPack[]
+  changes         SubscriptionChange[]
+  deliveryOrders  DeliveryOrder[]
+  packs           SubscriptionPack[]
 
   @@map("subscriptions")
 }
 
 model SubscriptionPack {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subscriptionId String       @map("subscription_id") @db.Uuid
-  packSize       Decimal      @map("pack_size") @db.Decimal(10, 3)
-  packCount      Int          @map("pack_count")
-  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionId String   @map("subscription_id") @db.Uuid
+  packSize       Decimal  @map("pack_size") @db.Decimal(10, 3)
+  packCount      Int      @map("pack_count")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
@@ -303,36 +307,36 @@ model SubscriptionChange {
 // ─── Delivery Tables ─────────────────────────────────────────────────────────
 
 model DeliveryOrder {
-  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  customerId       String              @map("customer_id") @db.Uuid
-  productVariantId String              @map("product_variant_id") @db.Uuid
-  subscriptionId   String?             @map("subscription_id") @db.Uuid
-  routeId          String?             @map("route_id") @db.Uuid
-  deliveryDate     DateTime            @map("delivery_date") @db.Date
-  quantity         Decimal             @db.Decimal(10, 3)
-  actualQuantity   Decimal?            @map("actual_quantity") @db.Decimal(10, 3)
-  deliverySession  DeliverySession     @default(morning) @map("delivery_session")
-  status           DeliveryOrderStatus @default(pending)
-  adjustmentType   DeliveryAdjustmentType? @map("adjustment_type")
-  adjustmentQuantity Decimal?          @map("adjustment_quantity") @db.Decimal(10, 3)
-  skipReason       String?             @map("skip_reason") @db.VarChar(50)
-  failureReason    String?             @map("failure_reason") @db.Text
-  returnedQuantity Decimal?            @map("returned_quantity") @db.Decimal(10, 3)
-  deliveryNotes    String?             @map("delivery_notes") @db.Text
-  deliveredBy      String?             @map("delivered_by") @db.Uuid
-  deliveredAt      DateTime?           @map("delivered_at") @db.Timestamptz
-  isAutoGenerated  Boolean             @default(true) @map("is_auto_generated")
-  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id                 String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId         String                  @map("customer_id") @db.Uuid
+  productVariantId   String                  @map("product_variant_id") @db.Uuid
+  subscriptionId     String?                 @map("subscription_id") @db.Uuid
+  routeId            String?                 @map("route_id") @db.Uuid
+  deliveryDate       DateTime                @map("delivery_date") @db.Date
+  quantity           Decimal                 @db.Decimal(10, 3)
+  actualQuantity     Decimal?                @map("actual_quantity") @db.Decimal(10, 3)
+  deliverySession    DeliverySession         @default(morning) @map("delivery_session")
+  status             DeliveryOrderStatus     @default(pending)
+  adjustmentType     DeliveryAdjustmentType? @map("adjustment_type")
+  adjustmentQuantity Decimal?                @map("adjustment_quantity") @db.Decimal(10, 3)
+  skipReason         String?                 @map("skip_reason") @db.VarChar(50)
+  failureReason      String?                 @map("failure_reason") @db.Text
+  returnedQuantity   Decimal?                @map("returned_quantity") @db.Decimal(10, 3)
+  deliveryNotes      String?                 @map("delivery_notes") @db.Text
+  deliveredBy        String?                 @map("delivered_by") @db.Uuid
+  deliveredAt        DateTime?               @map("delivered_at") @db.Timestamptz
+  isAutoGenerated    Boolean                 @default(true) @map("is_auto_generated")
+  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  customer       Customer         @relation(fields: [customerId], references: [id])
-  productVariant ProductVariant   @relation(fields: [productVariantId], references: [id])
-  subscription   Subscription?    @relation(fields: [subscriptionId], references: [id])
-  route          Route?           @relation(fields: [routeId], references: [id])
-  deliverer      User?            @relation("DeliveredBy", fields: [deliveredBy], references: [id])
+  customer         Customer            @relation(fields: [customerId], references: [id])
+  productVariant   ProductVariant      @relation(fields: [productVariantId], references: [id])
+  subscription     Subscription?       @relation(fields: [subscriptionId], references: [id])
+  route            Route?              @relation(fields: [routeId], references: [id])
+  deliverer        User?               @relation("DeliveredBy", fields: [deliveredBy], references: [id])
   invoiceLineItems InvoiceLineItem[]
-  packs          DeliveryOrderPack[]
+  packs            DeliveryOrderPack[]
 
   @@unique([subscriptionId, deliveryDate], map: "idx_delivery_orders_unique")
   @@index([deliveryDate], map: "idx_delivery_orders_date")
@@ -342,17 +346,39 @@ model DeliveryOrder {
 }
 
 model DeliveryOrderPack {
-  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  deliveryOrderId String        @map("delivery_order_id") @db.Uuid
-  packSize        Decimal       @map("pack_size") @db.Decimal(10, 3)
-  packCount       Int           @map("pack_count")
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  deliveryOrderId String   @map("delivery_order_id") @db.Uuid
+  packSize        Decimal  @map("pack_size") @db.Decimal(10, 3)
+  packCount       Int      @map("pack_count")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   deliveryOrder DeliveryOrder @relation(fields: [deliveryOrderId], references: [id], onDelete: Cascade)
 
   @@unique([deliveryOrderId, packSize], map: "uq_delivery_order_packs_order_size")
   @@map("delivery_order_packs")
+}
+
+model VehicleGpsPing {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String           @map("user_id") @db.Uuid
+  routeId         String?          @map("route_id") @db.Uuid
+  latitude        Decimal          @db.Decimal(10, 8)
+  longitude       Decimal          @db.Decimal(11, 8)
+  accuracyMeters  Decimal?         @map("accuracy_meters") @db.Decimal(10, 3)
+  speedKmph       Decimal?         @map("speed_kmph") @db.Decimal(10, 3)
+  headingDegrees  Decimal?         @map("heading_degrees") @db.Decimal(10, 3)
+  deliverySession DeliverySession? @map("delivery_session")
+  pingAt          DateTime         @default(now()) @map("ping_at") @db.Timestamptz
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  recorder User   @relation("VehicleGpsPingRecorder", fields: [userId], references: [id], onDelete: Cascade)
+  route    Route? @relation(fields: [routeId], references: [id], onDelete: SetNull)
+
+  @@index([pingAt], map: "idx_vehicle_gps_pings_ping_at")
+  @@index([userId, pingAt], map: "idx_vehicle_gps_pings_user_ping_at")
+  @@index([routeId, pingAt], map: "idx_vehicle_gps_pings_route_ping_at")
+  @@map("vehicle_gps_pings")
 }
 
 enum DeliveryOrderStatus {
@@ -380,21 +406,25 @@ model Route {
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  customers      Customer[]
-  routeCustomers RouteCustomer[]
-  routeAgents    RouteAgent[]
-  subscriptions  Subscription[]
-  deliveryOrders DeliveryOrder[]
-  routeHolidays  RouteHoliday[]
+  customers       Customer[]
+  routeCustomers  RouteCustomer[]
+  routeAgents     RouteAgent[]
+  subscriptions   Subscription[]
+  deliveryOrders  DeliveryOrder[]
+  routeHolidays   RouteHoliday[]
+  vehicleGpsPings VehicleGpsPing[]
 
   @@map("routes")
 }
 
 model RouteCustomer {
-  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  routeId       String @map("route_id") @db.Uuid
-  customerId    String @map("customer_id") @db.Uuid
-  sequenceOrder Int    @map("sequence_order")
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routeId             String   @map("route_id") @db.Uuid
+  customerId          String   @map("customer_id") @db.Uuid
+  sequenceOrder       Int      @map("sequence_order")
+  plannedDropQuantity Decimal? @map("planned_drop_quantity") @db.Decimal(10, 3)
+  dropLatitude        Decimal? @map("drop_latitude") @db.Decimal(10, 8)
+  dropLongitude       Decimal? @map("drop_longitude") @db.Decimal(11, 8)
 
   // Relations
   route    Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
@@ -421,25 +451,27 @@ model RouteAgent {
 // ─── Billing Tables ──────────────────────────────────────────────────────────
 
 model Village {
-  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name            String           @unique @db.VarChar(255)
-  isActive        Boolean          @default(true) @map("is_active")
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique @db.VarChar(255)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  farmers         Farmer[]
-  milkCollections MilkCollection[]
+  farmers               Farmer[]
+  milkCollections       MilkCollection[]
+  individualCollections VillageIndividualCollection[]
+  vehicleLoads          MilkVehicleLoad[]
 
   @@map("villages")
 }
 
 model Farmer {
-  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  villageId       String           @map("village_id") @db.Uuid
-  name            String           @db.VarChar(255)
-  isActive        Boolean          @default(true) @map("is_active")
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  villageId String   @map("village_id") @db.Uuid
+  name      String   @db.VarChar(255)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   village         Village          @relation(fields: [villageId], references: [id], onDelete: Cascade)
   milkCollections MilkCollection[]
@@ -467,6 +499,68 @@ model MilkCollection {
   @@unique([farmerId, collectionDate, deliverySession], map: "uq_milk_collection_farmer_date_session")
   @@index([collectionDate, deliverySession], map: "idx_milk_collection_date_session")
   @@map("milk_collections")
+}
+
+model VillageIndividualCollection {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  villageId       String          @map("village_id") @db.Uuid
+  collectionDate  DateTime        @map("collection_date") @db.Date
+  deliverySession DeliverySession @default(morning) @map("delivery_session")
+  quantity        Decimal         @db.Decimal(10, 3)
+  notes           String?         @db.Text
+  recordedBy      String          @map("recorded_by") @db.Uuid
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  village  Village @relation(fields: [villageId], references: [id], onDelete: Cascade)
+  recorder User    @relation("VillageIndividualCollectionRecorder", fields: [recordedBy], references: [id])
+
+  @@unique([villageId, collectionDate, deliverySession], map: "uq_village_individual_collection_date_session")
+  @@index([collectionDate, deliverySession], map: "idx_village_individual_collection_date_session")
+  @@map("village_individual_collections")
+}
+
+enum MilkType {
+  buffalo
+  cow
+}
+
+model MilkVehicleLoad {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  villageId       String          @map("village_id") @db.Uuid
+  loadDate        DateTime        @map("load_date") @db.Date
+  deliverySession DeliverySession @default(morning) @map("delivery_session")
+  milkType        MilkType        @map("milk_type")
+  quantity        Decimal         @db.Decimal(10, 3)
+  notes           String?         @db.Text
+  recordedBy      String          @map("recorded_by") @db.Uuid
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  village  Village @relation(fields: [villageId], references: [id], onDelete: Cascade)
+  recorder User    @relation("MilkVehicleLoadRecorder", fields: [recordedBy], references: [id])
+
+  @@unique([villageId, loadDate, deliverySession, milkType], map: "uq_milk_vehicle_load_date_session_type")
+  @@index([loadDate, deliverySession], map: "idx_milk_vehicle_load_date_session")
+  @@map("milk_vehicle_loads")
+}
+
+model MilkVehicleShiftLoad {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  loadDate        DateTime        @map("load_date") @db.Date
+  deliverySession DeliverySession @default(morning) @map("delivery_session")
+  milkType        MilkType        @map("milk_type")
+  quantity        Decimal         @db.Decimal(10, 3)
+  notes           String?         @db.Text
+  recordedBy      String          @map("recorded_by") @db.Uuid
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  recorder User @relation("MilkVehicleShiftLoadRecorder", fields: [recordedBy], references: [id])
+
+  @@unique([loadDate, deliverySession, milkType], map: "uq_milk_vehicle_shift_load_date_session_type")
+  @@index([loadDate, deliverySession], map: "idx_milk_vehicle_shift_load_date_session")
+  @@map("milk_vehicle_shift_loads")
 }
 
 model Invoice {

@@ -9,6 +9,9 @@ import {
   createVillageSchema,
   milkCollectionDateQuerySchema,
   saveMilkCollectionSchema,
+  saveMilkVehicleLoadSchema,
+  saveMilkVehicleShiftLoadSchema,
+  saveVillageIndividualCollectionSchema,
   updateFarmerSchema,
 } from './milk-collections.types.js';
 import * as controller from './milk-collections.controller.js';
@@ -27,6 +30,9 @@ router.post('/farmers', authorize(editRoles), csrfProtection, validate({ body: c
 router.put('/farmers/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema, body: updateFarmerSchema }), controller.updateFarmer);
 router.delete('/farmers/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.removeFarmer);
 router.post('/', authorize(editRoles), csrfProtection, validate({ body: saveMilkCollectionSchema }), controller.saveEntry);
+router.post('/individual-records', authorize(editRoles), csrfProtection, validate({ body: saveVillageIndividualCollectionSchema }), controller.saveIndividualRecord);
+router.post('/vehicle-loads', authorize(editRoles), csrfProtection, validate({ body: saveMilkVehicleLoadSchema }), controller.saveVehicleLoad);
+router.post('/vehicle-shift-loads', authorize(editRoles), csrfProtection, validate({ body: saveMilkVehicleShiftLoadSchema }), controller.saveVehicleShiftLoad);
 router.delete('/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.removeEntry);
 
 export default router;

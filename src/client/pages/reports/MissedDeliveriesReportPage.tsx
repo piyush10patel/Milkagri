@@ -1,12 +1,15 @@
 import ReportPage from './ReportPage';
 
+const formatDate = (v: unknown) => (v ? new Date(String(v)).toLocaleDateString() : '—');
+
 const COLUMNS = [
-  { key: 'delivery_date', label: 'Date' },
-  { key: 'customer_name', label: 'Customer' },
-  { key: 'product_name', label: 'Product' },
+  { key: 'deliveryDate', label: 'Date', format: formatDate },
+  { key: 'customer.name', label: 'Customer' },
+  { key: 'productName', label: 'Product' },
   { key: 'status', label: 'Status' },
-  { key: 'skip_reason', label: 'Reason' },
-  { key: 'route_name', label: 'Route' },
+  { key: 'skipReason', label: 'Skip Reason' },
+  { key: 'failureReason', label: 'Failure Reason' },
+  { key: 'route.name', label: 'Route' },
 ];
 
 export default function MissedDeliveriesReportPage() {

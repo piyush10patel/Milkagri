@@ -76,6 +76,33 @@ export async function saveEntry(req: Request, res: Response, next: NextFunction)
   }
 }
 
+export async function saveIndividualRecord(req: Request, res: Response, next: NextFunction) {
+  try {
+    const entry = await service.saveVillageIndividualCollection(req.body, sessionUserId(req));
+    res.status(201).json(entry);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function saveVehicleLoad(req: Request, res: Response, next: NextFunction) {
+  try {
+    const entry = await service.saveMilkVehicleLoad(req.body, sessionUserId(req));
+    res.status(201).json(entry);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function saveVehicleShiftLoad(req: Request, res: Response, next: NextFunction) {
+  try {
+    const entry = await service.saveMilkVehicleShiftLoad(req.body, sessionUserId(req));
+    res.status(201).json(entry);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function removeEntry(req: Request, res: Response, next: NextFunction) {
   try {
     const result = await service.deleteMilkCollection(param(req, 'id'));

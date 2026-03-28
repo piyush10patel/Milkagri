@@ -33,6 +33,9 @@ export const assignCustomersSchema = z.object({
     z.object({
       customerId: z.string().uuid('Invalid customer ID'),
       sequenceOrder: z.number().int().min(1, 'Sequence order must be >= 1'),
+      plannedDropQuantity: z.number().positive('Planned drop quantity must be positive').optional(),
+      dropLatitude: z.number().min(-90).max(90).optional(),
+      dropLongitude: z.number().min(-180).max(180).optional(),
     }),
   ).min(0),
 });

@@ -1,12 +1,15 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useModalFocusTrap } from '@/hooks/useModalFocusTrap';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ManifestItem {
+  routeId?: string | null;
+  routeName?: string | null;
   id: string;
   customer: { id: string; name: string; phone: string; deliveryNotes?: string };
-  customerAddress?: { addressLine1: string; addressLine2?: string; city?: string };
+  customerAddress?: { addressLine1: string; addressLine2?: string; city?: string; latitude?: number | null; longitude?: number | null };
   productVariant: { id: string; product: { name: string }; unitType: string; quantityPerUnit: number };
   quantity: number;
   actualQuantity: number;
@@ -20,6 +23,8 @@ interface ManifestItem {
   returnedQuantity?: number;
   deliveryNotes?: string;
   sequenceOrder: number;
+  plannedDropQuantity?: number | null;
+  dropLocation?: { latitude: number; longitude: number } | null;
 }
 
 interface ReconciliationSummary {
@@ -52,7 +57,28 @@ const STATUS_COLORS: Record<string, string> = {
   returned: 'bg-purple-100 text-purple-800 border-purple-300',
 };
 
+function buildOsmStopUrl(item: ManifestItem) {
+  const dropLat = item.dropLocation?.latitude;
+  const dropLon = item.dropLocation?.longitude;
+  if (typeof dropLat === 'number' && typeof dropLon === 'number') {
+    return `https://www.openstreetmap.org/?mlat=${dropLat}&mlon=${dropLon}#map=17/${dropLat}/${dropLon}`;
+  }
+
+  const lat = item.customerAddress?.latitude;
+  const lon = item.customerAddress?.longitude;
+  if (typeof lat === 'number' && typeof lon === 'number') {
+    return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=17/${lat}/${lon}`;
+  }
+
+  const query = [item.customer.name, item.customerAddress?.addressLine1, item.customerAddress?.addressLine2, item.customerAddress?.city]
+    .filter(Boolean)
+    .join(', ');
+  if (!query) return null;
+  return `https://www.openstreetmap.org/search?query=${encodeURIComponent(query)}`;
+}
+
 export default function DeliveryManifestPage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('morning');
@@ -63,6 +89,10 @@ export default function DeliveryManifestPage() {
   const [notesTarget, setNotesTarget] = useState<string | null>(null);
   const [notesText, setNotesText] = useState('');
   const [showReconciliation, setShowReconciliation] = useState(false);
+  const [gpsEnabled, setGpsEnabled] = useState(false);
+  const [gpsMessage, setGpsMessage] = useState('');
+  const watchIdRef = useRef<number | null>(null);
+  const lastSentAtRef = useRef<number>(0);
 
   const closeActionModal = useCallback(() => {
     setActiveAction(null);
@@ -129,20 +159,87 @@ export default function DeliveryManifestPage() {
     { key: 'evening', label: 'Evening', count: manifest.filter((item) => item.deliverySession === 'evening').length },
   ];
 
+  useEffect(() => {
+    if (!gpsEnabled || user?.role !== 'delivery_agent') return;
+    if (!navigator.geolocation) {
+      setGpsMessage('GPS is not supported in this browser.');
+      setGpsEnabled(false);
+      return;
+    }
+
+    setGpsMessage('GPS tracking enabled');
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      async (position) => {
+        const nowMs = Date.now();
+        if (nowMs - lastSentAtRef.current < 15000) return;
+        lastSentAtRef.current = nowMs;
+
+        const speedMps = position.coords.speed ?? null;
+        const speedKmph = speedMps === null ? undefined : Number((speedMps * 3.6).toFixed(3));
+
+        try {
+          await api.post('/api/v1/delivery/location/ping', {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracyMeters: position.coords.accuracy,
+            speedKmph,
+            headingDegrees: position.coords.heading ?? undefined,
+            deliverySession: selectedSession,
+            capturedAt: new Date(position.timestamp).toISOString(),
+          });
+          setGpsMessage(`Last ping: ${new Date().toLocaleTimeString()}`);
+        } catch {
+          setGpsMessage('GPS ping failed. Retrying...');
+        }
+      },
+      (error) => {
+        setGpsMessage(`GPS error: ${error.message}`);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 10000,
+        timeout: 15000,
+      },
+    );
+
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+  }, [gpsEnabled, selectedSession, user?.role]);
+
   return (
     <div className="max-w-lg mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold text-gray-900">My Deliveries</h1>
-        {allCompleted && (
-          <button
-            onClick={() => setShowReconciliation(true)}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 min-h-[44px] print:hidden"
-            aria-label="View end-of-day summary"
-          >
-            Summary
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {user?.role === 'delivery_agent' && (
+            <button
+              type="button"
+              onClick={() => setGpsEnabled((current) => !current)}
+              className={`rounded-md px-3 py-2 text-xs font-medium text-white min-h-[36px] ${
+                gpsEnabled ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}
+            >
+              {gpsEnabled ? 'Stop GPS' : 'Start GPS'}
+            </button>
+          )}
+          {allCompleted && (
+            <button
+              onClick={() => setShowReconciliation(true)}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 min-h-[44px] print:hidden"
+              aria-label="View end-of-day summary"
+            >
+              Summary
+            </button>
+          )}
+        </div>
       </div>
+      {user?.role === 'delivery_agent' && gpsMessage && (
+        <p className="mb-3 text-xs text-gray-600">{gpsMessage}</p>
+      )}
 
       <div className="mb-4 print:hidden">
         <input
@@ -189,14 +286,19 @@ export default function DeliveryManifestPage() {
       {isLoading && <p className="text-sm text-gray-500 text-center py-8" aria-live="polite">Loading manifest...</p>}
 
       <div className="space-y-3">
-        {filteredManifest.map((item, idx) => (
+        {filteredManifest.map((item) => {
+          const osmStopUrl = buildOsmStopUrl(item);
+          return (
           <div key={item.id} className={`bg-white rounded-lg border-2 p-4 ${STATUS_COLORS[item.status] ?? 'border-gray-200'}`}>
             <div className="flex items-start justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-800 text-white text-xs font-bold">{idx + 1}</span>
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-800 text-white text-xs font-bold">{item.sequenceOrder}</span>
                 <div>
                   <p className="font-semibold text-gray-900">{item.customer.name}</p>
-                  <p className="text-xs text-gray-500">{item.customer.phone}</p>
+                  <p className="text-xs text-gray-500">
+                    {item.customer.phone}
+                    {item.routeName ? ` | Route: ${item.routeName}` : ''}
+                  </p>
                 </div>
               </div>
               <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[item.status]?.replace('border-', 'bg-') ?? ''}`}>
@@ -205,9 +307,21 @@ export default function DeliveryManifestPage() {
             </div>
 
             {item.customerAddress && (
-              <p className="text-sm text-gray-600 mb-2">
-                {[item.customerAddress.addressLine1, item.customerAddress.addressLine2, item.customerAddress.city].filter(Boolean).join(', ')}
-              </p>
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <p className="text-sm text-gray-600">
+                  {[item.customerAddress.addressLine1, item.customerAddress.addressLine2, item.customerAddress.city].filter(Boolean).join(', ')}
+                </p>
+                {osmStopUrl && (
+                  <a
+                    href={osmStopUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Open OSM
+                  </a>
+                )}
+              </div>
             )}
 
             {item.customer.deliveryNotes && (
@@ -217,6 +331,9 @@ export default function DeliveryManifestPage() {
             <div className="bg-gray-50 rounded px-3 py-2 mb-3">
               <p className="text-sm font-medium">{item.productVariant.product.name}</p>
               <p className="text-sm text-gray-600">{item.quantity} x {item.productVariant.quantityPerUnit} {item.productVariant.unitType}</p>
+              {item.plannedDropQuantity !== null && item.plannedDropQuantity !== undefined && (
+                <p className="text-xs text-gray-500">Planned drop qty: {item.plannedDropQuantity}</p>
+              )}
               <p className="text-xs text-gray-500 capitalize">Session: {item.deliverySession}</p>
               {item.status === 'delivered' && (
                 <p className="text-xs text-gray-500">
@@ -274,7 +391,7 @@ export default function DeliveryManifestPage() {
               {item.deliveryNotes ? 'Edit Notes' : '+ Add Notes'}
             </button>
           </div>
-        ))}
+        )})}
 
         {filteredManifest.length === 0 && !isLoading && (
           <p className="text-center text-sm text-gray-500 py-8">No {selectedSession} deliveries assigned for this date</p>

@@ -18,6 +18,8 @@ import VillageCollectionDetailPage from '@/pages/milk-collections/VillageCollect
 import DeliveryManifestPage from '@/pages/delivery/DeliveryManifestPage';
 import RouteListPage from '@/pages/routes/RouteListPage';
 import RouteFormPage from '@/pages/routes/RouteFormPage';
+import RouteMapPage from '@/pages/routes/RouteMapPage';
+import LiveVehicleTrackingPage from '@/pages/tracking/LiveVehicleTrackingPage';
 import InvoiceListPage from '@/pages/billing/InvoiceListPage';
 import InvoiceDetailPage from '@/pages/billing/InvoiceDetailPage';
 import OutstandingPage from '@/pages/payments/OutstandingPage';
@@ -84,6 +86,8 @@ export default function App() {
           <Route path="milk-collections/:villageId" element={<VillageCollectionDetailPage />} />
           <Route path="deliveries" element={<DeliveryManifestPage />} />
           <Route path="routes" element={<RouteListPage />} />
+          <Route path="routes/map" element={<RouteMapPage />} />
+          <Route path="tracking/live-gps" element={<LiveVehicleTrackingPage />} />
           <Route path="routes/new" element={<RouteFormPage />} />
           <Route path="routes/:id/edit" element={<RouteFormPage />} />
           <Route path="billing" element={<InvoiceListPage />} />

@@ -179,7 +179,8 @@ export async function customerOutstandingReport(query: OutstandingQuery) {
       });
     }
     const entry = customerMap.get(cid)!;
-    entry.totalOutstanding += Number(inv.closingBalance) - Number(inv.totalPayments);
+    // closingBalance already includes payments/discounts/adjustments for current invoice
+    entry.totalOutstanding += Number(inv.closingBalance);
     entry.invoiceCount++;
     if (inv.billingCycleEnd < entry.oldestInvoiceDate) {
       entry.oldestInvoiceDate = inv.billingCycleEnd;
@@ -207,7 +208,16 @@ export async function customerOutstandingReport(query: OutstandingQuery) {
   const total = allRows.length;
   const paged = allRows.slice(pagination.skip, pagination.skip + pagination.take);
 
-  return paginatedResponse(paged, total, pagination);
+  const base = paginatedResponse(paged, total, pagination);
+  const totalOutstanding = allRows.reduce((sum, row) => sum + Number(row.totalOutstanding ?? 0), 0);
+
+  return {
+    ...base,
+    summary: {
+      totalOutstanding: Number(totalOutstanding.toFixed(2)),
+      customerCount: total,
+    },
+  };
 }
 
 

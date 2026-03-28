@@ -16,6 +16,8 @@ const ROUTE_TITLES: Record<string, string> = {
   '/milk-collections': 'Milk Collection',
   '/deliveries': 'Delivery Manifest',
   '/routes': 'Routes',
+  '/routes/map': 'Route Map',
+  '/tracking/live-gps': 'Live GPS Tracking',
   '/routes/new': 'New Route',
   '/billing': 'Invoices',
   '/payments': 'Payments',

@@ -4,13 +4,39 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ApiError } from '@/lib/api';
 
 interface RouteData { id: string; name: string; description?: string; isActive: boolean; }
-interface RouteCustomer { customerId: string; sequenceOrder: number; customer: { id: string; name: string; phone: string }; }
+interface RouteCustomer {
+  customerId: string;
+  sequenceOrder: number;
+  plannedDropQuantity?: number | null;
+  dropLatitude?: number | null;
+  dropLongitude?: number | null;
+  customer: { id: string; name: string; phone: string };
+}
 interface RouteAgent { userId: string; user: { id: string; name: string; email: string; role: string }; }
 interface AgentOption { id: string; name: string; email: string; }
+interface CustomerOption {
+  id: string;
+  name: string;
+  phone: string;
+  addresses?: Array<{
+    isPrimary?: boolean;
+    latitude?: number | string | null;
+    longitude?: number | string | null;
+  }>;
+}
 interface RouteDetail extends RouteData {
   routeCustomers: RouteCustomer[];
   routeAgents: RouteAgent[];
 }
+
+type RouteStop = {
+  customerId: string;
+  sequenceOrder: number;
+  name: string;
+  plannedDropQuantity: string;
+  dropLatitude: string;
+  dropLongitude: string;
+};
 
 export default function RouteFormPage() {
   const { id } = useParams();
@@ -20,7 +46,7 @@ export default function RouteFormPage() {
 
   const [form, setForm] = useState({ name: '', description: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [customers, setCustomers] = useState<Array<{ customerId: string; sequenceOrder: number; name: string }>>([]);
+  const [customers, setCustomers] = useState<RouteStop[]>([]);
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
 
   const { data: existing } = useQuery({
@@ -31,7 +57,7 @@ export default function RouteFormPage() {
 
   const { data: allCustomers } = useQuery({
     queryKey: ['all-customers-for-route'],
-    queryFn: () => api.get<{ data: Array<{ id: string; name: string; phone: string }> }>('/api/v1/customers?limit=500&status=active'),
+    queryFn: () => api.get<{ data: CustomerOption[] }>('/api/v1/customers?limit=500&status=active'),
   });
 
   const { data: allAgents } = useQuery({
@@ -42,7 +68,25 @@ export default function RouteFormPage() {
   useEffect(() => {
     if (existing) {
       setForm({ name: existing.name, description: existing.description ?? '' });
-      setCustomers(existing.routeCustomers.map((rc) => ({ customerId: rc.customerId, sequenceOrder: rc.sequenceOrder, name: rc.customer?.name ?? rc.customerId })));
+      setCustomers(
+        existing.routeCustomers.map((rc) => ({
+          customerId: rc.customerId,
+          sequenceOrder: rc.sequenceOrder,
+          name: rc.customer?.name ?? rc.customerId,
+          plannedDropQuantity:
+            rc.plannedDropQuantity === null || rc.plannedDropQuantity === undefined
+              ? ''
+              : String(rc.plannedDropQuantity),
+          dropLatitude:
+            rc.dropLatitude === null || rc.dropLatitude === undefined
+              ? ''
+              : String(rc.dropLatitude),
+          dropLongitude:
+            rc.dropLongitude === null || rc.dropLongitude === undefined
+              ? ''
+              : String(rc.dropLongitude),
+        })),
+      );
       setSelectedAgents(existing.routeAgents.map((a) => a.userId));
     }
   }, [existing]);
@@ -59,14 +103,28 @@ export default function RouteFormPage() {
       }
     },
     onError: (err: ApiError) => {
-      if (err.errors) setErrors(Object.fromEntries(Object.entries(err.errors).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v])));
-      else setErrors({ _form: err.message });
+      if (err.errors) {
+        setErrors(
+          Object.fromEntries(
+            Object.entries(err.errors).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]),
+          ),
+        );
+      } else setErrors({ _form: err.message });
     },
   });
 
   const customersMutation = useMutation({
-    mutationFn: (data: { customers: Array<{ customerId: string; sequenceOrder: number }> }) =>
-      api.put(`/api/v1/routes/${id}/customers`, data),
+    mutationFn: (
+      data: {
+        customers: Array<{
+          customerId: string;
+          sequenceOrder: number;
+          plannedDropQuantity?: number;
+          dropLatitude?: number;
+          dropLongitude?: number;
+        }>;
+      },
+    ) => api.put(`/api/v1/routes/${id}/customers`, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['route', id] }),
   });
 
@@ -92,19 +150,67 @@ export default function RouteFormPage() {
   function addCustomer(custId: string) {
     const cust = allCustomers?.data?.find((c) => c.id === custId);
     if (!cust || customers.some((c) => c.customerId === custId)) return;
-    setCustomers([...customers, { customerId: custId, sequenceOrder: customers.length + 1, name: cust.name }]);
+    const primary = cust.addresses?.find((address) => address.isPrimary) ?? cust.addresses?.[0];
+    const latitude =
+      primary?.latitude === null || primary?.latitude === undefined ? '' : String(primary.latitude);
+    const longitude =
+      primary?.longitude === null || primary?.longitude === undefined ? '' : String(primary.longitude);
+    setCustomers([
+      ...customers,
+      {
+        customerId: custId,
+        sequenceOrder: customers.length + 1,
+        name: cust.name,
+        plannedDropQuantity: '',
+        dropLatitude: latitude,
+        dropLongitude: longitude,
+      },
+    ]);
   }
 
   function removeCustomer(index: number) {
     setCustomers(customers.filter((_, i) => i !== index).map((c, i) => ({ ...c, sequenceOrder: i + 1 })));
   }
 
+  function updateStopField(
+    index: number,
+    field: 'plannedDropQuantity' | 'dropLatitude' | 'dropLongitude',
+    value: string,
+  ) {
+    setCustomers((prev) => prev.map((item, idx) => (idx === index ? { ...item, [field]: value } : item)));
+  }
+
   function saveCustomers() {
-    customersMutation.mutate({ customers: customers.map((c) => ({ customerId: c.customerId, sequenceOrder: c.sequenceOrder })) });
+    customersMutation.mutate({
+      customers: customers.map((c) => {
+        const item: {
+          customerId: string;
+          sequenceOrder: number;
+          plannedDropQuantity?: number;
+          dropLatitude?: number;
+          dropLongitude?: number;
+        } = {
+          customerId: c.customerId,
+          sequenceOrder: c.sequenceOrder,
+        };
+        if (c.plannedDropQuantity.trim() !== '' && !Number.isNaN(Number(c.plannedDropQuantity))) {
+          item.plannedDropQuantity = Number(c.plannedDropQuantity);
+        }
+        if (c.dropLatitude.trim() !== '' && !Number.isNaN(Number(c.dropLatitude))) {
+          item.dropLatitude = Number(c.dropLatitude);
+        }
+        if (c.dropLongitude.trim() !== '' && !Number.isNaN(Number(c.dropLongitude))) {
+          item.dropLongitude = Number(c.dropLongitude);
+        }
+        return item;
+      }),
+    });
   }
 
   function toggleAgent(agentId: string) {
-    setSelectedAgents((prev) => prev.includes(agentId) ? prev.filter((a) => a !== agentId) : [...prev, agentId]);
+    setSelectedAgents((prev) =>
+      prev.includes(agentId) ? prev.filter((a) => a !== agentId) : [...prev, agentId],
+    );
   }
 
   function saveAgents() {
@@ -118,7 +224,11 @@ export default function RouteFormPage() {
     <div className="max-w-2xl">
       <h1 className="text-xl font-semibold text-gray-900 mb-4">{isEdit ? 'Edit Route' : 'New Route'}</h1>
 
-      {errors._form && <div role="alert" className="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">{errors._form}</div>}
+      {errors._form && (
+        <div role="alert" className="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+          {errors._form}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-6 space-y-4 mb-4">
         <div>
@@ -133,38 +243,66 @@ export default function RouteFormPage() {
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={() => navigate('/routes')} className="rounded-md border border-gray-300 px-4 py-2 text-sm">Cancel</button>
           <button type="submit" disabled={routeMutation.isPending} className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
-            {routeMutation.isPending ? 'Saving…' : isEdit ? 'Update' : 'Create'}
+            {routeMutation.isPending ? 'Saving...' : isEdit ? 'Update' : 'Create'}
           </button>
         </div>
       </form>
 
-      {/* Customer assignment (edit mode) */}
       {isEdit && (
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-900">Customer Assignment (Sequence Order)</h2>
+            <h2 className="text-sm font-semibold text-gray-900">Customer Stops (Sequence, Drop Pin, Planned Qty)</h2>
             <button type="button" onClick={saveCustomers} disabled={customersMutation.isPending} className="rounded-md bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:opacity-50">
-              {customersMutation.isPending ? 'Saving…' : 'Save Order'}
+              {customersMutation.isPending ? 'Saving...' : 'Save Stops'}
             </button>
           </div>
 
           <div className="mb-3">
             <select onChange={(e) => { addCustomer(e.target.value); e.target.value = ''; }} className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full" aria-label="Add customer to route" defaultValue="">
-              <option value="" disabled>Add customer…</option>
+              <option value="" disabled>Add customer...</option>
               {allCustomers?.data?.filter((c) => !customers.some((rc) => rc.customerId === c.id)).map((c) => (
                 <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>
               ))}
             </select>
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-2">
             {customers.map((c, i) => (
-              <div key={c.customerId} className="flex items-center gap-2 border border-gray-100 rounded p-2">
-                <span className="text-xs text-gray-400 w-6 text-center">{c.sequenceOrder}</span>
-                <span className="text-sm flex-1">{c.name}</span>
-                <button type="button" onClick={() => moveCustomer(i, -1)} disabled={i === 0} className="text-xs text-gray-500 hover:text-gray-700 disabled:opacity-30" aria-label="Move up">↑</button>
-                <button type="button" onClick={() => moveCustomer(i, 1)} disabled={i === customers.length - 1} className="text-xs text-gray-500 hover:text-gray-700 disabled:opacity-30" aria-label="Move down">↓</button>
-                <button type="button" onClick={() => removeCustomer(i)} className="text-xs text-red-500 hover:text-red-700" aria-label="Remove">✕</button>
+              <div key={c.customerId} className="border border-gray-100 rounded p-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 w-6 text-center">{c.sequenceOrder}</span>
+                  <span className="text-sm flex-1 font-medium">{c.name}</span>
+                  <button type="button" onClick={() => moveCustomer(i, -1)} disabled={i === 0} className="text-xs text-gray-500 hover:text-gray-700 disabled:opacity-30" aria-label="Move up">↑</button>
+                  <button type="button" onClick={() => moveCustomer(i, 1)} disabled={i === customers.length - 1} className="text-xs text-gray-500 hover:text-gray-700 disabled:opacity-30" aria-label="Move down">↓</button>
+                  <button type="button" onClick={() => removeCustomer(i)} className="text-xs text-red-500 hover:text-red-700" aria-label="Remove">✕</button>
+                </div>
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    value={c.plannedDropQuantity}
+                    onChange={(e) => updateStopField(i, 'plannedDropQuantity', e.target.value)}
+                    className="rounded-md border border-gray-300 px-2 py-1.5 text-xs"
+                    placeholder="Planned qty"
+                  />
+                  <input
+                    type="number"
+                    step="0.00000001"
+                    value={c.dropLatitude}
+                    onChange={(e) => updateStopField(i, 'dropLatitude', e.target.value)}
+                    className="rounded-md border border-gray-300 px-2 py-1.5 text-xs"
+                    placeholder="Drop latitude"
+                  />
+                  <input
+                    type="number"
+                    step="0.00000001"
+                    value={c.dropLongitude}
+                    onChange={(e) => updateStopField(i, 'dropLongitude', e.target.value)}
+                    className="rounded-md border border-gray-300 px-2 py-1.5 text-xs"
+                    placeholder="Drop longitude"
+                  />
+                </div>
               </div>
             ))}
             {customers.length === 0 && <p className="text-sm text-gray-500">No customers assigned</p>}
@@ -172,13 +310,12 @@ export default function RouteFormPage() {
         </div>
       )}
 
-      {/* Agent assignment (edit mode) */}
       {isEdit && (
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-gray-900">Agent Assignment</h2>
             <button type="button" onClick={saveAgents} disabled={agentsMutation.isPending} className="rounded-md bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:opacity-50">
-              {agentsMutation.isPending ? 'Saving…' : 'Save Agents'}
+              {agentsMutation.isPending ? 'Saving...' : 'Save Agents'}
             </button>
           </div>
           <div className="space-y-1">

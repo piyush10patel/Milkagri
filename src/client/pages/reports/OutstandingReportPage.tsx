@@ -1,13 +1,15 @@
 import ReportPage from './ReportPage';
 
 const currency = (v: unknown) => v == null ? '—' : `₹${Number(v).toFixed(2)}`;
+const formatDate = (v: unknown) => (v ? new Date(String(v)).toLocaleDateString() : '—');
 
 const COLUMNS = [
-  { key: 'customer_name', label: 'Customer' },
+  { key: 'customerName', label: 'Customer' },
   { key: 'phone', label: 'Phone' },
-  { key: 'outstanding_amount', label: 'Outstanding', align: 'right' as const, format: currency },
-  { key: 'last_payment_date', label: 'Last Payment' },
-  { key: 'oldest_unpaid_invoice', label: 'Oldest Unpaid' },
+  { key: 'totalOutstanding', label: 'Outstanding', align: 'right' as const, format: currency },
+  { key: 'invoiceCount', label: 'Invoices', align: 'right' as const },
+  { key: 'oldestInvoiceDate', label: 'Oldest Unpaid', format: formatDate },
+  { key: 'agingDays', label: 'Aging (days)', align: 'right' as const },
 ];
 
 export default function OutstandingReportPage() {

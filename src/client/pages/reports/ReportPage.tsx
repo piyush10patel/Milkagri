@@ -30,6 +30,18 @@ interface ListResponse {
 
 const fmt = (v: unknown) => (v == null ? '—' : String(v));
 
+function getByPath(row: Record<string, unknown>, key: string): unknown {
+  if (Object.prototype.hasOwnProperty.call(row, key)) return row[key];
+  if (!key.includes('.')) return undefined;
+
+  return key.split('.').reduce<unknown>((acc, part) => {
+    if (acc && typeof acc === 'object') {
+      return (acc as Record<string, unknown>)[part];
+    }
+    return undefined;
+  }, row);
+}
+
 export default function ReportPage({ title, endpoint, columns, extraParams, useDateRange = true, renderFilters }: ReportPageProps) {
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = today.slice(0, 8) + '01';
@@ -147,7 +159,7 @@ export default function ReportPage({ title, endpoint, columns, extraParams, useD
               <tr key={i} className="hover:bg-gray-50">
                 {columns.map((col) => (
                   <td key={col.key} className={`px-4 py-3 text-sm ${col.align === 'right' ? 'text-right' : ''}`}>
-                    {col.format ? col.format(row[col.key]) : fmt(row[col.key])}
+                    {col.format ? col.format(getByPath(row, col.key)) : fmt(getByPath(row, col.key))}
                   </td>
                 ))}
               </tr>

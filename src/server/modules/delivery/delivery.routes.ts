@@ -7,6 +7,8 @@ import {
   manifestQuerySchema,
   reconciliationQuerySchema,
   overviewQuerySchema,
+  gpsLiveQuerySchema,
+  gpsLocationPingSchema,
   updateDeliveryStatusSchema,
   updateDeliveryNotesSchema,
 } from './delivery.types.js';
@@ -60,6 +62,23 @@ router.get(
   authorize(adminOnly),
   validate({ query: overviewQuerySchema }),
   controller.overview,
+);
+
+// POST /delivery/location/ping
+router.post(
+  '/location/ping',
+  authorize(deliveryAgentPlus),
+  csrfProtection,
+  validate({ body: gpsLocationPingSchema }),
+  controller.saveLocationPing,
+);
+
+// GET /delivery/location/live?minutes=120
+router.get(
+  '/location/live',
+  authorize(adminOnly),
+  validate({ query: gpsLiveQuerySchema }),
+  controller.liveLocations,
 );
 
 export default router;

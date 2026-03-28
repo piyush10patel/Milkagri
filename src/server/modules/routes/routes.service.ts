@@ -207,6 +207,16 @@ export async function assignCustomers(routeId: string, input: AssignCustomersInp
     });
   }
 
+  for (const customer of input.customers) {
+    const hasLat = customer.dropLatitude !== undefined;
+    const hasLon = customer.dropLongitude !== undefined;
+    if (hasLat !== hasLon) {
+      throw new ValidationError('Drop location requires both latitude and longitude', {
+        dropLocation: ['Provide both dropLatitude and dropLongitude for each stop'],
+      });
+    }
+  }
+
   // Validate all customers exist
   if (customerIds.length > 0) {
     const existingCustomers = await prisma.customer.findMany({
@@ -238,6 +248,9 @@ export async function assignCustomers(routeId: string, input: AssignCustomersInp
           routeId,
           customerId: c.customerId,
           sequenceOrder: c.sequenceOrder,
+          plannedDropQuantity: c.plannedDropQuantity ?? null,
+          dropLatitude: c.dropLatitude ?? null,
+          dropLongitude: c.dropLongitude ?? null,
         })),
       });
     }
@@ -443,6 +456,14 @@ export async function getRouteManifest(routeId: string, date: string) {
 
     return {
       sequenceOrder: rc.sequenceOrder,
+      plannedDropQuantity: rc.plannedDropQuantity !== null ? Number(rc.plannedDropQuantity) : null,
+      dropLocation:
+        rc.dropLatitude !== null && rc.dropLongitude !== null
+          ? {
+              latitude: Number(rc.dropLatitude),
+              longitude: Number(rc.dropLongitude),
+            }
+          : null,
       customer: {
         id: customer.id,
         name: customer.name,
