@@ -116,7 +116,25 @@ redis?.on('error', (err) => {
 // ---------------------------------------------------------------------------
 // 1. Security headers
 // ---------------------------------------------------------------------------
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        scriptSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://unpkg.com'],
+        connectSrc: [
+          "'self'",
+          'https://router.project-osrm.org',
+          'https://*.tile.openstreetmap.org',
+          'https://unpkg.com',
+        ],
+        fontSrc: ["'self'", 'data:', 'https://unpkg.com'],
+      },
+    },
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // 2. CORS
