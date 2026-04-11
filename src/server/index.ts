@@ -32,12 +32,17 @@ import inventoryRoutes from './modules/inventory/inventory.routes.js';
 import pricingCategoriesRoutes from './modules/pricing-categories/pricing-categories.routes.js';
 import milkCollectionsRoutes from './modules/milk-collections/milk-collections.routes.js';
 import { startWorker, registerSchedules } from './jobs/index.js';
+import {
+  bootstrapSuperAdmin,
+  hasBootstrapAdminEnv,
+  shouldAutoBootstrapAdmin,
+} from './lib/bootstrapAdmin.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const clientDistPath = path.resolve(__dirname, '../../client');
+const clientDistPath = path.resolve(__dirname, '../client');
 const isProduction = process.env.NODE_ENV === 'production';
 
 function requireProductionEnv(name: string): string {
@@ -263,6 +268,16 @@ if (process.env.NODE_ENV !== 'test') {
       );
     }
   });
+
+  if (isProduction && shouldAutoBootstrapAdmin()) {
+    if (!hasBootstrapAdminEnv()) {
+      console.warn('AUTO_BOOTSTRAP_ADMIN is enabled, but ADMIN_EMAIL or ADMIN_PASSWORD is missing.');
+    } else {
+      bootstrapSuperAdmin(prisma)
+        .then((email) => console.log(`Production admin bootstrap complete for ${email}`))
+        .catch((err) => console.error('Production admin bootstrap failed:', err));
+    }
+  }
 }
 
 export default app;

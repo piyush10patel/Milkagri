@@ -129,7 +129,20 @@ This keeps the app reliable even when background workers are not always running.
 
 ### 2. Create the first admin user
 
-For a clean production setup, do not seed demo data. Instead, bootstrap the first super admin:
+For a clean production setup, do not seed demo data. Instead, bootstrap the first super admin.
+
+On free hosted plans where shell access is unavailable, you can temporarily set:
+
+```dotenv
+AUTO_BOOTSTRAP_ADMIN=true
+ADMIN_EMAIL=owner@example.com
+ADMIN_PASSWORD=<strong-password>
+ADMIN_NAME=Owner
+```
+
+Redeploy once, log in, then remove those temporary bootstrap values and redeploy again.
+
+If you can run the bootstrap command locally, use:
 
 ```bash
 ADMIN_EMAIL=owner@example.com ADMIN_PASSWORD=<strong-password> ADMIN_NAME="Owner" npm run bootstrap:admin

@@ -80,9 +80,30 @@ The server will:
 
 ## 5. Create the first super admin
 
-Do not run the demo seed in production unless you explicitly want sample data.
+### Option A: recommended on Render free
 
-Instead, run this from your machine in the repository root:
+If Render Shell is unavailable on your plan, bootstrap the first admin through startup:
+
+Set these temporary environment variables in Render:
+
+| Variable | Value |
+|---|---|
+| `AUTO_BOOTSTRAP_ADMIN` | `true` |
+| `ADMIN_EMAIL` | Your admin email |
+| `ADMIN_PASSWORD` | Strong admin password |
+| `ADMIN_NAME` | Your display name |
+
+Then redeploy once.
+
+After the deploy finishes:
+
+- log in with the configured admin email and password
+- immediately change or remove `AUTO_BOOTSTRAP_ADMIN`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`
+- redeploy again so credentials are no longer present in service env
+
+### Option B: local bootstrap
+
+If your machine can connect to the production database, run:
 
 ```powershell
 $env:DATABASE_URL="postgresql://<user>:<password>@<host>/<database>?sslmode=require"
