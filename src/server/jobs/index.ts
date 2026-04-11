@@ -10,11 +10,14 @@ function parseRedisConnection(): ConnectionOptions {
   const url = process.env.REDIS_URL || 'redis://localhost:6379';
   try {
     const parsed = new URL(url);
+    const isTls = parsed.protocol === 'rediss:';
     return {
       host: parsed.hostname || 'localhost',
       port: parseInt(parsed.port, 10) || 6379,
+      username: parsed.username || undefined,
       password: parsed.password || undefined,
       db: parsed.pathname ? parseInt(parsed.pathname.slice(1), 10) || 0 : 0,
+      ...(isTls ? { tls: {} } : {}),
     };
   } catch {
     return { host: 'localhost', port: 6379 };

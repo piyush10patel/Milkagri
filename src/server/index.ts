@@ -31,7 +31,6 @@ import settingsRoutes from './modules/settings/settings.routes.js';
 import inventoryRoutes from './modules/inventory/inventory.routes.js';
 import pricingCategoriesRoutes from './modules/pricing-categories/pricing-categories.routes.js';
 import milkCollectionsRoutes from './modules/milk-collections/milk-collections.routes.js';
-import { startWorker, registerSchedules } from './jobs/index.js';
 import {
   bootstrapSuperAdmin,
   hasBootstrapAdminEnv,
@@ -262,10 +261,16 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`Server running on port ${PORT}`);
 
     if (process.env.ENABLE_BACKGROUND_JOBS !== 'false') {
-      startWorker();
-      registerSchedules().catch((err) =>
-        console.error('Failed to register job schedules:', err),
-      );
+      import('./jobs/index.js')
+        .then(({ startWorker, registerSchedules }) => {
+          startWorker();
+          registerSchedules().catch((err) =>
+            console.error('Failed to register job schedules:', err),
+          );
+        })
+        .catch((err) => {
+          console.error('Failed to load background jobs module:', err);
+        });
     }
   });
 
