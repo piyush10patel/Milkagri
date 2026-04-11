@@ -20,7 +20,7 @@ router.get('/', authorize(['super_admin', 'admin', 'billing_staff', 'read_only']
 
 router.post(
   '/',
-  authorize(['super_admin', 'admin']),
+  authorize(['super_admin', 'admin', 'billing_staff']),
   csrfProtection,
   validate({ body: createPricingCategorySchema }),
   auditLog(),
@@ -29,7 +29,7 @@ router.post(
 
 router.put(
   '/:id',
-  authorize(['super_admin', 'admin']),
+  authorize(['super_admin', 'admin', 'billing_staff']),
   csrfProtection,
   validate({ params: uuidParamSchema, body: updatePricingCategorySchema }),
   auditLog(),

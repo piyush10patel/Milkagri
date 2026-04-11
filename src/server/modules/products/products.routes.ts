@@ -21,6 +21,7 @@ const router = Router();
 
 const adminPlus = ['super_admin', 'admin', 'billing_staff', 'read_only'];
 const adminOnly = ['super_admin', 'admin'];
+const pricingEditors = ['super_admin', 'admin', 'billing_staff'];
 
 router.use(authenticate);
 
@@ -102,7 +103,7 @@ router.delete(
 // POST /products/:id/variants/:vid/prices
 router.post(
   '/:id/variants/:vid/prices',
-  authorize(adminOnly),
+  authorize(pricingEditors),
   csrfProtection,
   validate({ params: uuidWithSubParam('vid'), body: addPriceSchema }),
   auditLog(),

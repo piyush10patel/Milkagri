@@ -168,7 +168,11 @@ export default function PricingPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (!newCategoryName.trim()) return;
+              setError('');
+              if (!newCategoryName.trim()) {
+                setError('Enter a pricing category name before adding.');
+                return;
+              }
               createCategoryMutation.mutate(newCategoryName.trim());
             }}
             className="flex w-full max-w-md gap-2"
