@@ -46,6 +46,7 @@ export function useAuthProvider(): AuthState {
     setError(null);
     try {
       const data = await api.post<{ user: User }>('/api/auth/login', { email, password });
+      await api.refreshCsrfToken();
       setUser(data.user);
     } catch (err) {
       const apiErr = err as ApiError;

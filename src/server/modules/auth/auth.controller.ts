@@ -13,14 +13,20 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
     (req.session as any).userId = user.id;
     (req.session as any).userRole = user.role;
     (req.session as any).userName = user.name;
+    req.session.save((err) => {
+      if (err) {
+        next(err);
+        return;
+      }
 
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-      },
+      res.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        },
+      });
     });
   } catch (err) {
     next(err);
