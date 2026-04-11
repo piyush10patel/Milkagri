@@ -65,6 +65,28 @@ function resolveCorsOrigin() {
   return isProduction ? false : true;
 }
 
+function createRedisClient(url: string) {
+  try {
+    const parsed = new URL(url);
+    const isTls = parsed.protocol === 'rediss:';
+    return new Redis({
+      host: parsed.hostname || 'localhost',
+      port: parseInt(parsed.port, 10) || 6379,
+      username: parsed.username || undefined,
+      password: parsed.password || undefined,
+      db: parsed.pathname ? parseInt(parsed.pathname.slice(1), 10) || 0 : 0,
+      maxRetriesPerRequest: null,
+      lazyConnect: true,
+      ...(isTls ? { tls: {} } : {}),
+    });
+  } catch {
+    return new Redis(url, {
+      maxRetriesPerRequest: null,
+      lazyConnect: true,
+    });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Database client
 // ---------------------------------------------------------------------------
@@ -80,9 +102,9 @@ if (isProduction) {
 // Redis client (used for sessions; also available for BullMQ elsewhere)
 // ---------------------------------------------------------------------------
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-export const redis = new Redis(redisUrl, {
-  maxRetriesPerRequest: null, // required by BullMQ
-  lazyConnect: true,          // don't connect until first use
+export const redis = createRedisClient(redisUrl);
+redis.on('error', (err) => {
+  console.error('[redis] connection error:', err.message);
 });
 
 // ---------------------------------------------------------------------------
