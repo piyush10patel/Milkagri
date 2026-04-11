@@ -135,7 +135,9 @@ export async function deactivateUser(id: string) {
   });
 
   // Invalidate all active sessions for the deactivated user
-  await invalidateUserSessions(id, redis);
+  if (redis) {
+    await invalidateUserSessions(id, redis);
+  }
 
   return updated;
 }

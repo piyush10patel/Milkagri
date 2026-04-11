@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import helmet from 'helmet';
 import cors from 'cors';
-import session from 'express-session';
+import session, { type SessionOptions } from 'express-session';
 import { RedisStore } from 'connect-redis';
 import Redis from 'ioredis';
 import { PrismaClient } from '@prisma/client';
@@ -87,6 +87,10 @@ function createRedisClient(url: string) {
   }
 }
 
+function shouldUseRedisSessions(): boolean {
+  return process.env.DISABLE_REDIS_SESSIONS !== 'true';
+}
+
 // ---------------------------------------------------------------------------
 // Database client
 // ---------------------------------------------------------------------------
@@ -94,16 +98,18 @@ export const prisma = new PrismaClient();
 
 if (isProduction) {
   requireProductionEnv('DATABASE_URL');
-  requireProductionEnv('REDIS_URL');
   requireProductionEnv('SESSION_SECRET');
+  if (shouldUseRedisSessions()) {
+    requireProductionEnv('REDIS_URL');
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Redis client (used for sessions; also available for BullMQ elsewhere)
 // ---------------------------------------------------------------------------
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-export const redis = createRedisClient(redisUrl);
-redis.on('error', (err) => {
+export const redis = shouldUseRedisSessions() ? createRedisClient(redisUrl) : null;
+redis?.on('error', (err) => {
   console.error('[redis] connection error:', err.message);
 });
 
@@ -138,21 +144,27 @@ if (isProduction) {
 // 4. Session management (Redis store)
 // ---------------------------------------------------------------------------
 const sessionSecret = process.env.SESSION_SECRET || 'dev-secret-change-me';
+const sessionConfig: SessionOptions = {
+  secret: sessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  name: 'milk.sid',
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  },
+};
+
+if (redis) {
+  sessionConfig.store = new RedisStore({ client: redis });
+} else {
+  console.warn('Redis sessions disabled; using in-memory session store.');
+}
 
 app.use(
-  session({
-    store: new RedisStore({ client: redis }),
-    secret: sessionSecret,
-    resave: false,
-    saveUninitialized: false,
-    name: 'milk.sid',
-    cookie: {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    },
-  }),
+  session(sessionConfig),
 );
 
 // ---------------------------------------------------------------------------
