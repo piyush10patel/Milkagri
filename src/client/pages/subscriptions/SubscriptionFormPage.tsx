@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ApiError } from '@/lib/api';
 
@@ -56,6 +56,7 @@ function formatDateOnly(value?: string) {
 export default function SubscriptionFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -142,6 +143,19 @@ export default function SubscriptionFormPage() {
       );
     }
   }, [existing]);
+
+  useEffect(() => {
+    if (isEdit) return;
+    const typeParam = searchParams.get('type');
+    const parentIdParam = searchParams.get('parentId');
+    if (typeParam !== 'sub_subscription' && !parentIdParam) return;
+
+    setForm((prev) => ({
+      ...prev,
+      subscriptionType: typeParam === 'sub_subscription' ? 'sub_subscription' : prev.subscriptionType,
+      parentSubscriptionId: parentIdParam ?? prev.parentSubscriptionId,
+    }));
+  }, [isEdit, searchParams]);
 
   // Build flat variant options from products
   const variantOptions: Array<{ id: string; label: string }> = [];

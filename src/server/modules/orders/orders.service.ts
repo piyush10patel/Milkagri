@@ -71,6 +71,22 @@ export async function generateOrdersForDate(targetDate: Date): Promise<GenerateO
     },
   });
 
+  // Parent subscriptions that have active sub-subscriptions should not generate their own orders.
+  // Their total is represented by child subscriptions only.
+  const parentIdsWithActiveChildren = new Set(
+    (
+      await prisma.subscription.groupBy({
+        by: ['parentSubscriptionId'],
+        where: {
+          status: 'active',
+          parentSubscriptionId: { not: null },
+        },
+      })
+    )
+      .map((row) => row.parentSubscriptionId)
+      .filter((id): id is string => Boolean(id)),
+  );
+
   const summary: GenerateOrdersSummary = {
     totalCreated: 0,
     byRoute: {},
@@ -78,6 +94,8 @@ export async function generateOrdersForDate(targetDate: Date): Promise<GenerateO
   };
 
   for (const sub of subscriptions) {
+    if (parentIdsWithActiveChildren.has(sub.id)) continue;
+
     // Skip paused/stopped customers
     if (sub.customer.status !== 'active') continue;
 

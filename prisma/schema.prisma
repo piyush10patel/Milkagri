@@ -468,6 +468,7 @@ model MilkCollectionRouteStop {
   id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   routeId         String          @map("route_id") @db.Uuid
   villageId       String          @map("village_id") @db.Uuid
+  villageStopId   String?         @map("village_stop_id") @db.Uuid
   deliverySession DeliverySession @default(morning) @map("delivery_session")
   sequenceOrder   Int             @map("sequence_order")
   createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
@@ -475,11 +476,28 @@ model MilkCollectionRouteStop {
 
   route   Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
   village Village @relation(fields: [villageId], references: [id], onDelete: Cascade)
+  villageStop VillageCollectionStop? @relation(fields: [villageStopId], references: [id], onDelete: SetNull)
+  farmers MilkCollectionRouteStopFarmer[]
 
-  @@unique([routeId, deliverySession, villageId], map: "uq_collection_route_stops_route_session_village")
+  @@unique([routeId, deliverySession, villageStopId], map: "uq_collection_route_stops_route_session_stop")
   @@unique([routeId, deliverySession, sequenceOrder], map: "uq_collection_route_stops_route_session_sequence")
   @@index([routeId, deliverySession], map: "idx_collection_route_stops_route_session")
+  @@index([villageStopId], map: "idx_collection_route_stops_village_stop")
   @@map("milk_collection_route_stops")
+}
+
+model MilkCollectionRouteStopFarmer {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stopId    String   @map("stop_id") @db.Uuid
+  farmerId  String   @map("farmer_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  stop   MilkCollectionRouteStop @relation(fields: [stopId], references: [id], onDelete: Cascade)
+  farmer Farmer                  @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+
+  @@unique([stopId, farmerId], map: "uq_collection_stop_farmers_stop_farmer")
+  @@index([farmerId], map: "idx_collection_stop_farmers_farmer")
+  @@map("milk_collection_route_stop_farmers")
 }
 
 // ─── Billing Tables ──────────────────────────────────────────────────────────
@@ -492,12 +510,45 @@ model Village {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   farmers               Farmer[]
+  stops                 VillageCollectionStop[]
   milkCollections       MilkCollection[]
   individualCollections VillageIndividualCollection[]
   vehicleLoads          MilkVehicleLoad[]
   collectionRouteStops  MilkCollectionRouteStop[]
 
   @@map("villages")
+}
+
+model VillageCollectionStop {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  villageId String   @map("village_id") @db.Uuid
+  name      String   @db.VarChar(255)
+  isActive  Boolean  @default(true) @map("is_active")
+  latitude  Decimal? @db.Decimal(10, 8)
+  longitude Decimal? @db.Decimal(11, 8)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  village    Village                   @relation(fields: [villageId], references: [id], onDelete: Cascade)
+  routeStops MilkCollectionRouteStop[]
+  farmers    VillageCollectionStopFarmer[]
+
+  @@unique([villageId, name], map: "uq_village_collection_stops_village_name")
+  @@map("village_collection_stops")
+}
+
+model VillageCollectionStopFarmer {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stopId    String   @map("stop_id") @db.Uuid
+  farmerId  String   @map("farmer_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  stop   VillageCollectionStop @relation(fields: [stopId], references: [id], onDelete: Cascade)
+  farmer Farmer                @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+
+  @@unique([stopId, farmerId], map: "uq_village_stop_farmers_stop_farmer")
+  @@index([farmerId], map: "idx_village_stop_farmers_farmer")
+  @@map("village_collection_stop_farmers")
 }
 
 model Farmer {
@@ -510,6 +561,8 @@ model Farmer {
 
   village         Village          @relation(fields: [villageId], references: [id], onDelete: Cascade)
   milkCollections MilkCollection[]
+  routeStops      MilkCollectionRouteStopFarmer[]
+  collectionStops VillageCollectionStopFarmer[]
 
   @@unique([villageId, name], map: "uq_farmers_village_name")
   @@map("farmers")

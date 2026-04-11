@@ -89,6 +89,16 @@ Default local URLs:
 
 ## Production Deployment
 
+### Recommended hosted setup
+
+For a simple production deployment without running your own VM:
+
+- App: Render Web Service
+- Database: Neon Postgres
+- Redis: Upstash Redis
+
+This repository already serves the built frontend from the Node server in production, so you only need one app service.
+
 ### 1. Prepare environment
 
 ```bash
@@ -101,27 +111,57 @@ Key variables:
 
 | Variable | Required | Description |
 |---|---|---|
-| `POSTGRES_PASSWORD` | Yes | PostgreSQL password |
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `REDIS_URL` | Yes | Redis connection string |
 | `SESSION_SECRET` | Yes | Session signing secret |
+| `CORS_ORIGIN` | Recommended | Public app URL, for example `https://your-app.onrender.com` |
 | `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` | No | Email settings |
 | `SMS_PROVIDER_URL` / `SMS_API_KEY` | No | SMS integration |
 | `WEBHOOK_NOTIFICATION_URL` | No | Outbound webhook target |
 
-### 2. Start services
+If you are deploying to a sleeping free-tier service, set:
+
+```dotenv
+ENABLE_BACKGROUND_JOBS=false
+```
+
+This keeps the app reliable even when background workers are not always running.
+
+### 2. Create the first admin user
+
+For a clean production setup, do not seed demo data. Instead, bootstrap the first super admin:
+
+```bash
+ADMIN_EMAIL=owner@example.com ADMIN_PASSWORD=<strong-password> ADMIN_NAME="Owner" npm run bootstrap:admin
+```
+
+Run this only after the database is reachable and migrations are applied.
+
+### 3. Start services
 
 ```bash
 docker compose up -d --build
 ```
 
-### 3. Seed optional demo data
+### 4. Seed optional demo data
 
 ```bash
 docker compose exec app npx tsx prisma/seed.ts
 ```
 
 Use this only for non-production/demo environments unless you explicitly want sample data.
+
+### Render deployment
+
+This repo includes [render.yaml](/J:/Milkagri/render.yaml) for a one-service Render deployment.
+There is also a host-specific checklist in [deploy/render-free/README.md](/J:/Milkagri/deploy/render-free/README.md) and an env template in [deploy/render-free/env.template](/J:/Milkagri/deploy/render-free/env.template).
+
+On Render:
+
+1. Create a new Blueprint or Web Service from this repository.
+2. Set `DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET`, and `CORS_ORIGIN`.
+3. Keep `ENABLE_BACKGROUND_JOBS=false` on the free plan.
+4. After first deploy, run the admin bootstrap command from your machine using the production `DATABASE_URL`.
 
 ## Database and Backups
 
@@ -164,6 +204,7 @@ Make sure `DATABASE_URL` points to the correct target database before restoring.
 | `npm run db:generate` | Regenerate Prisma client |
 | `npm run db:seed` | Seed sample data |
 | `npm run db:studio` | Open Prisma Studio |
+| `npm run bootstrap:admin` | Create or reset the first super admin |
 
 ## Security Notes
 

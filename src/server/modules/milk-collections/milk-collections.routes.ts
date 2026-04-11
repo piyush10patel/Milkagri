@@ -7,15 +7,18 @@ import { uuidParamSchema } from '../../lib/paramSchemas.js';
 import {
   createFarmerSchema,
   createVillageSchema,
+  createVillageStopSchema,
   collectionRouteManifestQuerySchema,
   collectionRouteStopsQuerySchema,
   milkCollectionDateQuerySchema,
   saveMilkCollectionSchema,
   saveCollectionRouteStopsSchema,
+  assignCollectionRouteAgentsSchema,
   saveMilkVehicleLoadSchema,
   saveMilkVehicleShiftLoadSchema,
   saveVillageIndividualCollectionSchema,
   updateFarmerSchema,
+  updateVillageStopSchema,
 } from './milk-collections.types.js';
 import * as controller from './milk-collections.controller.js';
 
@@ -32,7 +35,11 @@ router.get('/route-stops', authorize(viewRoles), validate({ query: collectionRou
 router.get('/route-manifest', authorize(viewRoles), validate({ query: collectionRouteManifestQuerySchema }), controller.getCollectionRouteManifest);
 router.get('/villages', authorize(viewRoles), controller.listVillages);
 router.put('/route-stops', authorize(editRoles), csrfProtection, validate({ body: saveCollectionRouteStopsSchema }), controller.saveCollectionRouteStops);
+router.put('/route-agents', authorize(editRoles), csrfProtection, validate({ body: assignCollectionRouteAgentsSchema }), controller.assignCollectionRouteAgents);
 router.post('/villages', authorize(editRoles), csrfProtection, validate({ body: createVillageSchema }), controller.createVillage);
+router.post('/village-stops', authorize(editRoles), csrfProtection, validate({ body: createVillageStopSchema }), controller.createVillageStop);
+router.put('/village-stops/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema, body: updateVillageStopSchema }), controller.updateVillageStop);
+router.delete('/village-stops/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.removeVillageStop);
 router.post('/farmers', authorize(editRoles), csrfProtection, validate({ body: createFarmerSchema }), controller.createFarmer);
 router.put('/farmers/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema, body: updateFarmerSchema }), controller.updateFarmer);
 router.delete('/farmers/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.removeFarmer);

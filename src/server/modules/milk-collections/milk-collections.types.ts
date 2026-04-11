@@ -14,10 +14,16 @@ export const saveCollectionRouteStopsSchema = z.object({
   deliverySession: z.enum(['morning', 'evening']),
   stops: z.array(
     z.object({
-      villageId: z.string().uuid('Invalid village ID'),
+      villageStopId: z.string().uuid('Invalid village stop ID'),
       sequenceOrder: z.number().int().min(1, 'Sequence order must be >= 1'),
+      farmerIds: z.array(z.string().uuid('Invalid farmer ID')).optional().default([]),
     }),
   ),
+});
+
+export const assignCollectionRouteAgentsSchema = z.object({
+  routeId: z.string().uuid('Invalid route ID'),
+  agentIds: z.array(z.string().uuid('Invalid agent ID')),
 });
 
 export const collectionRouteManifestQuerySchema = z.object({
@@ -28,6 +34,24 @@ export const collectionRouteManifestQuerySchema = z.object({
 
 export const createVillageSchema = z.object({
   name: z.string().trim().min(1, 'Village name is required').max(255, 'Village name is too long'),
+});
+
+export const createVillageStopSchema = z.object({
+  villageId: z.string().uuid('Invalid village ID'),
+  name: z.string().trim().min(1, 'Stop name is required').max(255, 'Stop name is too long'),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  farmerIds: z.array(z.string().uuid('Invalid farmer ID')).optional().default([]),
+});
+
+export const updateVillageStopSchema = z.object({
+  name: z.string().trim().min(1, 'Stop name is required').max(255, 'Stop name is too long').optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  isActive: z.boolean().optional(),
+  farmerIds: z.array(z.string().uuid('Invalid farmer ID')).optional(),
+}).refine((value) => value.name !== undefined || value.latitude !== undefined || value.longitude !== undefined || value.isActive !== undefined || value.farmerIds !== undefined, {
+  message: 'At least one field must be provided',
 });
 
 export const createFarmerSchema = z.object({
@@ -77,6 +101,8 @@ export const saveMilkVehicleShiftLoadSchema = z.object({
 });
 
 export type CreateVillageInput = z.infer<typeof createVillageSchema>;
+export type CreateVillageStopInput = z.infer<typeof createVillageStopSchema>;
+export type UpdateVillageStopInput = z.infer<typeof updateVillageStopSchema>;
 export type CreateFarmerInput = z.infer<typeof createFarmerSchema>;
 export type UpdateFarmerInput = z.infer<typeof updateFarmerSchema>;
 export type SaveMilkCollectionInput = z.infer<typeof saveMilkCollectionSchema>;
@@ -86,3 +112,4 @@ export type SaveMilkVehicleShiftLoadInput = z.infer<typeof saveMilkVehicleShiftL
 export type CollectionRouteStopsQuery = z.infer<typeof collectionRouteStopsQuerySchema>;
 export type SaveCollectionRouteStopsInput = z.infer<typeof saveCollectionRouteStopsSchema>;
 export type CollectionRouteManifestQuery = z.infer<typeof collectionRouteManifestQuerySchema>;
+export type AssignCollectionRouteAgentsInput = z.infer<typeof assignCollectionRouteAgentsSchema>;

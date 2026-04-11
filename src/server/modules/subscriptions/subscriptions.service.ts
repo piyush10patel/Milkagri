@@ -68,7 +68,49 @@ export async function listSubscriptions(
     prisma.subscription.count({ where }),
   ]);
 
-  return { subscriptions, total };
+  const parentIds = subscriptions.map((subscription) => subscription.id);
+  const childRollups = parentIds.length > 0
+    ? await prisma.subscription.groupBy({
+        by: ['parentSubscriptionId'],
+        where: {
+          parentSubscriptionId: { in: parentIds },
+          ...(query.status ? { status: query.status } : {}),
+        },
+        _sum: { quantity: true },
+        _count: true,
+      })
+    : [];
+
+  const rollupMap = new Map(
+    childRollups
+      .filter((row) => row.parentSubscriptionId)
+      .map((row) => [
+        row.parentSubscriptionId as string,
+        {
+          quantity: Number(row._sum.quantity ?? 0),
+          count: row._count,
+        },
+      ]),
+  );
+
+  const subscriptionsWithRollup = subscriptions.map((subscription) => {
+    const rollup = rollupMap.get(subscription.id);
+    const childQuantity = rollup?.quantity ?? 0;
+    const childCount = rollup?.count ?? 0;
+    const hasChildSubscriptions = childCount > 0;
+    return {
+      ...subscription,
+      childSubscriptionCount: childCount,
+      childSubscriptionQuantity: childQuantity,
+      // If this parent has sub-subscriptions, its effective total is children only.
+      rolledUpQuantity: hasChildSubscriptions ? childQuantity : Number(subscription.quantity),
+      isRolledIntoParent:
+        subscription.subscriptionType === 'sub_subscription' &&
+        Boolean(subscription.parentSubscriptionId),
+    };
+  });
+
+  return { subscriptions: subscriptionsWithRollup, total };
 }
 
 

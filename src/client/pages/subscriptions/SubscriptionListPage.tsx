@@ -9,9 +9,14 @@ interface Subscription {
   customer: { id: string; name: string };
   subscriptionType?: 'regular' | 'sub_subscription';
   parentSubscription?: { id: string; customer?: { id: string; name: string } } | null;
+  parentSubscriptionId?: string | null;
   route?: { id: string; name: string } | null;
   productVariant: { id: string; product: { name: string }; unitType: string; quantityPerUnit: number };
   quantity: number;
+  rolledUpQuantity?: number;
+  childSubscriptionCount?: number;
+  childSubscriptionQuantity?: number;
+  isRolledIntoParent?: boolean;
   deliverySession: 'morning' | 'evening';
   packs?: Array<{ packSize: number | string; packCount: number }>;
   frequencyType: string;
@@ -83,6 +88,8 @@ export default function SubscriptionListPage() {
     },
   });
 
+  const visibleSubscriptions = data?.data ?? [];
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
@@ -119,7 +126,7 @@ export default function SubscriptionListPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {data?.data?.map((s) => (
+            {visibleSubscriptions.map((s) => (
               <tr key={s.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-sm"><Link to={`/customers/${s.customer.id}`} className="text-blue-600 hover:underline">{s.customer.name}</Link></td>
                 <td className="px-4 py-3 text-sm">
@@ -136,10 +143,15 @@ export default function SubscriptionListPage() {
                 </td>
                 <td className="px-4 py-3 text-sm">{s.productVariant?.product?.name} ({s.productVariant?.quantityPerUnit} {s.productVariant?.unitType})</td>
                 <td className="px-4 py-3 text-sm">
-                  <div>{s.quantity}</div>
+                  <div>{s.subscriptionType === 'sub_subscription' ? s.quantity : (s.rolledUpQuantity ?? s.quantity)}</div>
                   <div className="text-xs text-gray-500">
                     {s.packs?.length ? s.packs.map((pack) => `${pack.packCount} x ${Number(pack.packSize)}L`).join(', ') : 'No packs'}
                   </div>
+                  {s.subscriptionType !== 'sub_subscription' && (s.childSubscriptionCount ?? 0) > 0 && (
+                    <div className="text-xs text-indigo-600">
+                      Includes {s.childSubscriptionCount} sub-subscription(s): +{Number(s.childSubscriptionQuantity ?? 0)}
+                    </div>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-sm capitalize">{s.deliverySession}</td>
                 <td className="px-4 py-3 text-sm">{s.route?.name ?? '—'}</td>
@@ -148,6 +160,14 @@ export default function SubscriptionListPage() {
                 <td className="px-4 py-3 text-sm">{formatDateOnly(s.startDate)}</td>
                 <td className="px-4 py-3 text-sm text-right space-x-1">
                   <Link to={`/subscriptions/${s.id}/edit`} className="text-blue-600 hover:underline text-xs">Edit</Link>
+                  {s.subscriptionType !== 'sub_subscription' && (
+                    <Link
+                      to={`/subscriptions/new?type=sub_subscription&parentId=${s.id}`}
+                      className="text-indigo-600 hover:underline text-xs"
+                    >
+                      Add Sub
+                    </Link>
+                  )}
                   {s.status === 'active' && (
                     <>
                       <button onClick={() => setHoldTarget(s.id)} className="text-yellow-600 hover:underline text-xs">Hold</button>
@@ -160,7 +180,7 @@ export default function SubscriptionListPage() {
                 </td>
               </tr>
             ))}
-            {data?.data?.length === 0 && <tr><td colSpan={10} className="px-4 py-8 text-center text-sm text-gray-500">No subscriptions found</td></tr>}
+            {visibleSubscriptions.length === 0 && <tr><td colSpan={10} className="px-4 py-8 text-center text-sm text-gray-500">No subscriptions found</td></tr>}
           </tbody>
         </table>
       </div>

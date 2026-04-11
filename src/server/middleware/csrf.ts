@@ -1,12 +1,12 @@
 import csurf from 'csurf';
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction, RequestHandler } from 'express';
 
 /**
  * CSRF protection middleware using csurf with cookie-based double-submit pattern.
  * Applied to state-changing routes (POST, PUT, PATCH, DELETE).
  * The token is sent to the client via a dedicated endpoint or response header.
  */
-export const csrfProtection = csurf({
+export const csrfProtection: RequestHandler = csurf({
   cookie: false, // use session-based CSRF tokens (stored in req.session)
 });
 

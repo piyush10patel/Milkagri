@@ -49,6 +49,15 @@ export async function saveCollectionRouteStops(req: Request, res: Response, next
   }
 }
 
+export async function assignCollectionRouteAgents(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await service.assignCollectionRouteAgents(req.body);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getCollectionRouteManifest(req: Request, res: Response, next: NextFunction) {
   try {
     const result = await service.getCollectionRouteManifest({
@@ -66,6 +75,36 @@ export async function createVillage(req: Request, res: Response, next: NextFunct
   try {
     const village = await service.createVillage(req.body);
     res.status(201).json(village);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createVillageStop(req: Request, res: Response, next: NextFunction) {
+  try {
+    const stop = await service.createVillageStop(req.body);
+    res.status(201).json(stop);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateVillageStop(req: Request, res: Response, next: NextFunction) {
+  try {
+    const stop = await service.updateVillageStop(param(req, 'id'), req.body);
+    res.json(stop);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function removeVillageStop(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await service.deleteVillageStop(param(req, 'id'));
+    res.json({
+      message: result.mode === 'deleted' ? 'Village stop deleted' : 'Village stop deactivated',
+      ...result,
+    });
   } catch (err) {
     next(err);
   }
