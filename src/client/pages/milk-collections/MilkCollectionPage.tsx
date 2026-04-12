@@ -265,6 +265,14 @@ export default function MilkCollectionPage() {
     },
   });
 
+  const deleteVillageMutation = useMutation({
+    mutationFn: (villageId: string) => api.delete(`/api/v1/milk-collections/villages/${villageId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['milk-collection-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['milk-collection-villages'] });
+    },
+  });
+
   useEffect(() => {
     if (!selectedCollectionRouteId && collectionRoutesData?.items?.length) {
       setSelectedCollectionRouteId(collectionRoutesData.items[0].id);
@@ -893,6 +901,17 @@ export default function MilkCollectionPage() {
                           >
                             Open OSM
                           </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Delete village "${row.villageName}"? If it has collection records it will be deactivated instead.`))
+                                deleteVillageMutation.mutate(row.villageId);
+                            }}
+                            disabled={deleteVillageMutation.isPending}
+                            className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
                         </div>
                       </td>
                     </tr>

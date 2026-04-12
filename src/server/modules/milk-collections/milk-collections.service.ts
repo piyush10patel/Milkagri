@@ -517,6 +517,39 @@ export async function createVillage(input: CreateVillageInput) {
   return prisma.village.create({ data: { name } });
 }
 
+export async function deleteVillage(id: string) {
+  const existing = await prisma.village.findUnique({
+    where: { id },
+    include: {
+      _count: {
+        select: {
+          milkCollections: true,
+          individualCollections: true,
+          vehicleLoads: true,
+        },
+      },
+    },
+  });
+  if (!existing) throw new NotFoundError('Village not found');
+
+  const hasRecords =
+    existing._count.milkCollections > 0 ||
+    existing._count.individualCollections > 0 ||
+    existing._count.vehicleLoads > 0;
+
+  if (hasRecords) {
+    await prisma.village.update({
+      where: { id },
+      data: { isActive: false },
+    });
+    return { id, mode: 'deactivated' as const };
+  }
+
+  // Hard delete — cascade will remove stops, stop-farmers, route-stops
+  await prisma.village.delete({ where: { id } });
+  return { id, mode: 'deleted' as const };
+}
+
 export async function createVillageStop(input: CreateVillageStopInput) {
   const village = await prisma.village.findUnique({ where: { id: input.villageId } });
   if (!village) throw new NotFoundError('Village not found');

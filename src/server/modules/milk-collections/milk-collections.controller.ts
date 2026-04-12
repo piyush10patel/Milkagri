@@ -80,6 +80,15 @@ export async function createVillage(req: Request, res: Response, next: NextFunct
   }
 }
 
+export async function deleteVillage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await service.deleteVillage(param(req, 'id'));
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function createVillageStop(req: Request, res: Response, next: NextFunction) {
   try {
     const stop = await service.createVillageStop(req.body);

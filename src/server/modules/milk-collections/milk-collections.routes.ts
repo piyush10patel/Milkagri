@@ -37,6 +37,7 @@ router.get('/villages', authorize(viewRoles), controller.listVillages);
 router.put('/route-stops', authorize(editRoles), csrfProtection, validate({ body: saveCollectionRouteStopsSchema }), controller.saveCollectionRouteStops);
 router.put('/route-agents', authorize(editRoles), csrfProtection, validate({ body: assignCollectionRouteAgentsSchema }), controller.assignCollectionRouteAgents);
 router.post('/villages', authorize(editRoles), csrfProtection, validate({ body: createVillageSchema }), controller.createVillage);
+router.delete('/villages/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.deleteVillage);
 router.post('/village-stops', authorize(editRoles), csrfProtection, validate({ body: createVillageStopSchema }), controller.createVillageStop);
 router.put('/village-stops/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema, body: updateVillageStopSchema }), controller.updateVillageStop);
 router.delete('/village-stops/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.removeVillageStop);
