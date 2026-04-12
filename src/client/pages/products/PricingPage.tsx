@@ -52,6 +52,7 @@ export default function PricingPage() {
   const [search, setSearch] = useState('');
   const [editor, setEditor] = useState<PriceEditorState | null>(null);
   const [error, setError] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
 
   const { data, isLoading } = useQuery({
@@ -89,6 +90,7 @@ export default function PricingPage() {
       queryClient.invalidateQueries({ queryKey: ['pricing-matrix'] });
       setEditor(null);
       setError('');
+      setInfoMessage('Prices saved successfully.');
     },
     onError: (err: { message?: string }) => {
       setError(err.message ?? 'Failed to save prices');
@@ -99,6 +101,8 @@ export default function PricingPage() {
     mutationFn: (name: string) => api.post('/api/v1/pricing-categories', { name }),
     onSuccess: () => {
       setNewCategoryName('');
+      setError('');
+      setInfoMessage('Pricing category added. Now click "Set Prices" on a product row below to assign prices for that category.');
       queryClient.invalidateQueries({ queryKey: ['pricing-categories-admin'] });
       queryClient.invalidateQueries({ queryKey: ['pricing-matrix'] });
     },
@@ -134,6 +138,7 @@ export default function PricingPage() {
 
   function openEditor(row: PricingRow) {
     setError('');
+    setInfoMessage('');
     const prices: Record<string, string> = {
       default: row.latestPrices.default ? String(Number(row.latestPrices.default.price)) : '',
     };
@@ -163,12 +168,16 @@ export default function PricingPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Pricing Plan</h1>
-            <p className="text-sm text-gray-500">Add your own pricing categories and set different prices per milk type without hardcoded Cat 1 or Cat 2 limits.</p>
+            <p className="text-sm text-gray-500">
+              The button here adds a pricing category only. To set the price for a specific milk or product variant, use the
+              product rows below and click "Set Prices".
+            </p>
           </div>
           <form
             onSubmit={(e) => {
               e.preventDefault();
               setError('');
+              setInfoMessage('');
               if (!newCategoryName.trim()) {
                 setError('Enter a pricing category name before adding.');
                 return;
@@ -189,7 +198,7 @@ export default function PricingPage() {
               disabled={createCategoryMutation.isPending}
               className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              {createCategoryMutation.isPending ? 'Adding...' : 'Add'}
+              {createCategoryMutation.isPending ? 'Adding...' : 'Add Category'}
             </button>
           </form>
         </div>
@@ -210,6 +219,12 @@ export default function PricingPage() {
           ))}
         </div>
       </div>
+
+      {infoMessage && (
+        <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+          {infoMessage}
+        </div>
+      )}
 
       <div className="mb-4">
         <input
@@ -305,7 +320,7 @@ export default function PricingPage() {
                         </button>
                       </div>
                     ) : (
-                      <button type="button" onClick={() => openEditor(row)} className="text-blue-600 hover:underline">Edit Prices</button>
+                      <button type="button" onClick={() => openEditor(row)} className="text-blue-600 hover:underline">Set Prices</button>
                     )}
                   </td>
                 </tr>
