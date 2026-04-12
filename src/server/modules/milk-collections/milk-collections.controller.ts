@@ -202,3 +202,21 @@ export async function removeEntry(req: Request, res: Response, next: NextFunctio
     next(err);
   }
 }
+
+export async function removeIndividualRecord(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await service.deleteVillageIndividualCollection(param(req, 'id'));
+    res.json({ message: 'Village individual collection deleted', ...result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function removeVehicleShiftLoad(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await service.deleteMilkVehicleShiftLoad(param(req, 'id'));
+    res.json({ message: 'Vehicle shift load deleted', ...result });
+  } catch (err) {
+    next(err);
+  }
+}

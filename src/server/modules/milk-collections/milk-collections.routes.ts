@@ -46,8 +46,10 @@ router.put('/farmers/:id', authorize(editRoles), csrfProtection, validate({ para
 router.delete('/farmers/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.removeFarmer);
 router.post('/', authorize(editRoles), csrfProtection, validate({ body: saveMilkCollectionSchema }), controller.saveEntry);
 router.post('/individual-records', authorize(editRoles), csrfProtection, validate({ body: saveVillageIndividualCollectionSchema }), controller.saveIndividualRecord);
+router.delete('/individual-records/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.removeIndividualRecord);
 router.post('/vehicle-loads', authorize(editRoles), csrfProtection, validate({ body: saveMilkVehicleLoadSchema }), controller.saveVehicleLoad);
 router.post('/vehicle-shift-loads', authorize(editRoles), csrfProtection, validate({ body: saveMilkVehicleShiftLoadSchema }), controller.saveVehicleShiftLoad);
+router.delete('/vehicle-shift-loads/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.removeVehicleShiftLoad);
 router.delete('/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.removeEntry);
 
 export default router;

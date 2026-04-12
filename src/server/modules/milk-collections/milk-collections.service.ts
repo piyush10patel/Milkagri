@@ -905,6 +905,20 @@ export async function deleteMilkCollection(id: string) {
   return { id };
 }
 
+export async function deleteVillageIndividualCollection(id: string) {
+  const existing = await prisma.villageIndividualCollection.findUnique({ where: { id } });
+  if (!existing) throw new NotFoundError('Village individual collection record not found');
+  await prisma.villageIndividualCollection.delete({ where: { id } });
+  return { id };
+}
+
+export async function deleteMilkVehicleShiftLoad(id: string) {
+  const existing = await prisma.milkVehicleShiftLoad.findUnique({ where: { id } });
+  if (!existing) throw new NotFoundError('Vehicle shift load record not found');
+  await prisma.milkVehicleShiftLoad.delete({ where: { id } });
+  return { id };
+}
+
 export async function getMilkCollectionSummary(date: string) {
   const targetDate = new Date(date);
   const [villages, entries, individualCollections, vehicleShiftLoads, villageRouteAssignmentsData] = await Promise.all([

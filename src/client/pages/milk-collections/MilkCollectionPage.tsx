@@ -50,6 +50,17 @@ interface VehicleShiftLoadEntry {
   recorder?: { id: string; name: string } | null;
 }
 
+interface IndividualCollectionEntry {
+  id: string;
+  villageId: string;
+  villageName: string;
+  deliverySession: 'morning' | 'evening';
+  quantity: number;
+  notes?: string | null;
+  recordedAt: string;
+  recorder?: { id: string; name: string } | null;
+}
+
 interface MilkCollectionSummary {
   date: string;
   shiftTotals: {
@@ -65,6 +76,7 @@ interface MilkCollectionSummary {
     morning: { routeName: string; agentNames: string[] } | null;
     evening: { routeName: string; agentNames: string[] } | null;
   }>;
+  individualCollections: IndividualCollectionEntry[];
   vehicleShiftLoads: VehicleShiftLoadEntry[];
 }
 
@@ -271,6 +283,16 @@ export default function MilkCollectionPage() {
       queryClient.invalidateQueries({ queryKey: ['milk-collection-summary'] });
       queryClient.invalidateQueries({ queryKey: ['milk-collection-villages'] });
     },
+  });
+
+  const deleteIndividualRecordMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/v1/milk-collections/individual-records/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['milk-collection-summary'] }),
+  });
+
+  const deleteVehicleShiftLoadMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/v1/milk-collections/vehicle-shift-loads/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['milk-collection-summary'] }),
   });
 
   useEffect(() => {
@@ -808,15 +830,19 @@ export default function MilkCollectionPage() {
                   <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">Cow</th>
                   <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">Total Loaded</th>
                   <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">Difference</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {(['morning', 'evening'] as const).map((session) => {
-                  const buffalo = data.vehicleShiftLoads.find((entry) => entry.deliverySession === session && entry.milkType === 'buffalo')?.quantity ?? 0;
-                  const cow = data.vehicleShiftLoads.find((entry) => entry.deliverySession === session && entry.milkType === 'cow')?.quantity ?? 0;
+                  const buffaloEntry = data.vehicleShiftLoads.find((entry) => entry.deliverySession === session && entry.milkType === 'buffalo');
+                  const cowEntry = data.vehicleShiftLoads.find((entry) => entry.deliverySession === session && entry.milkType === 'cow');
+                  const buffalo = buffaloEntry?.quantity ?? 0;
+                  const cow = cowEntry?.quantity ?? 0;
                   const totalCollected = data.shiftTotals[session];
                   const totalLoaded = Number((buffalo + cow).toFixed(3));
                   const difference = Number((totalCollected - totalLoaded).toFixed(3));
+                  const hasEntries = buffaloEntry || cowEntry;
                   return (
                     <tr key={session}>
                       <td className="px-4 py-3 text-sm font-medium capitalize text-gray-900">{session}</td>
@@ -825,6 +851,23 @@ export default function MilkCollectionPage() {
                       <td className="px-4 py-3 text-right text-sm text-gray-900">{cow}</td>
                       <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">{totalLoaded}</td>
                       <td className={`px-4 py-3 text-right text-sm font-medium ${difference !== 0 ? 'text-amber-700' : 'text-gray-500'}`}>{difference}</td>
+                      <td className="px-4 py-3 text-right">
+                        {hasEntries && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Delete ${session} vehicle load entries?`)) {
+                                if (buffaloEntry) deleteVehicleShiftLoadMutation.mutate(buffaloEntry.id);
+                                if (cowEntry) deleteVehicleShiftLoadMutation.mutate(cowEntry.id);
+                              }
+                            }}
+                            disabled={deleteVehicleShiftLoadMutation.isPending}
+                            className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -887,6 +930,22 @@ export default function MilkCollectionPage() {
                           >
                             Record Total
                           </button>
+                          {(data.individualCollections ?? []).filter((ic) => ic.villageId === row.villageId).length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm(`Delete recorded totals for "${row.villageName}" on ${date}?`)) {
+                                  (data.individualCollections ?? [])
+                                    .filter((ic) => ic.villageId === row.villageId)
+                                    .forEach((ic) => deleteIndividualRecordMutation.mutate(ic.id));
+                                }
+                              }}
+                              disabled={deleteIndividualRecordMutation.isPending}
+                              className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              Delete Total
+                            </button>
+                          )}
                           <Link
                             to={`/milk-collections/${row.villageId}?date=${date}`}
                             className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
