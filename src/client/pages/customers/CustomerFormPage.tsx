@@ -256,43 +256,51 @@ export default function CustomerFormPage() {
           <label htmlFor="pricingCategory" className="block text-sm font-medium text-gray-700 mb-1">Pricing Category</label>
           <select id="pricingCategory" value={form.pricingCategory} onChange={(e) => setForm({ ...form, pricingCategory: e.target.value })} className={fieldClass('pricingCategory')}>
             <option value="">Select pricing category</option>
-            {pricingCategoriesData?.data?.map((category) => {
-              const matrixRows = pricingMatrixData?.data?.rows ?? [];
-              const priceSummary = matrixRows
-                .map((r) => {
-                  const catPrice = r.latestPrices.categories[category.code];
-                  const defPrice = r.latestPrices.default;
-                  const price = catPrice ?? defPrice;
-                  return price ? `${r.product.name} ₹${Number(price.price).toFixed(0)}` : null;
-                })
-                .filter(Boolean)
-                .slice(0, 3)
-                .join(', ');
-              return (
-                <option key={category.id} value={category.code}>
-                  {category.name}{priceSummary ? ` — ${priceSummary}` : ''}
-                </option>
-              );
-            })}
+            {pricingCategoriesData?.data?.map((category) => (
+              <option key={category.id} value={category.code}>{category.name}</option>
+            ))}
           </select>
           {errors.pricingCategory && <p className="text-xs text-red-600 mt-1">{errors.pricingCategory}</p>}
           {form.pricingCategory && (pricingMatrixData?.data?.rows?.length ?? 0) > 0 && (
             <div className="mt-2 rounded-md border border-blue-100 bg-blue-50 px-3 py-2">
-              <p className="text-xs font-medium text-blue-800 mb-1">Prices for {pricingCategoriesData?.data?.find((c) => c.code === form.pricingCategory)?.name ?? form.pricingCategory}:</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5">
-                {pricingMatrixData?.data?.rows?.map((r) => {
-                  const catPrice = r.latestPrices.categories[form.pricingCategory];
-                  const defPrice = r.latestPrices.default;
-                  const price = catPrice ?? defPrice;
-                  if (!price) return null;
-                  return (
-                    <div key={r.id} className="text-xs text-blue-700">
-                      {r.product.name} {r.quantityPerUnit}{r.unitType.charAt(0)}: <span className="font-medium">₹{Number(price.price).toFixed(2)}</span>
-                      {!catPrice && defPrice ? <span className="text-blue-400 ml-1">(default)</span> : null}
-                    </div>
-                  );
-                })}
-              </div>
+              <p className="text-xs font-medium text-blue-800 mb-2">
+                Price breakdown for {pricingCategoriesData?.data?.find((c) => c.code === form.pricingCategory)?.name ?? form.pricingCategory}:
+              </p>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-blue-600">
+                    <th className="text-left py-0.5 font-medium">Product</th>
+                    <th className="text-left py-0.5 font-medium">Variant</th>
+                    <th className="text-right py-0.5 font-medium">Default (₹)</th>
+                    <th className="text-right py-0.5 font-medium">{pricingCategoriesData?.data?.find((c) => c.code === form.pricingCategory)?.name ?? 'Category'} (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pricingMatrixData?.data?.rows?.map((r) => {
+                    const catPrice = r.latestPrices.categories[form.pricingCategory];
+                    const defPrice = r.latestPrices.default;
+                    if (!catPrice && !defPrice) return null;
+                    const defVal = defPrice ? Number(defPrice.price).toFixed(2) : '—';
+                    const catVal = catPrice ? Number(catPrice.price).toFixed(2) : null;
+                    return (
+                      <tr key={r.id} className="border-t border-blue-100/50">
+                        <td className="py-1 text-blue-800 font-medium">{r.product.name}</td>
+                        <td className="py-1 text-blue-700">{r.quantityPerUnit} {r.unitType}</td>
+                        <td className="py-1 text-right text-blue-600">₹{defVal}</td>
+                        <td className="py-1 text-right font-medium">
+                          {catVal ? (
+                            <span className={Number(catVal) < Number(defVal) ? 'text-green-700' : Number(catVal) > Number(defVal) ? 'text-red-700' : 'text-blue-800'}>
+                              ₹{catVal}
+                            </span>
+                          ) : (
+                            <span className="text-blue-400">₹{defVal} <span className="text-[10px]">(default)</span></span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
