@@ -47,6 +47,7 @@ model User {
   milkVehicleLoads             MilkVehicleLoad[]             @relation("MilkVehicleLoadRecorder")
   milkVehicleShiftLoads        MilkVehicleShiftLoad[]        @relation("MilkVehicleShiftLoadRecorder")
   vehicleGpsPings              VehicleGpsPing[]              @relation("VehicleGpsPingRecorder")
+  handoverNotes                HandoverNote[]                @relation("HandoverNoteCreator")
 
   @@map("users")
 }
@@ -959,4 +960,20 @@ model Wastage {
 
   @@index([productVariantId, wastageDate], map: "idx_wastage_variant_date")
   @@map("wastage")
+}
+
+// ─── Handover Notes ──────────────────────────────────────────────────────────
+
+model HandoverNote {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  noteDate  DateTime @map("note_date") @db.Date
+  content   String   @db.Text
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  creator User @relation("HandoverNoteCreator", fields: [createdBy], references: [id])
+
+  @@index([noteDate], map: "idx_handover_notes_date")
+  @@map("handover_notes")
 }

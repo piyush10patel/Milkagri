@@ -31,6 +31,7 @@ import settingsRoutes from './modules/settings/settings.routes.js';
 import inventoryRoutes from './modules/inventory/inventory.routes.js';
 import pricingCategoriesRoutes from './modules/pricing-categories/pricing-categories.routes.js';
 import milkCollectionsRoutes from './modules/milk-collections/milk-collections.routes.js';
+import handoverRoutes from './modules/handover/handover.routes.js';
 import {
   bootstrapSuperAdmin,
   hasBootstrapAdminEnv,
@@ -256,6 +257,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/pricing-categories', pricingCategoriesRoutes);
 app.use('/api/milk-collections', milkCollectionsRoutes);
+app.use('/api/handover', handoverRoutes);
 
 // Duplicate under /api/v1 so client calls with v1 prefix work
 app.use('/api/v1/auth', authRoutes);
@@ -277,6 +279,7 @@ app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/pricing-categories', pricingCategoriesRoutes);
 app.use('/api/v1/milk-collections', milkCollectionsRoutes);
+app.use('/api/v1/handover', handoverRoutes);
 
 // ---------------------------------------------------------------------------
 // Serve built frontend in production
