@@ -95,9 +95,12 @@ function VariantList({ productId }: { productId: string }) {
         <div key={v.id} className="border border-gray-100 rounded p-2">
           <div className="flex items-center justify-between">
             <span className="text-sm">{v.quantityPerUnit} {v.unitType} {v.sku ? `(${v.sku})` : ''} {!v.isActive && <span className="text-xs text-red-600">Inactive</span>}</span>
-            <button onClick={() => setPriceView(priceView === v.id ? null : v.id)} className="text-xs text-blue-600 hover:underline">
-              {priceView === v.id ? 'Hide Prices' : 'Prices'}
-            </button>
+            <div className="flex items-center gap-2">
+              <Link to={`/products/${productId}/edit`} className="text-xs text-blue-600 hover:underline">Set Prices</Link>
+              <button onClick={() => setPriceView(priceView === v.id ? null : v.id)} className="text-xs text-blue-600 hover:underline">
+                {priceView === v.id ? 'Hide Prices' : 'Prices'}
+              </button>
+            </div>
           </div>
           {priceView === v.id && <PriceHistory productId={productId} variantId={v.id} />}
         </div>
