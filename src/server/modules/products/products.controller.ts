@@ -88,7 +88,7 @@ export async function update(req: Request, res: Response, next: NextFunction) {
     res.locals.audit = {
       actionType: 'update',
       entityType: 'product',
-      entityId: product.id,
+      entityId: product!.id,
       changes,
     };
     res.json(product);
@@ -169,13 +169,12 @@ export async function updateVariant(req: Request, res: Response, next: NextFunct
 }
 
 // ---------------------------------------------------------------------------
-// POST /products/:id/variants/:vid/prices
+// POST /products/:id/prices
 // ---------------------------------------------------------------------------
 export async function addPrice(req: Request, res: Response, next: NextFunction) {
   try {
     const price = await productsService.addPrice(
       param(req, 'id'),
-      param(req, 'vid'),
       req.body,
     );
     res.locals.audit = {
@@ -190,7 +189,7 @@ export async function addPrice(req: Request, res: Response, next: NextFunction) 
 }
 
 // ---------------------------------------------------------------------------
-// GET /products/:id/variants/:vid/prices
+// GET /products/:id/prices
 // ---------------------------------------------------------------------------
 export async function getPriceHistory(req: Request, res: Response, next: NextFunction) {
   try {
@@ -200,7 +199,6 @@ export async function getPriceHistory(req: Request, res: Response, next: NextFun
     );
     const { prices, total } = await productsService.getPriceHistory(
       param(req, 'id'),
-      param(req, 'vid'),
       pagination,
     );
     res.json(paginatedResponse(prices, total, pagination));

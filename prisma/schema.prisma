@@ -138,6 +138,7 @@ model Product {
 
   // Relations
   variants ProductVariant[]
+  prices   ProductPrice[]
 
   @@map("products")
 }
@@ -154,7 +155,6 @@ model ProductVariant {
 
   // Relations
   product          Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
-  prices           ProductPrice[]
   subscriptions    Subscription[]
   deliveryOrders   DeliveryOrder[]
   invoiceLineItems InvoiceLineItem[]
@@ -173,19 +173,19 @@ enum UnitType {
 }
 
 model ProductPrice {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  productVariantId String   @map("product_variant_id") @db.Uuid
-  price            Decimal  @db.Decimal(10, 2)
-  effectiveDate    DateTime @map("effective_date") @db.Date
-  branch           String?  @db.VarChar(100)
-  pricingCategory  String?  @map("pricing_category") @db.VarChar(100)
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId       String   @map("product_id") @db.Uuid
+  price           Decimal  @db.Decimal(10, 2)
+  effectiveDate   DateTime @map("effective_date") @db.Date
+  branch          String?  @db.VarChar(100)
+  pricingCategory String?  @map("pricing_category") @db.VarChar(100)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   // Relations
-  productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  @@unique([productVariantId, effectiveDate, branch, pricingCategory], map: "uq_product_prices_variant_date_branch_category")
-  @@index([productVariantId, effectiveDate(sort: Desc), pricingCategory], map: "idx_product_prices_lookup")
+  @@unique([productId, effectiveDate, branch, pricingCategory], map: "uq_product_prices_product_date_branch_category")
+  @@index([productId, effectiveDate(sort: Desc), pricingCategory], map: "idx_product_prices_lookup")
   @@map("product_prices")
 }
 

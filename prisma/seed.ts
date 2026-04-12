@@ -221,25 +221,25 @@ async function main() {
   const effectiveDate = new Date(priceDate.toISOString().split('T')[0] as string);
 
   const priceEntries = [
-    { productVariantId: cowMilk500ml.id, price: 30 },
-    { productVariantId: cowMilk1L.id, price: 56 },
-    { productVariantId: buffaloMilk1L.id, price: 70 },
-    { productVariantId: curd500g.id, price: 40 },
+    { productId: cowMilk.id, price: 56 },
+    { productId: buffaloMilk.id, price: 70 },
+    { productId: curd.id, price: 40 },
   ];
 
   for (const entry of priceEntries) {
     const existingPrice = await prisma.productPrice.findFirst({
       where: {
-        productVariantId: entry.productVariantId,
+        productId: entry.productId,
         effectiveDate,
         branch: null,
+        pricingCategory: null,
       },
     });
 
     if (!existingPrice) {
       await prisma.productPrice.create({
         data: {
-          productVariantId: entry.productVariantId,
+          productId: entry.productId,
           price: entry.price,
           effectiveDate,
         },

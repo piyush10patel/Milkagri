@@ -13,9 +13,8 @@ import type {
 import type { Prisma } from '@prisma/client';
 
 const productInclude = {
-  variants: {
-    include: { prices: { orderBy: { effectiveDate: 'desc' as const }, take: 1 } },
-  },
+  variants: true,
+  prices: { orderBy: { effectiveDate: 'desc' as const }, take: 5 },
 } satisfies Prisma.ProductInclude;
 
 // ---------------------------------------------------------------------------
@@ -69,26 +68,83 @@ export async function getProduct(id: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Create product
+// Create product (with default price)
 // ---------------------------------------------------------------------------
 export async function createProduct(input: CreateProductInput) {
+  const { defaultPrice, ...productData } = input;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   return prisma.product.create({
-    data: input,
+    data: {
+      ...productData,
+      prices: {
+        create: {
+          price: defaultPrice,
+          effectiveDate: today,
+          branch: null,
+          pricingCategory: null,
+        },
+      },
+    },
     include: productInclude,
   });
 }
 
 // ---------------------------------------------------------------------------
-// Update product
+// Update product (optionally update default price)
 // ---------------------------------------------------------------------------
 export async function updateProduct(id: string, input: UpdateProductInput) {
   const existing = await prisma.product.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError('Product not found');
-  return prisma.product.update({
+
+  const { defaultPrice, ...productData } = input;
+
+  const product = await prisma.product.update({
     where: { id },
-    data: input,
+    data: productData,
     include: productInclude,
   });
+
+  if (defaultPrice !== undefined) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Check if a default price record already exists for today
+    const existingPrice = await prisma.productPrice.findFirst({
+      where: {
+        productId: id,
+        effectiveDate: today,
+        branch: null,
+        pricingCategory: null,
+      },
+    });
+
+    if (existingPrice) {
+      await prisma.productPrice.update({
+        where: { id: existingPrice.id },
+        data: { price: defaultPrice },
+      });
+    } else {
+      await prisma.productPrice.create({
+        data: {
+          productId: id,
+          price: defaultPrice,
+          effectiveDate: today,
+          branch: null,
+          pricingCategory: null,
+        },
+      });
+    }
+
+    // Re-fetch to include updated prices
+    return prisma.product.findUnique({
+      where: { id },
+      include: productInclude,
+    });
+  }
+
+  return product;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +161,6 @@ export async function listVariants(productId: string, query: VariantQuery) {
 
   return prisma.productVariant.findMany({
     where,
-    include: { prices: { orderBy: { effectiveDate: 'desc' }, take: 1 } },
     orderBy: { createdAt: 'asc' },
   });
 }
@@ -124,7 +179,6 @@ export async function createVariant(productId: string, input: CreateVariantInput
 
   return prisma.productVariant.create({
     data: { productId, ...input },
-    include: { prices: { orderBy: { effectiveDate: 'desc' }, take: 1 } },
   });
 }
 
@@ -149,7 +203,6 @@ export async function updateVariant(
   return prisma.productVariant.update({
     where: { id: variantId },
     data: input,
-    include: { prices: { orderBy: { effectiveDate: 'desc' }, take: 1 } },
   });
 }
 
@@ -176,36 +229,40 @@ export async function deleteVariant(productId: string, variantId: string) {
     });
   }
 
-  // Hard delete if nothing references it
-  await prisma.productPrice.deleteMany({ where: { productVariantId: variantId } });
+  // Hard delete if nothing references it — no price cleanup needed
+  // (prices are now at product level, not variant level)
   return prisma.productVariant.delete({ where: { id: variantId } });
 }
 
 // ---------------------------------------------------------------------------
-// Add price entry
+// Add price entry (product-level)
 // ---------------------------------------------------------------------------
 export async function addPrice(
   productId: string,
-  variantId: string,
   input: AddPriceInput,
 ) {
-  const variant = await prisma.productVariant.findFirst({
-    where: { id: variantId, productId },
-  });
-  if (!variant) throw new NotFoundError('Variant not found');
+  const product = await prisma.product.findUnique({ where: { id: productId } });
+  if (!product) throw new NotFoundError('Product not found');
 
+  // If a pricing category is provided, ensure it exists — create if it doesn't
   if (input.pricingCategory) {
-    const category = await prisma.pricingCategory.findFirst({
-      where: { code: input.pricingCategory, isActive: true },
+    const existing = await prisma.pricingCategory.findFirst({
+      where: { code: input.pricingCategory },
     });
-    if (!category) {
-      throw new NotFoundError('Pricing category not found');
+    if (!existing) {
+      await prisma.pricingCategory.create({
+        data: {
+          code: input.pricingCategory,
+          name: input.pricingCategory,
+          isActive: true,
+        },
+      });
     }
   }
 
   return prisma.productPrice.create({
     data: {
-      productVariantId: variantId,
+      productId,
       price: input.price,
       effectiveDate: new Date(input.effectiveDate),
       branch: input.branch ?? null,
@@ -215,19 +272,16 @@ export async function addPrice(
 }
 
 // ---------------------------------------------------------------------------
-// Get price history for a variant
+// Get price history for a product
 // ---------------------------------------------------------------------------
 export async function getPriceHistory(
   productId: string,
-  variantId: string,
   pagination: PaginationParams,
 ) {
-  const variant = await prisma.productVariant.findFirst({
-    where: { id: variantId, productId },
-  });
-  if (!variant) throw new NotFoundError('Variant not found');
+  const product = await prisma.product.findUnique({ where: { id: productId } });
+  if (!product) throw new NotFoundError('Product not found');
 
-  const where: Prisma.ProductPriceWhereInput = { productVariantId: variantId };
+  const where: Prisma.ProductPriceWhereInput = { productId };
 
   const [prices, total] = await Promise.all([
     prisma.productPrice.findMany({
@@ -243,7 +297,7 @@ export async function getPriceHistory(
 }
 
 // ---------------------------------------------------------------------------
-// Pricing matrix for category-based billing
+// Pricing matrix for category-based billing (one row per product)
 // ---------------------------------------------------------------------------
 export async function getPricingMatrix() {
   const categories = await prisma.pricingCategory.findMany({
@@ -251,34 +305,49 @@ export async function getPricingMatrix() {
     orderBy: { name: 'asc' },
   });
 
-  const variants = await prisma.productVariant.findMany({
+  const products = await prisma.product.findMany({
     where: { isActive: true },
     include: {
-      product: { select: { id: true, name: true } },
       prices: {
         where: { branch: null },
         orderBy: [{ effectiveDate: 'desc' }, { createdAt: 'desc' }],
       },
     },
-    orderBy: [{ product: { name: 'asc' } }, { quantityPerUnit: 'asc' }],
+    orderBy: { name: 'asc' },
   });
 
-  const rows = variants.map((variant) => {
-    const categoryPrices = Object.fromEntries(
-      categories.map((category) => [
-        category.code,
-        variant.prices.find((price) => price.pricingCategory === category.code) ?? null,
-      ]),
-    );
+  const rows = products.map((product) => {
+    const categoryPrices: Record<string, { price: number; effectiveDate: string } | null> =
+      Object.fromEntries(
+        categories.map((category) => {
+          const priceRecord = product.prices.find(
+            (p) => p.pricingCategory === category.code,
+          );
+          return [
+            category.code,
+            priceRecord
+              ? {
+                  price: Number(priceRecord.price),
+                  effectiveDate: priceRecord.effectiveDate.toISOString().slice(0, 10),
+                }
+              : null,
+          ];
+        }),
+      );
+
+    const defaultPriceRecord = product.prices.find((p) => !p.pricingCategory);
 
     return {
-      id: variant.id,
-      sku: variant.sku,
-      unitType: variant.unitType,
-      quantityPerUnit: variant.quantityPerUnit,
-      product: variant.product,
+      id: product.id,
+      name: product.name,
+      category: product.category ?? '',
       latestPrices: {
-        default: variant.prices.find((price) => !price.pricingCategory) ?? null,
+        default: defaultPriceRecord
+          ? {
+              price: Number(defaultPriceRecord.price),
+              effectiveDate: defaultPriceRecord.effectiveDate.toISOString().slice(0, 10),
+            }
+          : null,
         categories: categoryPrices,
       },
     };
@@ -289,7 +358,6 @@ export async function getPricingMatrix() {
       id: category.id,
       code: category.code,
       name: category.name,
-      isActive: category.isActive,
     })),
     rows,
   };

@@ -31,7 +31,7 @@ export async function generateInvoicesForCycle(cycleStart: string, cycleEnd: str
       deliveryDate: { gte: cycleStartDate, lte: cycleEndDate },
     },
     include: {
-      productVariant: true,
+      productVariant: { include: { product: true } },
     },
     orderBy: [{ customerId: 'asc' }, { deliveryDate: 'asc' }],
   });
@@ -95,7 +95,7 @@ export async function generateInvoicesForCycle(cycleStart: string, cycleEnd: str
 
     for (const order of orders) {
       const priceRecord = await getEffectivePrice(
-        order.productVariantId,
+        order.productVariant.productId,
         order.deliveryDate,
         null,
         customer.pricingCategory,
@@ -227,7 +227,7 @@ export async function regenerateInvoice(invoiceId: string) {
       status: 'delivered',
       deliveryDate: { gte: cycleStart, lte: cycleEnd },
     },
-    include: { productVariant: true },
+    include: { productVariant: { include: { product: true } } },
     orderBy: { deliveryDate: 'asc' },
   });
 
@@ -245,7 +245,7 @@ export async function regenerateInvoice(invoiceId: string) {
 
   for (const order of deliveredOrders) {
     const priceRecord = await getEffectivePrice(
-      order.productVariantId,
+      order.productVariant.productId,
       order.deliveryDate,
       null,
       customer.pricingCategory,
@@ -636,7 +636,7 @@ export async function generateInvoiceForCustomer(
       status: 'delivered',
       deliveryDate: { gte: cycleStart, lte: cycleEnd },
     },
-    include: { productVariant: true },
+    include: { productVariant: { include: { product: true } } },
     orderBy: { deliveryDate: 'asc' },
   });
 
@@ -665,7 +665,7 @@ export async function generateInvoiceForCustomer(
 
   for (const order of deliveredOrders) {
     const priceRecord = await getEffectivePrice(
-      order.productVariantId,
+      order.productVariant.productId,
       order.deliveryDate,
       null,
       customer.pricingCategory,

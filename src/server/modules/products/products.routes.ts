@@ -100,21 +100,21 @@ router.delete(
   controller.deleteVariant,
 );
 
-// POST /products/:id/variants/:vid/prices
+// POST /products/:id/prices (product-level pricing)
 router.post(
-  '/:id/variants/:vid/prices',
+  '/:id/prices',
   authorize(pricingEditors),
   csrfProtection,
-  validate({ params: uuidWithSubParam('vid'), body: addPriceSchema }),
+  validate({ params: uuidParamSchema, body: addPriceSchema }),
   auditLog(),
   controller.addPrice,
 );
 
-// GET /products/:id/variants/:vid/prices
+// GET /products/:id/prices (product-level price history)
 router.get(
-  '/:id/variants/:vid/prices',
+  '/:id/prices',
   authorize(adminPlus),
-  validate({ params: uuidWithSubParam('vid'), query: priceHistoryQuerySchema }),
+  validate({ params: uuidParamSchema, query: priceHistoryQuerySchema }),
   controller.getPriceHistory,
 );
 

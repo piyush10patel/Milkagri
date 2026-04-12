@@ -47,7 +47,7 @@ function findMostRecentPrice(
     .sort((a, b) => b.effectiveDate.getTime() - a.effectiveDate.getTime())[0] ?? null;
 }
 
-const VARIANT_ID = 'variant-1';
+const PRODUCT_ID = 'product-1';
 
 // ---------------------------------------------------------------------------
 // Arbitraries
@@ -88,7 +88,7 @@ describe('Property 1: Most recent effective price is selected', () => {
           return findMostRecentPrice(prices, targetDate, branchFilter ?? null, catFilter ?? null);
         });
 
-        return getEffectivePrice(VARIANT_ID, targetDate).then(
+        return getEffectivePrice(PRODUCT_ID, targetDate).then(
           (result) => {
             // If we got a result, it should match the expected price
             if (expected) {
@@ -130,7 +130,7 @@ describe('Property 2: Future prices are never applied early', () => {
           return findMostRecentPrice(prices, targetDate, branchFilter ?? null, catFilter ?? null);
         });
 
-        return getEffectivePrice(VARIANT_ID, targetDate).then(
+        return getEffectivePrice(PRODUCT_ID, targetDate).then(
           (result) => {
             // The returned price's effective date must never be in the future
             expect(result.effectiveDate <= targetDate).toBe(true);
@@ -178,7 +178,7 @@ describe('Property 3: Branch override takes precedence', () => {
             return findMostRecentPrice(allPrices, targetDate, branchFilter ?? null, catFilter ?? null);
           });
 
-          return getEffectivePrice(VARIANT_ID, targetDate, 'branch-A').then(
+          return getEffectivePrice(PRODUCT_ID, targetDate, 'branch-A').then(
             (result) => {
               if (expectedBranch) {
                 // Branch price should take precedence
@@ -194,6 +194,132 @@ describe('Property 3: Branch override takes precedence', () => {
             (err) => {
               // Only fails if neither branch nor default price exists
               expect(!expectedBranch && !expectedDefault).toBe(true);
+              expect(err.message).toContain('No effective price found');
+              return true;
+            },
+          );
+        },
+      ),
+      { numRuns: 200 },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feature: product-level-pricing, Property 10: Price resolution fallback order and most-recent-date selection
+// Validates: Requirements 6.2, 6.4
+// ---------------------------------------------------------------------------
+describe('Property 10: Price resolution fallback order and most-recent-date selection', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  /**
+   * Arbitrary: generate a set of ProductPrice records across various
+   * branch / category / date combinations for a single product.
+   */
+  const branchArb = fc.oneof(fc.constant(null), fc.constant('branch-A'), fc.constant('branch-B'));
+  const categoryArb = fc.oneof(fc.constant(null), fc.constant('cat-1'), fc.constant('cat-2'));
+
+  const priceRecordArb = fc.record({
+    effectiveDate: fc.integer({ min: 0, max: 3650 }).map(dateFromOffset),
+    price: fc.integer({ min: 1, max: 100000 }).map((n) => n / 100),
+    branch: branchArb,
+    pricingCategory: categoryArb,
+  });
+
+  const priceSetArb = fc.array(priceRecordArb, { minLength: 1, maxLength: 30 });
+
+  /** Reference implementation of the 4-step fallback. */
+  function expectedFallback(
+    prices: { effectiveDate: Date; price: number; branch: string | null; pricingCategory: string | null }[],
+    targetDate: Date,
+    branch: string | null,
+    pricingCategory: string | null,
+  ) {
+    const steps: { branch: string | null; pricingCategory: string | null }[] = [];
+
+    // Build fallback steps in order
+    if (branch && pricingCategory) steps.push({ branch, pricingCategory });
+    if (branch) steps.push({ branch, pricingCategory: null });
+    if (pricingCategory) steps.push({ branch: null, pricingCategory });
+    steps.push({ branch: null, pricingCategory: null });
+
+    for (const step of steps) {
+      const match = findMostRecentPrice(prices, targetDate, step.branch, step.pricingCategory);
+      if (match) return match;
+    }
+    return null;
+  }
+
+  it('follows the 4-step fallback order and selects the most recent date <= targetDate', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        priceSetArb,
+        targetDateArb,
+        branchArb,
+        categoryArb,
+        async (prices, targetDate, queryBranch, queryCategory) => {
+          const expected = expectedFallback(prices, targetDate, queryBranch, queryCategory);
+
+          mockFindFirst.mockImplementation(async (args: any) => {
+            const branchFilter = args.where.branch;
+            const catFilter = args.where.pricingCategory;
+            return findMostRecentPrice(
+              prices,
+              targetDate,
+              branchFilter ?? null,
+              catFilter === undefined ? null : catFilter,
+            );
+          });
+
+          return getEffectivePrice(PRODUCT_ID, targetDate, queryBranch, queryCategory).then(
+            (result) => {
+              // Must have found a match
+              expect(expected).not.toBeNull();
+              expect(result.price).toBe(expected!.price);
+              expect(result.effectiveDate.getTime()).toBe(expected!.effectiveDate.getTime());
+              expect(result.branch).toBe(expected!.branch);
+              // Effective date must be on or before target date
+              expect(result.effectiveDate <= targetDate).toBe(true);
+              return true;
+            },
+            (err) => {
+              // Should only throw if no fallback step matched
+              expect(expected).toBeNull();
+              expect(err.message).toContain('No effective price found');
+              return true;
+            },
+          );
+        },
+      ),
+      { numRuns: 200 },
+    );
+  });
+
+  it('never returns a record with effectiveDate > targetDate', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        priceSetArb,
+        targetDateArb,
+        branchArb,
+        categoryArb,
+        async (prices, targetDate, queryBranch, queryCategory) => {
+          mockFindFirst.mockImplementation(async (args: any) => {
+            const branchFilter = args.where.branch;
+            const catFilter = args.where.pricingCategory;
+            return findMostRecentPrice(
+              prices,
+              targetDate,
+              branchFilter ?? null,
+              catFilter === undefined ? null : catFilter,
+            );
+          });
+
+          return getEffectivePrice(PRODUCT_ID, targetDate, queryBranch, queryCategory).then(
+            (result) => {
+              expect(result.effectiveDate <= targetDate).toBe(true);
+              return true;
+            },
+            (err) => {
               expect(err.message).toContain('No effective price found');
               return true;
             },

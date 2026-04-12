@@ -8,6 +8,7 @@ export const createProductSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   category: z.string().max(100).optional(),
   description: z.string().optional(),
+  defaultPrice: z.number().positive('Price must be positive'),
 });
 
 export const updateProductSchema = z.object({
@@ -15,6 +16,7 @@ export const updateProductSchema = z.object({
   category: z.string().max(100).optional(),
   description: z.string().optional(),
   isActive: z.boolean().optional(),
+  defaultPrice: z.number().positive('Price must be positive').optional(),
 });
 
 // ---------------------------------------------------------------------------

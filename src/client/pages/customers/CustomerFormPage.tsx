@@ -27,12 +27,7 @@ interface CustomerData {
 }
 
 interface RouteOption { id: string; name: string; }
-interface PricingCategoryOption { id: string; code: string; name: string; isActive: boolean; }
-interface PricingMatrixRow {
-  id: string; sku?: string | null; unitType: string; quantityPerUnit: number;
-  product: { id: string; name: string };
-  latestPrices: { default: { price: number } | null; categories: Record<string, { price: number } | null> };
-}
+interface PricingCategoryOption { id: string; code: string; name: string; }
 type PinPoint = { lat: number; lng: number };
 
 declare global {
@@ -87,7 +82,6 @@ export default function CustomerFormPage() {
   const [address, setAddress] = useState({ addressLine1: '', addressLine2: '', city: '', state: '', pincode: '', latitude: '', longitude: '' });
   const [primaryAddressId, setPrimaryAddressId] = useState<string>('');
   const [showPinModal, setShowPinModal] = useState(false);
-  const [showPricePreview, setShowPricePreview] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: existing } = useQuery({
@@ -104,11 +98,6 @@ export default function CustomerFormPage() {
   const { data: pricingCategoriesData } = useQuery({
     queryKey: ['pricing-categories-options'],
     queryFn: () => api.get<{ data: PricingCategoryOption[] }>('/api/v1/pricing-categories'),
-  });
-
-  const { data: pricingMatrixData } = useQuery({
-    queryKey: ['pricing-matrix-customer'],
-    queryFn: () => api.get<{ data: { categories: PricingCategoryOption[]; rows: PricingMatrixRow[] } }>('/api/v1/products/pricing-matrix'),
   });
 
   useEffect(() => {
@@ -131,11 +120,7 @@ export default function CustomerFormPage() {
     }
   }, [existing]);
 
-  useEffect(() => {
-    if (!isEdit && !form.pricingCategory && pricingCategoriesData?.data?.length) {
-      setForm((current) => ({ ...current, pricingCategory: pricingCategoriesData.data[0].code }));
-    }
-  }, [form.pricingCategory, isEdit, pricingCategoriesData]);
+
 
   const mutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
@@ -255,57 +240,13 @@ export default function CustomerFormPage() {
 
         <div>
           <label htmlFor="pricingCategory" className="block text-sm font-medium text-gray-700 mb-1">Pricing Category</label>
-          <select id="pricingCategory" value={form.pricingCategory} onChange={(e) => { setForm({ ...form, pricingCategory: e.target.value }); setShowPricePreview(false); }} className={fieldClass('pricingCategory')}>
-            <option value="">Select pricing category</option>
-            {pricingCategoriesData?.data?.map((category) => (
+          <select id="pricingCategory" value={form.pricingCategory} onChange={(e) => setForm({ ...form, pricingCategory: e.target.value })} className={fieldClass('pricingCategory')}>
+            <option value="">Default</option>
+            {pricingCategoriesData?.data?.map((category: PricingCategoryOption) => (
               <option key={category.id} value={category.code}>{category.name}</option>
             ))}
           </select>
           {errors.pricingCategory && <p className="text-xs text-red-600 mt-1">{errors.pricingCategory}</p>}
-          {form.pricingCategory && (pricingMatrixData?.data?.rows?.length ?? 0) > 0 && (() => {
-            const catName = pricingCategoriesData?.data?.find((c) => c.code === form.pricingCategory)?.name ?? form.pricingCategory;
-            const rows = pricingMatrixData?.data?.rows ?? [];
-            const withCatPrice = rows.filter((r) => r.latestPrices.categories[form.pricingCategory]);
-            return (
-              <div className="mt-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-xs text-gray-500">
-                    {catName}: {withCatPrice.length} product{withCatPrice.length !== 1 ? 's' : ''} with custom pricing, {rows.length - withCatPrice.length} at default
-                  </p>
-                  <button type="button" onClick={() => setShowPricePreview(!showPricePreview)} className="text-xs text-blue-600 hover:underline">
-                    {showPricePreview ? 'Hide' : 'View prices'}
-                  </button>
-                </div>
-                {showPricePreview && (
-                  <div className="mt-2 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 max-h-48 overflow-y-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="text-blue-600">
-                          <th className="text-left py-0.5 font-medium">Product</th>
-                          <th className="text-right py-0.5 font-medium">Default</th>
-                          <th className="text-right py-0.5 font-medium">{catName}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((r) => {
-                          const catPrice = r.latestPrices.categories[form.pricingCategory];
-                          const defPrice = r.latestPrices.default;
-                          if (!catPrice && !defPrice) return null;
-                          return (
-                            <tr key={r.id} className="border-t border-blue-100/50">
-                              <td className="py-0.5 text-blue-800">{r.product.name} — {r.quantityPerUnit} {r.unitType}</td>
-                              <td className="py-0.5 text-right text-blue-600">{defPrice ? `₹${Number(defPrice.price).toFixed(0)}` : '—'}</td>
-                              <td className="py-0.5 text-right font-medium">{catPrice ? <span className="text-blue-900">₹{Number(catPrice.price).toFixed(0)}</span> : <span className="text-blue-400 text-[10px]">default</span>}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
         </div>
 
         <div>
