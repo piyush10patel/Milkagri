@@ -203,7 +203,7 @@ export default function ProductFormPage() {
               </div>
               {priceTarget === v.id && (
                 <form onSubmit={handleAddPrice} className="mt-2 border-t border-gray-50 pt-2 space-y-2">
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="block text-xs text-gray-600 mb-1">Price *</label>
                       <input type="number" step="0.01" min="0.01" value={priceForm.price} onChange={(e) => setPriceForm({ ...priceForm, price: e.target.value })} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" required />
@@ -216,15 +216,15 @@ export default function ProductFormPage() {
                       <label className="block text-xs text-gray-600 mb-1">Branch</label>
                       <input value={priceForm.branch} onChange={(e) => setPriceForm({ ...priceForm, branch: e.target.value })} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" placeholder="Default" />
                     </div>
-                    <div>
-                      <label htmlFor={`pricingCat-${v.id}`} className="block text-xs text-gray-600 mb-1">Pricing Category</label>
-                      <select id={`pricingCat-${v.id}`} value={priceForm.pricingCategory} onChange={(e) => setPriceForm({ ...priceForm, pricingCategory: e.target.value })} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm">
-                        <option value="">Default (All)</option>
-                        {pricingCategoriesData?.data?.map((category) => (
-                          <option key={category.id} value={category.code}>{category.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor={`pricingCat-${v.id}`} className="block text-xs text-gray-600 mb-1">Pricing Category</label>
+                    <select id={`pricingCat-${v.id}`} value={priceForm.pricingCategory} onChange={(e) => setPriceForm({ ...priceForm, pricingCategory: e.target.value })} className="w-full sm:w-1/3 rounded-md border border-gray-300 px-2 py-1.5 text-sm">
+                      <option value="">Default (All)</option>
+                      {pricingCategoriesData?.data?.map((category) => (
+                        <option key={category.id} value={category.code}>{category.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <button type="submit" disabled={priceMutation.isPending} className="rounded-md bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:opacity-50">
                     {priceMutation.isPending ? 'Adding…' : 'Add Price'}
