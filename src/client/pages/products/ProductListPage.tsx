@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 
@@ -8,6 +8,7 @@ interface Product { id: string; name: string; category?: string; description?: s
 interface ListResponse { data: Product[]; pagination: { page: number; limit: number; total: number; totalPages: number }; }
 
 export default function ProductListPage() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -19,6 +20,11 @@ export default function ProductListPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['products', page, search],
     queryFn: () => api.get<ListResponse>(`/api/v1/products?${params}`),
+  });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => api.put(`/api/v1/products/${id}`, { isActive }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
   });
 
   function toggleExpand(id: string) {
@@ -50,6 +56,10 @@ export default function ProductListPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Link to={`/products/${p.id}/edit`} onClick={(e) => e.stopPropagation()} className="text-xs text-blue-600 hover:underline">Edit</Link>
+                <button type="button" onClick={(e) => { e.stopPropagation(); toggleActiveMutation.mutate({ id: p.id, isActive: !p.isActive }); }}
+                  className={`text-xs hover:underline ${p.isActive ? 'text-red-600' : 'text-green-600'}`}>
+                  {p.isActive ? 'Deactivate' : 'Activate'}
+                </button>
                 <span className="text-gray-400 text-xs">{expanded.has(p.id) ? '▲' : '▼'}</span>
               </div>
             </div>

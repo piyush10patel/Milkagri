@@ -152,7 +152,97 @@ export default function InventoryPage() {
           onClose={() => { setShowWastageForm(false); fetchReport(); }}
         />
       )}
+
+      {/* Inward Stock History */}
+      <InwardHistory date={date} />
+
+      {/* Wastage History */}
+      <WastageHistory date={date} />
     </div>
+  );
+}
+
+function InwardHistory({ date }: { date: string }) {
+  const [items, setItems] = useState<Array<{ id: string; productVariant: { product: { name: string }; unitType: string; quantityPerUnit: number; sku?: string | null }; quantity: number; supplierName?: string; createdAt: string }>>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    api.get<{ items: typeof items }>(`/api/inventory/inward?date=${date}`)
+      .then(res => setItems(res.items ?? []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [date]);
+
+  if (loading) return <p className="text-sm text-gray-400">Loading inward records...</p>;
+  if (!items.length) return <section className="bg-white rounded-lg border border-gray-200 p-4"><h2 className="text-sm font-semibold text-gray-900 mb-2">Inward Stock Records</h2><p className="text-sm text-gray-500">No inward stock recorded for this date.</p></section>;
+
+  return (
+    <section className="bg-white rounded-lg border border-gray-200 p-4">
+      <h2 className="text-sm font-semibold text-gray-900 mb-3">Inward Stock Records</h2>
+      <table className="min-w-full divide-y divide-gray-200 text-sm">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-3 py-2 text-left font-medium text-gray-600">Product</th>
+            <th className="px-3 py-2 text-right font-medium text-gray-600">Qty</th>
+            <th className="px-3 py-2 text-left font-medium text-gray-600">Supplier</th>
+            <th className="px-3 py-2 text-left font-medium text-gray-600">Time</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {items.map(i => (
+            <tr key={i.id}>
+              <td className="px-3 py-2">{i.productVariant?.product?.name ?? '—'} {i.productVariant?.quantityPerUnit}{i.productVariant?.unitType?.charAt(0)}</td>
+              <td className="px-3 py-2 text-right font-medium">{i.quantity}</td>
+              <td className="px-3 py-2 text-gray-600">{i.supplierName ?? '—'}</td>
+              <td className="px-3 py-2 text-gray-500 text-xs">{new Date(i.createdAt).toLocaleTimeString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+function WastageHistory({ date }: { date: string }) {
+  const [items, setItems] = useState<Array<{ id: string; productVariant: { product: { name: string }; unitType: string; quantityPerUnit: number; sku?: string | null }; quantity: number; reason?: string; createdAt: string }>>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    api.get<{ items: typeof items }>(`/api/inventory/wastage?date=${date}`)
+      .then(res => setItems(res.items ?? []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [date]);
+
+  if (loading) return <p className="text-sm text-gray-400">Loading wastage records...</p>;
+  if (!items.length) return <section className="bg-white rounded-lg border border-gray-200 p-4"><h2 className="text-sm font-semibold text-gray-900 mb-2">Wastage Records</h2><p className="text-sm text-gray-500">No wastage recorded for this date.</p></section>;
+
+  return (
+    <section className="bg-white rounded-lg border border-gray-200 p-4">
+      <h2 className="text-sm font-semibold text-gray-900 mb-3">Wastage Records</h2>
+      <table className="min-w-full divide-y divide-gray-200 text-sm">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-3 py-2 text-left font-medium text-gray-600">Product</th>
+            <th className="px-3 py-2 text-right font-medium text-gray-600">Qty</th>
+            <th className="px-3 py-2 text-left font-medium text-gray-600">Reason</th>
+            <th className="px-3 py-2 text-left font-medium text-gray-600">Time</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {items.map(i => (
+            <tr key={i.id}>
+              <td className="px-3 py-2">{i.productVariant?.product?.name ?? '—'} {i.productVariant?.quantityPerUnit}{i.productVariant?.unitType?.charAt(0)}</td>
+              <td className="px-3 py-2 text-right font-medium text-red-600">{i.quantity}</td>
+              <td className="px-3 py-2 text-gray-600">{i.reason ?? '—'}</td>
+              <td className="px-3 py-2 text-gray-500 text-xs">{new Date(i.createdAt).toLocaleTimeString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }
 

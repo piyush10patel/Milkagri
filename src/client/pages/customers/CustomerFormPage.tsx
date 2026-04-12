@@ -28,6 +28,11 @@ interface CustomerData {
 
 interface RouteOption { id: string; name: string; }
 interface PricingCategoryOption { id: string; code: string; name: string; isActive: boolean; }
+interface PricingMatrixRow {
+  id: string; sku?: string | null; unitType: string; quantityPerUnit: number;
+  product: { id: string; name: string };
+  latestPrices: { default: { price: number } | null; categories: Record<string, { price: number } | null> };
+}
 type PinPoint = { lat: number; lng: number };
 
 declare global {
@@ -98,6 +103,11 @@ export default function CustomerFormPage() {
   const { data: pricingCategoriesData } = useQuery({
     queryKey: ['pricing-categories-options'],
     queryFn: () => api.get<{ data: PricingCategoryOption[] }>('/api/v1/pricing-categories'),
+  });
+
+  const { data: pricingMatrixData } = useQuery({
+    queryKey: ['pricing-matrix-customer'],
+    queryFn: () => api.get<{ data: { categories: PricingCategoryOption[]; rows: PricingMatrixRow[] } }>('/api/v1/products/pricing-matrix'),
   });
 
   useEffect(() => {
@@ -246,11 +256,45 @@ export default function CustomerFormPage() {
           <label htmlFor="pricingCategory" className="block text-sm font-medium text-gray-700 mb-1">Pricing Category</label>
           <select id="pricingCategory" value={form.pricingCategory} onChange={(e) => setForm({ ...form, pricingCategory: e.target.value })} className={fieldClass('pricingCategory')}>
             <option value="">Select pricing category</option>
-            {pricingCategoriesData?.data?.map((category) => (
-              <option key={category.id} value={category.code}>{category.name}</option>
-            ))}
+            {pricingCategoriesData?.data?.map((category) => {
+              const matrixRows = pricingMatrixData?.data?.rows ?? [];
+              const priceSummary = matrixRows
+                .map((r) => {
+                  const catPrice = r.latestPrices.categories[category.code];
+                  const defPrice = r.latestPrices.default;
+                  const price = catPrice ?? defPrice;
+                  return price ? `${r.product.name} ₹${Number(price.price).toFixed(0)}` : null;
+                })
+                .filter(Boolean)
+                .slice(0, 3)
+                .join(', ');
+              return (
+                <option key={category.id} value={category.code}>
+                  {category.name}{priceSummary ? ` — ${priceSummary}` : ''}
+                </option>
+              );
+            })}
           </select>
           {errors.pricingCategory && <p className="text-xs text-red-600 mt-1">{errors.pricingCategory}</p>}
+          {form.pricingCategory && (pricingMatrixData?.data?.rows?.length ?? 0) > 0 && (
+            <div className="mt-2 rounded-md border border-blue-100 bg-blue-50 px-3 py-2">
+              <p className="text-xs font-medium text-blue-800 mb-1">Prices for {pricingCategoriesData?.data?.find((c) => c.code === form.pricingCategory)?.name ?? form.pricingCategory}:</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5">
+                {pricingMatrixData?.data?.rows?.map((r) => {
+                  const catPrice = r.latestPrices.categories[form.pricingCategory];
+                  const defPrice = r.latestPrices.default;
+                  const price = catPrice ?? defPrice;
+                  if (!price) return null;
+                  return (
+                    <div key={r.id} className="text-xs text-blue-700">
+                      {r.product.name} {r.quantityPerUnit}{r.unitType.charAt(0)}: <span className="font-medium">₹{Number(price.price).toFixed(2)}</span>
+                      {!catPrice && defPrice ? <span className="text-blue-400 ml-1">(default)</span> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <div>
