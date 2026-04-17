@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+// Re-export RouteWaypoint from the shared waypoints module
+export { RouteWaypoint } from '../../lib/waypoints';
+
 // ---------------------------------------------------------------------------
 // Route schemas
 // ---------------------------------------------------------------------------
@@ -76,3 +79,18 @@ export type RouteQuery = z.infer<typeof routeQuerySchema>;
 export type AssignCustomersInput = z.infer<typeof assignCustomersSchema>;
 export type AssignAgentsInput = z.infer<typeof assignAgentsSchema>;
 export type ManifestQuery = z.infer<typeof manifestQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// Generate path schema
+// ---------------------------------------------------------------------------
+
+export const generatePathSchema = z.object({
+  waypoints: z.array(z.object({
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    type: z.enum(['customer_stop', 'intermediate']),
+    routeCustomerId: z.string().uuid().nullable(),
+  })).min(2, 'At least 2 waypoints are required'),
+});
+
+export type GeneratePathInput = z.infer<typeof generatePathSchema>;

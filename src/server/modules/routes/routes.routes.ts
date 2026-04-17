@@ -11,6 +11,7 @@ import {
   assignCustomersSchema,
   assignAgentsSchema,
   manifestQuerySchema,
+  generatePathSchema,
 } from './routes.types.js';
 import { uuidParamSchema } from '../../lib/paramSchemas.js';
 import * as controller from './routes.controller.js';
@@ -56,6 +57,28 @@ router.get(
   authorize(adminPlus),
   validate({ params: uuidParamSchema, query: manifestQuerySchema }),
   controller.manifest,
+);
+
+// ---------------------------------------------------------------------------
+// GET /routes/:id/path — get stored route path
+// ---------------------------------------------------------------------------
+router.get(
+  '/:id/path',
+  authorize(adminOnly),
+  validate({ params: uuidParamSchema }),
+  controller.getPath,
+);
+
+// ---------------------------------------------------------------------------
+// POST /routes/:id/generate-path — generate OSRM route path
+// ---------------------------------------------------------------------------
+router.post(
+  '/:id/generate-path',
+  authorize(adminOnly),
+  csrfProtection,
+  validate({ params: uuidParamSchema, body: generatePathSchema }),
+  auditLog(),
+  controller.generatePath,
 );
 
 // ---------------------------------------------------------------------------

@@ -253,6 +253,7 @@ export default function CustomerFormPage() {
           <label htmlFor="billingFrequency" className="block text-sm font-medium text-gray-700 mb-1">Billing Frequency</label>
           <select id="billingFrequency" value={form.billingFrequency} onChange={(e) => setForm({ ...form, billingFrequency: e.target.value })} className={fieldClass('billingFrequency')}>
             <option value="daily">Daily</option>
+            <option value="next_day">Next Day</option>
             <option value="every_2_days">Every 2 Days</option>
             <option value="weekly">Weekly</option>
             <option value="every_10_days">Every 10 Days</option>

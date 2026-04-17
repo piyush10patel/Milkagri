@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useModalFocusTrap } from '@/hooks/useModalFocusTrap';
 import { useAuth } from '@/hooks/useAuth';
+import DriverRouteMap from './DriverRouteMap';
 
 interface ManifestItem {
   routeId?: string | null;
@@ -159,6 +160,11 @@ export default function DeliveryManifestPage() {
     { key: 'evening', label: 'Evening', count: manifest.filter((item) => item.deliverySession === 'evening').length },
   ];
 
+  const routeId = useMemo(() => {
+    const first = filteredManifest.find((item) => item.routeId);
+    return first?.routeId ?? null;
+  }, [filteredManifest]);
+
   useEffect(() => {
     if (!gpsEnabled || user?.role !== 'delivery_agent') return;
     if (!navigator.geolocation) {
@@ -280,6 +286,12 @@ export default function DeliveryManifestPage() {
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${progressPercent}%` }} />
           </div>
+        </div>
+      )}
+
+      {routeId && (
+        <div className="mb-4">
+          <DriverRouteMap routeId={routeId} />
         </div>
       )}
 

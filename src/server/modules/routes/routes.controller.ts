@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { parsePagination, paginatedResponse } from '../../lib/pagination.js';
 import * as routesService from './routes.service.js';
+import { OsrmNetworkError, OsrmNoRouteError, OsrmUnexpectedError } from '../../lib/osrm.js';
 
 /** Extract a single string param (Express v5 types params as string | string[]). */
 function param(req: Request, name: string): string {
@@ -177,7 +178,6 @@ export async function summary(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-
 // ---------------------------------------------------------------------------
 // GET /routes/:id/manifest — route manifest JSON
 // ---------------------------------------------------------------------------
@@ -202,6 +202,57 @@ export async function manifestPrint(req: Request, res: Response, next: NextFunct
     const html = await routesService.getRouteManifestPrintHtml(id, date);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POST /routes/:id/generate-path — generate OSRM route path
+// ---------------------------------------------------------------------------
+export async function generatePath(req: Request, res: Response, next: NextFunction) {
+  try {
+    const routeId = param(req, 'id');
+    const result = await routesService.generateRoutePath(routeId, req.body);
+
+    res.locals.audit = {
+      actionType: 'update',
+      entityType: 'route',
+      entityId: routeId,
+      changes: { routePath: { new: 'generated' } },
+    };
+    res.json(result);
+  } catch (err) {
+    if (err instanceof OsrmNetworkError) {
+      res.status(502).json({ error: err.message });
+      return;
+    }
+    if (err instanceof OsrmNoRouteError) {
+      res.status(422).json({ error: err.message });
+      return;
+    }
+    if (err instanceof OsrmUnexpectedError) {
+      res.status(502).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /routes/:id/path — get stored route path
+// ---------------------------------------------------------------------------
+export async function getPath(req: Request, res: Response, next: NextFunction) {
+  try {
+    const routeId = param(req, 'id');
+    const result = await routesService.getRoutePath(routeId);
+
+    if (!result) {
+      res.json({ path: null });
+      return;
+    }
+
+    res.json(result);
   } catch (err) {
     next(err);
   }

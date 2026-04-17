@@ -30,6 +30,10 @@ export async function recordPayment(input: RecordPaymentInput, userId: string) {
         paymentMethodDescription: input.paymentMethodDescription ?? null,
         paymentDate,
         isFieldCollection: false,
+        isOverspill: input.isOverspill ?? false,
+        overspillQuantity: input.overspillQuantity ? new Prisma.Decimal(input.overspillQuantity) : null,
+        overspillProductId: input.overspillProductId ?? null,
+        overspillNotes: input.overspillNotes?.trim() || null,
         recordedBy: userId,
       },
     });
@@ -48,7 +52,9 @@ export async function recordPayment(input: RecordPaymentInput, userId: string) {
       referenceId: payment.id,
       debitAmount: new Prisma.Decimal(0),
       creditAmount: amount,
-      description: `Payment via ${input.paymentMethod}${input.invoiceId ? ' against invoice' : ' (advance)'}`,
+      description: input.isOverspill
+        ? `Overspill payment via ${input.paymentMethod}${input.overspillQuantity ? ` (${input.overspillQuantity} qty)` : ''}`
+        : `Payment via ${input.paymentMethod}${input.invoiceId ? ' against invoice' : ' (advance)'}`,
     });
 
     return payment;

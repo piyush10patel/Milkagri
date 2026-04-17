@@ -100,6 +100,7 @@ enum DeliverySession {
 
 enum BillingFrequency {
   daily
+  next_day
   every_2_days
   weekly
   every_10_days
@@ -161,6 +162,7 @@ model ProductVariant {
   invoiceLineItems InvoiceLineItem[]
   inwardStocks     InwardStock[]
   wastages         Wastage[]
+  overspillPayments Payment[]        @relation("OverspillProduct")
 
   @@map("product_variants")
 }
@@ -420,6 +422,13 @@ model Route {
   startLabel        String?  @map("start_label") @db.VarChar(255)
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Route navigation fields
+  routePath            String?   @map("route_path") @db.Text
+  routeWaypoints       Json?     @map("route_waypoints")
+  routeDistanceMeters  Float?    @map("route_distance_meters")
+  routeDurationSeconds Float?    @map("route_duration_seconds")
+  routePathGeneratedAt DateTime? @map("route_path_generated_at") @db.Timestamptz
 
   // Relations
   customers            Customer[]
@@ -760,14 +769,19 @@ model Payment {
   paymentDate              DateTime      @map("payment_date") @db.Date
   collectedBy              String?       @map("collected_by") @db.Uuid
   isFieldCollection        Boolean       @default(false) @map("is_field_collection")
+  isOverspill              Boolean       @default(false) @map("is_overspill")
+  overspillQuantity        Decimal?      @map("overspill_quantity") @db.Decimal(10, 3)
+  overspillProductId       String?       @map("overspill_product_id") @db.Uuid
+  overspillNotes           String?       @map("overspill_notes") @db.Text
   recordedBy               String        @map("recorded_by") @db.Uuid
   createdAt                DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
   // Relations
-  customer  Customer @relation(fields: [customerId], references: [id])
-  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
-  collector User?    @relation("CollectedBy", fields: [collectedBy], references: [id])
-  recorder  User     @relation("RecordedBy", fields: [recordedBy], references: [id])
+  customer         Customer        @relation(fields: [customerId], references: [id])
+  invoice          Invoice?        @relation(fields: [invoiceId], references: [id])
+  collector        User?           @relation("CollectedBy", fields: [collectedBy], references: [id])
+  recorder         User            @relation("RecordedBy", fields: [recordedBy], references: [id])
+  overspillProduct ProductVariant? @relation("OverspillProduct", fields: [overspillProductId], references: [id])
 
   @@map("payments")
 }

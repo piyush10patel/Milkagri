@@ -12,6 +12,10 @@ export const recordPaymentSchema = z.object({
   paymentMethod: z.enum(['cash', 'upi', 'bank_transfer', 'card', 'other']),
   paymentMethodDescription: z.string().optional(),
   paymentDate: dateString,
+  isOverspill: z.boolean().optional(),
+  overspillQuantity: z.number().positive('Quantity must be positive').optional(),
+  overspillProductId: z.string().uuid().optional(),
+  overspillNotes: z.string().max(500).optional(),
 });
 
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;

@@ -31,6 +31,9 @@ const mockProductVariantFindMany = vi.fn();
 
 const mockTransaction = vi.fn();
 
+// OSRM mock
+const mockOsrmGenerateRoutePath = vi.fn();
+
 vi.mock('../../index.js', () => ({
   prisma: {
     route: {
@@ -71,7 +74,21 @@ vi.mock('../../index.js', () => ({
   redis: {},
 }));
 
+vi.mock('../../lib/osrm.js', () => ({
+  generateRoutePath: (...args: any[]) => mockOsrmGenerateRoutePath(...args),
+  OsrmNetworkError: class OsrmNetworkError extends Error {
+    constructor(msg = 'Route generation service is unavailable.') { super(msg); this.name = 'OsrmNetworkError'; }
+  },
+  OsrmNoRouteError: class OsrmNoRouteError extends Error {
+    constructor(msg = 'No road-following route could be found.') { super(msg); this.name = 'OsrmNoRouteError'; }
+  },
+  OsrmUnexpectedError: class OsrmUnexpectedError extends Error {
+    constructor(msg = 'Unexpected response from routing service.') { super(msg); this.name = 'OsrmUnexpectedError'; }
+  },
+}));
+
 import * as routesService from './routes.service.js';
+import { OsrmNetworkError, OsrmNoRouteError } from '../../lib/osrm.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -609,5 +626,193 @@ describe('getRouteManifestPrintHtml', () => {
     expect(html).toContain('&lt;script&gt;');
     expect(html).not.toContain('<b>Hacker</b>');
     expect(html).toContain('&lt;b&gt;Hacker&lt;/b&gt;');
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// generateRoutePath
+// ---------------------------------------------------------------------------
+describe('generateRoutePath', () => {
+  const routeId = 'route-1';
+  const validInput = {
+    waypoints: [
+      { latitude: 12.97, longitude: 77.59, type: 'customer_stop' as const, routeCustomerId: 'rc-1' },
+      { latitude: 12.98, longitude: 77.60, type: 'intermediate' as const, routeCustomerId: null },
+    ],
+  };
+
+  it('calls OSRM, saves result to DB, and returns path data', async () => {
+    mockRouteFindUnique.mockResolvedValue({ id: routeId, name: 'Route A' });
+    mockOsrmGenerateRoutePath.mockResolvedValue({
+      polyline: '_p~iF~ps|U_ulLnnqC',
+      distanceMeters: 1500,
+      durationSeconds: 120,
+    });
+    const generatedAt = new Date('2025-06-01T10:00:00Z');
+    mockRouteUpdate.mockResolvedValue({
+      id: routeId,
+      routePathGeneratedAt: generatedAt,
+      routeCustomers: [],
+      routeAgents: [],
+    });
+
+    const result = await routesService.generateRoutePath(routeId, validInput);
+
+    expect(mockOsrmGenerateRoutePath).toHaveBeenCalledWith([
+      { latitude: 12.97, longitude: 77.59 },
+      { latitude: 12.98, longitude: 77.60 },
+    ]);
+    expect(mockRouteUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: routeId },
+        data: expect.objectContaining({
+          routePath: '_p~iF~ps|U_ulLnnqC',
+          routeDistanceMeters: 1500,
+          routeDurationSeconds: 120,
+        }),
+      }),
+    );
+    expect(result.polyline).toBe('_p~iF~ps|U_ulLnnqC');
+    expect(result.distanceMeters).toBe(1500);
+    expect(result.durationSeconds).toBe(120);
+    expect(result.generatedAt).toEqual(generatedAt);
+  });
+
+  it('propagates OsrmNetworkError when OSRM is unreachable', async () => {
+    mockRouteFindUnique.mockResolvedValue({ id: routeId, name: 'Route A' });
+    mockOsrmGenerateRoutePath.mockRejectedValue(
+      new OsrmNetworkError('Route generation service is unavailable.'),
+    );
+
+    await expect(routesService.generateRoutePath(routeId, validInput)).rejects.toThrow(
+      'Route generation service is unavailable.',
+    );
+    expect(mockRouteUpdate).not.toHaveBeenCalled();
+  });
+
+  it('propagates OsrmNoRouteError when no route is found', async () => {
+    mockRouteFindUnique.mockResolvedValue({ id: routeId, name: 'Route A' });
+    mockOsrmGenerateRoutePath.mockRejectedValue(
+      new OsrmNoRouteError('No road-following route could be found.'),
+    );
+
+    await expect(routesService.generateRoutePath(routeId, validInput)).rejects.toThrow(
+      'No road-following route could be found.',
+    );
+    expect(mockRouteUpdate).not.toHaveBeenCalled();
+  });
+
+  it('throws NotFoundError for non-existent route', async () => {
+    mockRouteFindUnique.mockResolvedValue(null);
+
+    await expect(routesService.generateRoutePath('missing', validInput)).rejects.toThrow(
+      'Route not found',
+    );
+    expect(mockOsrmGenerateRoutePath).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getRoutePath
+// ---------------------------------------------------------------------------
+describe('getRoutePath', () => {
+  const routeId = 'route-1';
+
+  it('returns path with isStale false when customer stops match', async () => {
+    mockRouteFindUnique.mockResolvedValue({
+      id: routeId,
+      routePath: '_p~iF~ps|U_ulLnnqC',
+      routeWaypoints: [
+        { latitude: 12.97, longitude: 77.59, type: 'customer_stop', routeCustomerId: 'rc-1' },
+        { latitude: 12.98, longitude: 77.60, type: 'intermediate', routeCustomerId: null },
+      ],
+      routeDistanceMeters: 1500,
+      routeDurationSeconds: 120,
+      routePathGeneratedAt: new Date('2025-06-01T10:00:00Z'),
+      routeCustomers: [
+        { id: 'rc-1', dropLatitude: 12.97, dropLongitude: 77.59, sequenceOrder: 1 },
+      ],
+    });
+
+    const result = await routesService.getRoutePath(routeId);
+
+    expect(result).not.toBeNull();
+    expect(result!.polyline).toBe('_p~iF~ps|U_ulLnnqC');
+    expect(result!.distanceMeters).toBe(1500);
+    expect(result!.durationSeconds).toBe(120);
+    expect(result!.isStale).toBe(false);
+  });
+
+  it('returns path with isStale true when customer stops have changed', async () => {
+    mockRouteFindUnique.mockResolvedValue({
+      id: routeId,
+      routePath: '_p~iF~ps|U_ulLnnqC',
+      routeWaypoints: [
+        { latitude: 12.97, longitude: 77.59, type: 'customer_stop', routeCustomerId: 'rc-1' },
+      ],
+      routeDistanceMeters: 1500,
+      routeDurationSeconds: 120,
+      routePathGeneratedAt: new Date('2025-06-01T10:00:00Z'),
+      routeCustomers: [
+        { id: 'rc-1', dropLatitude: 12.97, dropLongitude: 77.59, sequenceOrder: 1 },
+        { id: 'rc-2', dropLatitude: 13.00, dropLongitude: 77.62, sequenceOrder: 2 },
+      ],
+    });
+
+    const result = await routesService.getRoutePath(routeId);
+
+    expect(result).not.toBeNull();
+    expect(result!.isStale).toBe(true);
+  });
+
+  it('returns null when no path has been generated', async () => {
+    mockRouteFindUnique.mockResolvedValue({
+      id: routeId,
+      routePath: null,
+      routeWaypoints: null,
+      routeDistanceMeters: null,
+      routeDurationSeconds: null,
+      routePathGeneratedAt: null,
+      routeCustomers: [],
+    });
+
+    const result = await routesService.getRoutePath(routeId);
+    expect(result).toBeNull();
+  });
+
+  it('throws NotFoundError for non-existent route', async () => {
+    mockRouteFindUnique.mockResolvedValue(null);
+
+    await expect(routesService.getRoutePath('missing')).rejects.toThrow('Route not found');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generatePathSchema validation (fewer than 2 waypoints)
+// ---------------------------------------------------------------------------
+describe('generatePathSchema validation', () => {
+  it('rejects fewer than 2 waypoints', async () => {
+    const { generatePathSchema } = await import('./routes.types.js');
+    const result = generatePathSchema.safeParse({
+      waypoints: [
+        { latitude: 12.97, longitude: 77.59, type: 'customer_stop', routeCustomerId: null },
+      ],
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe('At least 2 waypoints are required');
+    }
+  });
+
+  it('accepts exactly 2 waypoints', async () => {
+    const { generatePathSchema } = await import('./routes.types.js');
+    const result = generatePathSchema.safeParse({
+      waypoints: [
+        { latitude: 12.97, longitude: 77.59, type: 'customer_stop', routeCustomerId: null },
+        { latitude: 12.98, longitude: 77.60, type: 'intermediate', routeCustomerId: null },
+      ],
+    });
+    expect(result.success).toBe(true);
   });
 });

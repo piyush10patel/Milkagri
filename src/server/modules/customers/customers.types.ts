@@ -30,6 +30,8 @@ export const updateAddressSchema = z.object({
 // Customer schemas
 // ---------------------------------------------------------------------------
 
+const billingFrequencyEnum = z.enum(['daily', 'next_day', 'every_2_days', 'weekly', 'every_10_days', 'monthly']);
+
 export const createCustomerSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   phone: z.string().min(1, 'Phone is required').max(20),
@@ -39,7 +41,7 @@ export const createCustomerSchema = z.object({
   routeId: z.string().uuid('Invalid route ID').optional(),
   address: createAddressSchema.optional(),
   pricingCategory: z.string().max(100).optional(),
-  billingFrequency: z.enum(['daily', 'every_2_days', 'weekly', 'every_10_days', 'monthly']).optional(),
+  billingFrequency: billingFrequencyEnum.optional(),
 });
 
 export const updateCustomerSchema = z.object({
@@ -50,7 +52,7 @@ export const updateCustomerSchema = z.object({
   preferredDeliveryWindow: z.string().max(50).optional(),
   routeId: z.string().uuid('Invalid route ID').nullable().optional(),
   pricingCategory: z.string().max(100).optional(),
-  billingFrequency: z.enum(['daily', 'every_2_days', 'weekly', 'every_10_days', 'monthly']).optional(),
+  billingFrequency: billingFrequencyEnum.optional(),
 });
 
 export const changeStatusSchema = z.object({

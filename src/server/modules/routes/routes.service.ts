@@ -7,8 +7,17 @@ import type {
   RouteQuery,
   AssignCustomersInput,
   AssignAgentsInput,
+  GeneratePathInput,
 } from './routes.types.js';
 import type { Prisma } from '@prisma/client';
+import { generateRoutePath as osrmGenerateRoutePath } from '../../lib/osrm.js';
+import {
+  serializeWaypoints,
+  deserializeWaypoints,
+  autoPopulateCustomerStops,
+  isPathStale,
+} from '../../lib/waypoints.js';
+import type { RouteWaypoint } from '../../lib/waypoints.js';
 
 function normalizeStartLocationInput(
   input: Partial<{
@@ -304,6 +313,14 @@ export async function assignCustomers(routeId: string, input: AssignCustomersInp
           dropLatitude: c.dropLatitude ?? null,
           dropLongitude: c.dropLongitude ?? null,
         })),
+      });
+    }
+
+    // Update customer.routeId for all assigned customers
+    if (customerIds.length > 0) {
+      await tx.customer.updateMany({
+        where: { id: { in: customerIds } },
+        data: { routeId },
       });
     }
 
@@ -633,4 +650,98 @@ function escapeHtml(str: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+
+// ---------------------------------------------------------------------------
+// Generate route path via OSRM (Req 2.1, 3.1–3.4)
+// ---------------------------------------------------------------------------
+export async function generateRoutePath(routeId: string, input: GeneratePathInput) {
+  const route = await prisma.route.findUnique({ where: { id: routeId } });
+  if (!route) {
+    throw new NotFoundError('Route not found');
+  }
+
+  // Map waypoints to OSRM format and call the OSRM service
+  const osrmWaypoints = input.waypoints.map((wp) => ({
+    latitude: wp.latitude,
+    longitude: wp.longitude,
+  }));
+
+  const result = await osrmGenerateRoutePath(osrmWaypoints);
+
+  // Persist path data on the Route record
+  const updatedRoute = await prisma.route.update({
+    where: { id: routeId },
+    data: {
+      routePath: result.polyline,
+      routeWaypoints: JSON.parse(serializeWaypoints(input.waypoints)),
+      routeDistanceMeters: result.distanceMeters,
+      routeDurationSeconds: result.durationSeconds,
+      routePathGeneratedAt: new Date(),
+    },
+    include: routeInclude,
+  });
+
+  return {
+    polyline: result.polyline,
+    distanceMeters: result.distanceMeters,
+    durationSeconds: result.durationSeconds,
+    waypoints: input.waypoints,
+    generatedAt: updatedRoute.routePathGeneratedAt,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Get stored route path with staleness flag (Req 3.5)
+// ---------------------------------------------------------------------------
+export async function getRoutePath(routeId: string) {
+  const route = await prisma.route.findUnique({
+    where: { id: routeId },
+    include: {
+      routeCustomers: {
+        orderBy: { sequenceOrder: 'asc' as const },
+      },
+    },
+  });
+
+  if (!route) {
+    throw new NotFoundError('Route not found');
+  }
+
+  // No path generated yet
+  if (!route.routePath) {
+    return null;
+  }
+
+  // Deserialize stored waypoints
+  const storedWaypoints = deserializeWaypoints(
+    typeof route.routeWaypoints === 'string'
+      ? route.routeWaypoints
+      : JSON.stringify(route.routeWaypoints),
+  );
+
+  // Auto-populate current customer stops from routeCustomers
+  const currentCustomerStops = autoPopulateCustomerStops(
+    route.routeCustomers
+      .filter((rc) => rc.dropLatitude !== null && rc.dropLongitude !== null)
+      .map((rc) => ({
+        id: rc.id,
+        dropLatitude: Number(rc.dropLatitude),
+        dropLongitude: Number(rc.dropLongitude),
+        sequenceOrder: rc.sequenceOrder,
+      })),
+  );
+
+  // Compute staleness
+  const isStale = isPathStale(storedWaypoints, currentCustomerStops);
+
+  return {
+    polyline: route.routePath,
+    waypoints: storedWaypoints,
+    distanceMeters: route.routeDistanceMeters,
+    durationSeconds: route.routeDurationSeconds,
+    generatedAt: route.routePathGeneratedAt,
+    isStale,
+  };
 }

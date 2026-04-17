@@ -11,6 +11,7 @@ export interface BillingCycle {
  */
 const FREQUENCY_DAYS: Record<Exclude<BillingFrequency, 'monthly'>, number> = {
   daily: 1,
+  next_day: 1,
   every_2_days: 2,
   weekly: 7,
   every_10_days: 10,
