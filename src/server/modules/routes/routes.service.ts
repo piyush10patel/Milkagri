@@ -90,6 +90,10 @@ export async function listRoutes(query: RouteQuery, pagination: PaginationParams
     where.isActive = query.isActive === 'true';
   }
 
+  if (query.routeType) {
+    where.routeType = query.routeType;
+  }
+
   if (query.search) {
     where.OR = [
       { name: { contains: query.search, mode: 'insensitive' } },

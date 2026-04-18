@@ -17,15 +17,12 @@ import * as controller from './delivery.controller.js';
 
 const router = Router();
 
-const deliveryAgentPlus = ['super_admin', 'admin', 'delivery_agent'];
-const adminOnly = ['super_admin', 'admin'];
-
 router.use(authenticate);
 
 // GET /delivery/manifest?date=YYYY-MM-DD
 router.get(
   '/manifest',
-  authorize(deliveryAgentPlus),
+  authorize('deliveries'),
   validate({ query: manifestQuerySchema }),
   controller.manifest,
 );
@@ -33,7 +30,7 @@ router.get(
 // PATCH /delivery/orders/:id/status
 router.patch(
   '/orders/:id/status',
-  authorize(deliveryAgentPlus),
+  authorize('deliveries'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: updateDeliveryStatusSchema }),
   controller.updateStatus,
@@ -42,7 +39,7 @@ router.patch(
 // PATCH /delivery/orders/:id/notes
 router.patch(
   '/orders/:id/notes',
-  authorize(deliveryAgentPlus),
+  authorize('deliveries'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: updateDeliveryNotesSchema }),
   controller.updateNotes,
@@ -51,7 +48,7 @@ router.patch(
 // GET /delivery/reconciliation?date=YYYY-MM-DD
 router.get(
   '/reconciliation',
-  authorize(deliveryAgentPlus),
+  authorize('deliveries'),
   validate({ query: reconciliationQuerySchema }),
   controller.reconciliation,
 );
@@ -59,7 +56,7 @@ router.get(
 // GET /delivery/overview?date=YYYY-MM-DD
 router.get(
   '/overview',
-  authorize(adminOnly),
+  authorize('deliveries'),
   validate({ query: overviewQuerySchema }),
   controller.overview,
 );
@@ -67,7 +64,7 @@ router.get(
 // POST /delivery/location/ping
 router.post(
   '/location/ping',
-  authorize(deliveryAgentPlus),
+  authorize('deliveries'),
   csrfProtection,
   validate({ body: gpsLocationPingSchema }),
   controller.saveLocationPing,
@@ -76,7 +73,7 @@ router.post(
 // GET /delivery/location/live?minutes=120
 router.get(
   '/location/live',
-  authorize(adminOnly),
+  authorize('deliveries'),
   validate({ query: gpsLiveQuerySchema }),
   controller.liveLocations,
 );

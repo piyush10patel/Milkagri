@@ -11,14 +11,12 @@ import * as controller from './ledger.controller.js';
 
 const router = Router();
 
-const adminAndBillingStaff = ['super_admin', 'admin', 'billing_staff'];
-
 router.use(authenticate);
 
 // GET /customers/:id/ledger
 router.get(
   '/:id/ledger',
-  authorize(adminAndBillingStaff),
+  authorize('billing'),
   validate({ params: customerIdParamSchema, query: ledgerQuerySchema }),
   controller.getLedger,
 );
@@ -26,7 +24,7 @@ router.get(
 // GET /customers/:id/ledger/pdf
 router.get(
   '/:id/ledger/pdf',
-  authorize(adminAndBillingStaff),
+  authorize('billing'),
   validate({ params: customerIdParamSchema, query: ledgerPdfQuerySchema }),
   controller.getLedgerPdf,
 );

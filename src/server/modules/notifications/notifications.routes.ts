@@ -39,7 +39,7 @@ router.get(
 // GET /notifications/preferences — get notification channel preferences (Admin+)
 router.get(
   '/preferences',
-  authorize(['super_admin', 'admin']),
+  authorize('notifications'),
   async (_req: Request, res: Response, next: NextFunction) => {
     try {
       const preferences = await notificationsService.getNotificationPreferences();
@@ -53,7 +53,7 @@ router.get(
 // PUT /notifications/preferences — update notification channel preferences (Admin+)
 router.put(
   '/preferences',
-  authorize(['super_admin', 'admin']),
+  authorize('notifications'),
   csrfProtection,
   validate({ body: notificationPreferencesSchema }),
   async (req: Request, res: Response, next: NextFunction) => {

@@ -18,7 +18,7 @@ router.use(authenticate);
 
 router.get(
   '/',
-  authorize(['admin', 'billing_staff', 'super_admin']),
+  authorize('payments'),
   validate({ query: listPaymentsQuerySchema }),
   controller.listPayments,
 );
@@ -26,7 +26,7 @@ router.get(
 // POST /payments — Record payment (Billing_Staff, Super_Admin)
 router.post(
   '/',
-  authorize(['billing_staff', 'super_admin']),
+  authorize('payments'),
   csrfProtection,
   validate({ body: recordPaymentSchema }),
   controller.recordPayment,
@@ -35,7 +35,7 @@ router.post(
 // POST /payments/collections — Record field collection (Delivery_Agent)
 router.post(
   '/collections',
-  authorize(['delivery_agent', 'super_admin']),
+  authorize('payments'),
   csrfProtection,
   validate({ body: recordCollectionSchema }),
   controller.recordCollection,
@@ -44,7 +44,7 @@ router.post(
 // GET /payments/reconciliation?date=YYYY-MM-DD (Admin)
 router.get(
   '/reconciliation',
-  authorize(['admin', 'super_admin']),
+  authorize('payments'),
   validate({ query: reconciliationQuerySchema }),
   controller.getReconciliation,
 );
@@ -52,7 +52,7 @@ router.get(
 // GET /payments/outstanding (Admin, Billing_Staff)
 router.get(
   '/outstanding',
-  authorize(['admin', 'billing_staff', 'super_admin']),
+  authorize('payments'),
   validate({ query: outstandingQuerySchema }),
   controller.getOutstanding,
 );

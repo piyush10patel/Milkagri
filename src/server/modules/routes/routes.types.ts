@@ -4,12 +4,19 @@ import { z } from 'zod';
 export { RouteWaypoint } from '../../lib/waypoints';
 
 // ---------------------------------------------------------------------------
+// Route type enum
+// ---------------------------------------------------------------------------
+
+export const routeTypeEnum = z.enum(['delivery', 'collection']);
+
+// ---------------------------------------------------------------------------
 // Route schemas
 // ---------------------------------------------------------------------------
 
 export const createRouteSchema = z.object({
   name: z.string().min(1, 'Route name is required').max(255),
   description: z.string().optional(),
+  routeType: routeTypeEnum.optional(),
   startLocationMode: z.enum(['none', 'existing_stop', 'custom']).optional(),
   startCustomerId: z.string().uuid('Invalid customer ID').optional().nullable(),
   startLatitude: z.number().min(-90).max(90).optional().nullable(),
@@ -20,6 +27,7 @@ export const createRouteSchema = z.object({
 export const updateRouteSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().optional(),
+  routeType: routeTypeEnum.optional(),
   startLocationMode: z.enum(['none', 'existing_stop', 'custom']).optional(),
   startCustomerId: z.string().uuid('Invalid customer ID').optional().nullable(),
   startLatitude: z.number().min(-90).max(90).optional().nullable(),
@@ -32,6 +40,7 @@ export const routeQuerySchema = z.object({
   limit: z.string().optional(),
   search: z.string().optional(),
   isActive: z.enum(['true', 'false']).optional(),
+  routeType: routeTypeEnum.optional(),
   sortBy: z.enum(['name', 'createdAt']).optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),
 });

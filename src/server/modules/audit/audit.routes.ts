@@ -9,8 +9,8 @@ import * as auditService from './audit.service.js';
 
 const router = Router();
 
-// All audit log routes require Super_Admin or Admin
-router.use(authenticate, authorize(['super_admin', 'admin']));
+// All audit log routes require audit_logs permission
+router.use(authenticate, authorize('audit_logs'));
 
 // GET /audit-logs — search/filter audit logs (paginated)
 router.get(

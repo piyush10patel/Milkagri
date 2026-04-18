@@ -16,11 +16,11 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', authorize(['super_admin', 'admin', 'billing_staff', 'read_only']), validate({ query: pricingCategoryQuerySchema }), controller.list);
+router.get('/', authorize('pricing'), validate({ query: pricingCategoryQuerySchema }), controller.list);
 
 router.post(
   '/',
-  authorize(['super_admin', 'admin', 'billing_staff']),
+  authorize('pricing'),
   csrfProtection,
   validate({ body: createPricingCategorySchema }),
   auditLog(),
@@ -29,7 +29,7 @@ router.post(
 
 router.put(
   '/:id',
-  authorize(['super_admin', 'admin', 'billing_staff']),
+  authorize('pricing'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: updatePricingCategorySchema }),
   auditLog(),
@@ -38,7 +38,7 @@ router.put(
 
 router.delete(
   '/:id',
-  authorize(['super_admin', 'admin']),
+  authorize('pricing'),
   csrfProtection,
   validate({ params: uuidParamSchema }),
   auditLog(),

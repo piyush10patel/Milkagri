@@ -90,6 +90,7 @@ export default function DeliveryManifestPage() {
   const [notesTarget, setNotesTarget] = useState<string | null>(null);
   const [notesText, setNotesText] = useState('');
   const [showReconciliation, setShowReconciliation] = useState(false);
+  const [selectedRouteId, setSelectedRouteId] = useState('');
   const [gpsEnabled, setGpsEnabled] = useState(false);
   const [gpsMessage, setGpsMessage] = useState('');
   const watchIdRef = useRef<number | null>(null);
@@ -111,6 +112,11 @@ export default function DeliveryManifestPage() {
 
   const closeReconModal = useCallback(() => setShowReconciliation(false), []);
   const { modalRef: reconModalRef } = useModalFocusTrap(showReconciliation, closeReconModal);
+
+  const { data: deliveryRoutesData } = useQuery({
+    queryKey: ['delivery-routes'],
+    queryFn: () => api.get<{ data: Array<{ id: string; name: string }> }>('/api/v1/routes?routeType=delivery'),
+  });
 
   const { data: manifestData, isLoading } = useQuery({
     queryKey: ['delivery-manifest', date],
@@ -151,7 +157,11 @@ export default function DeliveryManifestPage() {
   }
 
   const manifest = manifestData?.data ?? [];
-  const filteredManifest = manifest.filter((item) => item.deliverySession === selectedSession);
+  const filteredManifest = manifest.filter((item) => {
+    if (item.deliverySession !== selectedSession) return false;
+    if (selectedRouteId && item.routeId !== selectedRouteId) return false;
+    return true;
+  });
   const completedCount = filteredManifest.filter((m) => m.status !== 'pending').length;
   const progressPercent = filteredManifest.length > 0 ? Math.round((completedCount / filteredManifest.length) * 100) : 0;
   const allCompleted = filteredManifest.length > 0 && filteredManifest.every((m) => m.status !== 'pending');
@@ -276,6 +286,22 @@ export default function DeliveryManifestPage() {
           </button>
         ))}
       </div>
+
+      {(deliveryRoutesData?.data?.length ?? 0) > 0 && (
+        <div className="mb-4 print:hidden">
+          <select
+            value={selectedRouteId}
+            onChange={(e) => setSelectedRouteId(e.target.value)}
+            className="w-full rounded-md border border-gray-300 px-4 py-3 text-sm min-h-[48px]"
+            aria-label="Filter by delivery route"
+          >
+            <option value="">All Routes</option>
+            {(deliveryRoutesData?.data ?? []).map((route) => (
+              <option key={route.id} value={route.id}>{route.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {filteredManifest.length > 0 && (
         <div className="mb-4 print:hidden">

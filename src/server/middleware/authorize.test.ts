@@ -1,6 +1,15 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
+
+// Mock the permission service before importing authorize
+vi.mock('../modules/permissions/permissions.service.js', () => ({
+  hasPermission: vi.fn(),
+}));
+
 import { authorize } from './authorize.js';
+import * as permissionService from '../modules/permissions/permissions.service.js';
+
+const mockedHasPermission = vi.mocked(permissionService.hasPermission);
 
 function createMockReq(session: Record<string, unknown> = {}): Request {
   return { session } as unknown as Request;
@@ -9,71 +18,80 @@ function createMockReq(session: Record<string, unknown> = {}): Request {
 const mockRes = {} as Response;
 
 describe('authorize middleware', () => {
-  it('calls next() when user role is in allowed list', () => {
-    const next = vi.fn();
-    const middleware = authorize(['super_admin', 'admin']);
-    const req = createMockReq({ userRole: 'admin' });
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-    middleware(req, mockRes, next);
+  it('calls next() for super_admin without DB lookup', async () => {
+    const next = vi.fn();
+    const middleware = authorize('customers');
+    const req = createMockReq({ userRole: 'super_admin' });
+
+    await middleware(req, mockRes, next);
 
     expect(next).toHaveBeenCalledWith();
+    expect(mockedHasPermission).not.toHaveBeenCalled();
   });
 
-  it('returns 403 when user role is not in allowed list', () => {
+  it('returns 401 when no session role exists', async () => {
     const next = vi.fn();
-    const middleware = authorize(['super_admin']);
-    const req = createMockReq({ userRole: 'delivery_agent' });
-
-    middleware(req, mockRes, next);
-
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 403, message: 'Insufficient privileges' }),
-    );
-  });
-
-  it('returns 401 when no session role exists', () => {
-    const next = vi.fn();
-    const middleware = authorize(['super_admin']);
+    const middleware = authorize('customers');
     const req = createMockReq({});
 
-    middleware(req, mockRes, next);
+    await middleware(req, mockRes, next);
 
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ statusCode: 401 }),
     );
   });
 
-  it('allows super_admin access to super_admin-only routes', () => {
+  it('calls next() when permission is granted', async () => {
+    mockedHasPermission.mockResolvedValue(true);
     const next = vi.fn();
-    const middleware = authorize(['super_admin']);
-    const req = createMockReq({ userRole: 'super_admin' });
+    const middleware = authorize('customers');
+    const req = createMockReq({ userRole: 'admin' });
 
-    middleware(req, mockRes, next);
+    await middleware(req, mockRes, next);
 
+    expect(mockedHasPermission).toHaveBeenCalledWith('admin', 'customers');
     expect(next).toHaveBeenCalledWith();
   });
 
-  it('denies read_only user from admin routes', () => {
+  it('returns 403 when permission is denied', async () => {
+    mockedHasPermission.mockResolvedValue(false);
     const next = vi.fn();
-    const middleware = authorize(['super_admin', 'admin']);
-    const req = createMockReq({ userRole: 'read_only' });
+    const middleware = authorize('users');
+    const req = createMockReq({ userRole: 'delivery_agent' });
 
-    middleware(req, mockRes, next);
+    await middleware(req, mockRes, next);
 
+    expect(mockedHasPermission).toHaveBeenCalledWith('delivery_agent', 'users');
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 403 }),
+      expect.objectContaining({ statusCode: 403, message: 'Insufficient privileges' }),
     );
   });
 
-  it('denies billing_staff from delivery_agent routes', () => {
+  it('returns 500 when permission service throws (fail-closed)', async () => {
+    mockedHasPermission.mockRejectedValue(new Error('DB connection lost'));
     const next = vi.fn();
-    const middleware = authorize(['delivery_agent']);
+    const middleware = authorize('billing');
     const req = createMockReq({ userRole: 'billing_staff' });
 
-    middleware(req, mockRes, next);
+    await middleware(req, mockRes, next);
 
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 403 }),
+      expect.objectContaining({ statusCode: 500, message: 'Permission check failed' }),
     );
+  });
+
+  it('passes the correct permission name to the service', async () => {
+    mockedHasPermission.mockResolvedValue(true);
+    const next = vi.fn();
+    const middleware = authorize('reports');
+    const req = createMockReq({ userRole: 'read_only' });
+
+    await middleware(req, mockRes, next);
+
+    expect(mockedHasPermission).toHaveBeenCalledWith('read_only', 'reports');
   });
 });

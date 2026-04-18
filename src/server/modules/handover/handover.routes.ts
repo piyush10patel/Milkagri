@@ -11,11 +11,8 @@ const router = Router();
 
 router.use(authenticate);
 
-const viewRoles = ['super_admin', 'admin', 'billing_staff', 'delivery_agent', 'read_only'];
-const editRoles = ['super_admin', 'admin', 'billing_staff', 'delivery_agent'];
-
-router.get('/', authorize(viewRoles), validate({ query: handoverQuerySchema }), controller.list);
-router.post('/', authorize(editRoles), csrfProtection, validate({ body: createHandoverNoteSchema }), controller.create);
-router.delete('/:id', authorize(editRoles), csrfProtection, validate({ params: uuidParamSchema }), controller.remove);
+router.get('/', authorize('deliveries'), validate({ query: handoverQuerySchema }), controller.list);
+router.post('/', authorize('deliveries'), csrfProtection, validate({ body: createHandoverNoteSchema }), controller.create);
+router.delete('/:id', authorize('deliveries'), csrfProtection, validate({ params: uuidParamSchema }), controller.remove);
 
 export default router;

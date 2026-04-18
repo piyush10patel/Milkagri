@@ -13,15 +13,12 @@ import * as controller from './reports.controller.js';
 
 const router = Router();
 
-// All report endpoints require at least Admin-level access
-const reportRoles = ['admin', 'super_admin', 'billing_staff', 'read_only'];
-
 router.use(authenticate);
 
 // GET /reports/daily-delivery
 router.get(
   '/daily-delivery',
-  authorize(reportRoles),
+  authorize('reports'),
   validate({ query: dateRangeQuerySchema }),
   controller.dailyDelivery,
 );
@@ -29,7 +26,7 @@ router.get(
 // GET /reports/route-delivery
 router.get(
   '/route-delivery',
-  authorize(reportRoles),
+  authorize('reports'),
   validate({ query: routeDeliveryQuerySchema }),
   controller.routeDelivery,
 );
@@ -37,7 +34,7 @@ router.get(
 // GET /reports/outstanding
 router.get(
   '/outstanding',
-  authorize(reportRoles),
+  authorize('reports'),
   validate({ query: outstandingQuerySchema }),
   controller.outstanding,
 );
@@ -45,7 +42,7 @@ router.get(
 // GET /reports/revenue
 router.get(
   '/revenue',
-  authorize(reportRoles),
+  authorize('reports'),
   validate({ query: revenueQuerySchema }),
   controller.revenue,
 );
@@ -53,7 +50,7 @@ router.get(
 // GET /reports/product-sales
 router.get(
   '/product-sales',
-  authorize(reportRoles),
+  authorize('reports'),
   validate({ query: dateRangeQuerySchema }),
   controller.productSales,
 );
@@ -61,7 +58,7 @@ router.get(
 // GET /reports/missed-deliveries
 router.get(
   '/missed-deliveries',
-  authorize(reportRoles),
+  authorize('reports'),
   validate({ query: dateRangeQuerySchema }),
   controller.missedDeliveries,
 );
@@ -69,7 +66,7 @@ router.get(
 // GET /reports/subscription-changes
 router.get(
   '/subscription-changes',
-  authorize(reportRoles),
+  authorize('reports'),
   validate({ query: dateRangeQuerySchema }),
   controller.subscriptionChanges,
 );
@@ -77,7 +74,7 @@ router.get(
 // GET /reports/:type/csv
 router.get(
   '/:type/csv',
-  authorize(reportRoles),
+  authorize('reports'),
   validate({ params: csvExportParamSchema }),
   controller.csvExport,
 );

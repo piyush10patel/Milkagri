@@ -9,6 +9,7 @@ interface RouteItem {
   name: string;
   description?: string;
   isActive: boolean;
+  routeType: 'delivery' | 'collection';
   _count?: { customers: number; agents: number };
   createdAt: string;
 }
@@ -19,6 +20,7 @@ export default function RouteListPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [routeTypeFilter, setRouteTypeFilter] = useState<'all' | 'delivery' | 'collection'>('all');
   const [deleteTarget, setDeleteTarget] = useState<RouteItem | null>(null);
   const closeDeleteModal = useCallback(() => setDeleteTarget(null), []);
   const { modalRef: deleteModalRef } = useModalFocusTrap(!!deleteTarget, closeDeleteModal);
@@ -26,9 +28,10 @@ export default function RouteListPage() {
 
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (search) params.set('search', search);
+  if (routeTypeFilter !== 'all') params.set('routeType', routeTypeFilter);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['routes', page, search],
+    queryKey: ['routes', page, search, routeTypeFilter],
     queryFn: () => api.get<ListResponse>(`/api/v1/routes?${params}`),
   });
 
@@ -47,9 +50,19 @@ export default function RouteListPage() {
         <Link to="/routes/new" className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">+ New Route</Link>
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 flex flex-col sm:flex-row gap-3">
         <input type="text" placeholder="Search routes…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full sm:w-80 focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Search routes" />
+        <select
+          value={routeTypeFilter}
+          onChange={(e) => { setRouteTypeFilter(e.target.value as 'all' | 'delivery' | 'collection'); setPage(1); }}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label="Filter by route type"
+        >
+          <option value="all">All Types</option>
+          <option value="delivery">Delivery</option>
+          <option value="collection">Collection</option>
+        </select>
       </div>
 
       {isLoading && <p className="text-sm text-gray-500" aria-live="polite">Loading…</p>}
@@ -59,6 +72,7 @@ export default function RouteListPage() {
           <thead className="bg-gray-50">
             <tr>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
               <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Customers</th>
               <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Agents</th>
@@ -71,6 +85,11 @@ export default function RouteListPage() {
             {data?.data?.map((r) => (
               <tr key={r.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">{r.name}</td>
+                <td className="px-4 py-3 text-sm">
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${r.routeType === 'delivery' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
+                    {r.routeType === 'delivery' ? 'Delivery' : 'Collection'}
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-sm text-gray-600">{r.description || '—'}</td>
                 <td className="px-4 py-3 text-sm text-center">{r._count?.customers ?? 0}</td>
                 <td className="px-4 py-3 text-sm text-center">{r._count?.agents ?? 0}</td>
@@ -85,7 +104,7 @@ export default function RouteListPage() {
                 </td>
               </tr>
             ))}
-            {data?.data?.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">No routes found</td></tr>}
+            {data?.data?.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">No routes found</td></tr>}
           </tbody>
         </table>
       </div>

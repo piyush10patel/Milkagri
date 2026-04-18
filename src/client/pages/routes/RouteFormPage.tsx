@@ -17,6 +17,7 @@ interface RouteData {
   name: string;
   description?: string;
   isActive: boolean;
+  routeType?: 'delivery' | 'collection';
   startLocationMode?: 'none' | 'existing_stop' | 'custom';
   startCustomerId?: string | null;
   startLatitude?: number | null;
@@ -110,6 +111,7 @@ export default function RouteFormPage() {
   const [form, setForm] = useState({
     name: '',
     description: '',
+    routeType: 'delivery' as 'delivery' | 'collection',
     startLocationMode: 'none' as 'none' | 'existing_stop' | 'custom',
     startCustomerId: '',
     startLatitude: '',
@@ -220,6 +222,7 @@ export default function RouteFormPage() {
       setForm({
         name: existing.name,
         description: existing.description ?? '',
+        routeType: existing.routeType ?? 'delivery',
         startLocationMode: existing.startLocationMode ?? 'none',
         startCustomerId: existing.startCustomerId ?? '',
         startLatitude:
@@ -325,6 +328,7 @@ export default function RouteFormPage() {
     const payload: Record<string, unknown> = {
       name: form.name,
       description: form.description || undefined,
+      routeType: form.routeType,
       startLocationMode: form.startLocationMode,
       startLabel: form.startLabel || null,
     };
@@ -588,6 +592,14 @@ export default function RouteFormPage() {
         <div>
           <label htmlFor="rdesc" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
           <textarea id="rdesc" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={fieldClass('description')} rows={2} />
+        </div>
+        <div>
+          <label htmlFor="routeType" className="block text-sm font-medium text-gray-700 mb-1">Route Type</label>
+          <select id="routeType" value={form.routeType} onChange={(e) => setForm({ ...form, routeType: e.target.value as 'delivery' | 'collection' })} className={fieldClass('routeType')}>
+            <option value="delivery">Delivery</option>
+            <option value="collection">Collection</option>
+          </select>
+          {errors.routeType && <p className="text-xs text-red-600 mt-1">{errors.routeType}</p>}
         </div>
         <fieldset className="rounded-md border border-gray-200 p-3">
           <legend className="px-1 text-xs font-medium text-gray-700">Route Start Location</legend>

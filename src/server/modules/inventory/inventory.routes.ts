@@ -19,7 +19,7 @@ router.use(authenticate);
 // POST /inventory/inward — record inward stock (Admin+)
 router.post(
   '/inward',
-  authorize(['super_admin', 'admin']),
+  authorize('products'),
   csrfProtection,
   validate({ body: recordInwardStockSchema }),
   async (req: Request, res: Response, next: NextFunction) => {
@@ -36,7 +36,7 @@ router.post(
 // POST /inventory/wastage — record wastage/spoilage (Admin+)
 router.post(
   '/wastage',
-  authorize(['super_admin', 'admin']),
+  authorize('products'),
   csrfProtection,
   validate({ body: recordWastageSchema }),
   async (req: Request, res: Response, next: NextFunction) => {
@@ -53,7 +53,7 @@ router.post(
 // GET /inventory/inward?date=YYYY-MM-DD — list inward stock for a date
 router.get(
   '/inward',
-  authorize(['super_admin', 'admin']),
+  authorize('products'),
   validate({ query: stockQuerySchema }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -71,7 +71,7 @@ router.get(
 // GET /inventory/wastage?date=YYYY-MM-DD — list wastage for a date
 router.get(
   '/wastage',
-  authorize(['super_admin', 'admin']),
+  authorize('products'),
   validate({ query: stockQuerySchema }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -89,7 +89,7 @@ router.get(
 // GET /inventory/reconciliation?date=YYYY-MM-DD — daily stock reconciliation report
 router.get(
   '/reconciliation',
-  authorize(['super_admin', 'admin']),
+  authorize('products'),
   validate({ query: stockDateParamSchema }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {

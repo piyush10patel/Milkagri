@@ -11,8 +11,8 @@ import * as usersService from './users.service.js';
 
 const router = Router();
 
-// All user management routes require Super_Admin
-router.use(authenticate, authorize(['super_admin']));
+// All user management routes require 'users' permission
+router.use(authenticate, authorize('users'));
 
 // GET /users — list staff accounts (paginated)
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {

@@ -17,26 +17,23 @@ import * as controller from './subscriptions.controller.js';
 
 const router = Router();
 
-const adminPlus = ['super_admin', 'admin', 'billing_staff', 'read_only'];
-const adminOnly = ['super_admin', 'admin'];
-
 router.use(authenticate);
 
 // GET /subscriptions
 router.get(
   '/',
-  authorize(adminPlus),
+  authorize('subscriptions'),
   validate({ query: subscriptionQuerySchema }),
   controller.list,
 );
 
 // GET /subscriptions/:id
-router.get('/:id', authorize(adminPlus), validate({ params: uuidParamSchema }), controller.getById);
+router.get('/:id', authorize('subscriptions'), validate({ params: uuidParamSchema }), controller.getById);
 
 // POST /subscriptions
 router.post(
   '/',
-  authorize(adminOnly),
+  authorize('subscriptions'),
   csrfProtection,
   validate({ body: createSubscriptionSchema }),
   auditLog(),
@@ -46,7 +43,7 @@ router.post(
 // PUT /subscriptions/:id
 router.put(
   '/:id',
-  authorize(adminOnly),
+  authorize('subscriptions'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: updateSubscriptionSchema }),
   auditLog(),
@@ -56,7 +53,7 @@ router.put(
 // DELETE /subscriptions/:id
 router.delete(
   '/:id',
-  authorize(adminOnly),
+  authorize('subscriptions'),
   csrfProtection,
   validate({ params: uuidParamSchema }),
   auditLog(),
@@ -66,7 +63,7 @@ router.delete(
 // PATCH /subscriptions/:id/cancel
 router.patch(
   '/:id/cancel',
-  authorize(adminOnly),
+  authorize('subscriptions'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: cancelSubscriptionSchema }),
   auditLog(),
@@ -76,7 +73,7 @@ router.patch(
 // POST /subscriptions/:id/vacation-holds
 router.post(
   '/:id/vacation-holds',
-  authorize(adminOnly),
+  authorize('subscriptions'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: createVacationHoldSchema }),
   auditLog(),
@@ -86,7 +83,7 @@ router.post(
 // PATCH /subscriptions/:id/vacation-holds/:hid/resume
 router.patch(
   '/:id/vacation-holds/:hid/resume',
-  authorize(adminOnly),
+  authorize('subscriptions'),
   csrfProtection,
   validate({ params: uuidWithSubParam('hid') }),
   auditLog(),
@@ -96,7 +93,7 @@ router.patch(
 // POST /subscriptions/:id/quantity-changes
 router.post(
   '/:id/quantity-changes',
-  authorize(adminOnly),
+  authorize('subscriptions'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: scheduleQuantityChangeSchema }),
   auditLog(),
@@ -104,6 +101,6 @@ router.post(
 );
 
 // GET /subscriptions/:id/history
-router.get('/:id/history', authorize(adminPlus), validate({ params: uuidParamSchema }), controller.getHistory);
+router.get('/:id/history', authorize('subscriptions'), validate({ params: uuidParamSchema }), controller.getHistory);
 
 export default router;

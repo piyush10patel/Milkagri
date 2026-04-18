@@ -148,6 +148,35 @@ describe('listRoutes', () => {
     expect(call.where.OR).toBeDefined();
     expect(call.where.OR).toHaveLength(2);
   });
+
+  it('filters by routeType when provided', async () => {
+    mockRouteFindMany.mockResolvedValue([]);
+    mockRouteCount.mockResolvedValue(0);
+
+    await routesService.listRoutes(
+      { routeType: 'collection' },
+      { page: 1, limit: 20, skip: 0, take: 20 },
+    );
+
+    expect(mockRouteFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ routeType: 'collection' }),
+      }),
+    );
+  });
+
+  it('does not filter by routeType when omitted', async () => {
+    mockRouteFindMany.mockResolvedValue([]);
+    mockRouteCount.mockResolvedValue(0);
+
+    await routesService.listRoutes(
+      {},
+      { page: 1, limit: 20, skip: 0, take: 20 },
+    );
+
+    const call = mockRouteFindMany.mock.calls[0][0];
+    expect(call.where).not.toHaveProperty('routeType');
+  });
 });
 
 // ---------------------------------------------------------------------------

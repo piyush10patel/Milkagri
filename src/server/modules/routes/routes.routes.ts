@@ -18,9 +18,6 @@ import * as controller from './routes.controller.js';
 
 const router = Router();
 
-const adminPlus = ['super_admin', 'admin', 'billing_staff', 'read_only'];
-const adminOnly = ['super_admin', 'admin'];
-
 // All routes require authentication
 router.use(authenticate);
 
@@ -29,7 +26,7 @@ router.use(authenticate);
 // ---------------------------------------------------------------------------
 router.get(
   '/',
-  authorize(adminPlus),
+  authorize('routes'),
   validate({ query: routeQuerySchema }),
   controller.list,
 );
@@ -37,14 +34,14 @@ router.get(
 // ---------------------------------------------------------------------------
 // GET /routes/:id/summary — route summary stats (must be before /:id)
 // ---------------------------------------------------------------------------
-router.get('/:id/summary', authorize(adminPlus), validate({ params: uuidParamSchema }), controller.summary);
+router.get('/:id/summary', authorize('routes'), validate({ params: uuidParamSchema }), controller.summary);
 
 // ---------------------------------------------------------------------------
 // GET /routes/:id/manifest/print — printable manifest HTML (must be before /:id/manifest)
 // ---------------------------------------------------------------------------
 router.get(
   '/:id/manifest/print',
-  authorize(adminPlus),
+  authorize('routes'),
   validate({ params: uuidParamSchema, query: manifestQuerySchema }),
   controller.manifestPrint,
 );
@@ -54,7 +51,7 @@ router.get(
 // ---------------------------------------------------------------------------
 router.get(
   '/:id/manifest',
-  authorize(adminPlus),
+  authorize('routes'),
   validate({ params: uuidParamSchema, query: manifestQuerySchema }),
   controller.manifest,
 );
@@ -64,7 +61,7 @@ router.get(
 // ---------------------------------------------------------------------------
 router.get(
   '/:id/path',
-  authorize(adminOnly),
+  authorize('routes'),
   validate({ params: uuidParamSchema }),
   controller.getPath,
 );
@@ -74,7 +71,7 @@ router.get(
 // ---------------------------------------------------------------------------
 router.post(
   '/:id/generate-path',
-  authorize(adminOnly),
+  authorize('routes'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: generatePathSchema }),
   auditLog(),
@@ -84,14 +81,14 @@ router.post(
 // ---------------------------------------------------------------------------
 // GET /routes/:id — detail
 // ---------------------------------------------------------------------------
-router.get('/:id', authorize(adminPlus), validate({ params: uuidParamSchema }), controller.getById);
+router.get('/:id', authorize('routes'), validate({ params: uuidParamSchema }), controller.getById);
 
 // ---------------------------------------------------------------------------
 // POST /routes — create
 // ---------------------------------------------------------------------------
 router.post(
   '/',
-  authorize(adminOnly),
+  authorize('routes'),
   csrfProtection,
   validate({ body: createRouteSchema }),
   auditLog(),
@@ -103,7 +100,7 @@ router.post(
 // ---------------------------------------------------------------------------
 router.put(
   '/:id',
-  authorize(adminOnly),
+  authorize('routes'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: updateRouteSchema }),
   auditLog(),
@@ -115,7 +112,7 @@ router.put(
 // ---------------------------------------------------------------------------
 router.delete(
   '/:id',
-  authorize(adminOnly),
+  authorize('routes'),
   csrfProtection,
   validate({ params: uuidParamSchema }),
   auditLog(),
@@ -127,7 +124,7 @@ router.delete(
 // ---------------------------------------------------------------------------
 router.patch(
   '/:id/deactivate',
-  authorize(adminOnly),
+  authorize('routes'),
   csrfProtection,
   validate({ params: uuidParamSchema }),
   auditLog(),
@@ -139,7 +136,7 @@ router.patch(
 // ---------------------------------------------------------------------------
 router.put(
   '/:id/customers',
-  authorize(adminOnly),
+  authorize('routes'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: assignCustomersSchema }),
   auditLog(),
@@ -151,7 +148,7 @@ router.put(
 // ---------------------------------------------------------------------------
 router.put(
   '/:id/agents',
-  authorize(adminOnly),
+  authorize('routes'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: assignAgentsSchema }),
   auditLog(),

@@ -21,7 +21,7 @@ router.use(authenticate);
 // GET /holidays — list system-wide holidays (paginated, filterable by date range)
 router.get(
   '/',
-  authorize(['super_admin', 'admin', 'delivery_agent', 'billing_staff', 'read_only']),
+  authorize('settings'),
   validate({ query: holidayQuerySchema }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -43,7 +43,7 @@ router.get(
 // GET /holidays/route — list route-specific holidays
 router.get(
   '/route',
-  authorize(['super_admin', 'admin', 'delivery_agent', 'billing_staff', 'read_only']),
+  authorize('settings'),
   validate({ query: holidayQuerySchema }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -66,7 +66,7 @@ router.get(
 // POST /holidays — add a system-wide holiday (Admin+)
 router.post(
   '/',
-  authorize(['super_admin', 'admin']),
+  authorize('settings'),
   csrfProtection,
   validate({ body: createHolidaySchema }),
   async (req: Request, res: Response, next: NextFunction) => {
@@ -83,7 +83,7 @@ router.post(
 // POST /holidays/route — add a route-specific holiday (Admin+)
 router.post(
   '/route',
-  authorize(['super_admin', 'admin']),
+  authorize('settings'),
   csrfProtection,
   validate({ body: createRouteHolidaySchema }),
   async (req: Request, res: Response, next: NextFunction) => {
@@ -103,7 +103,7 @@ router.post(
 // DELETE /holidays/:id — delete a future system-wide holiday (Admin+)
 router.delete(
   '/:id',
-  authorize(['super_admin', 'admin']),
+  authorize('settings'),
   csrfProtection,
   validate({ params: holidayIdParamSchema }),
   async (req: Request, res: Response, next: NextFunction) => {
@@ -119,7 +119,7 @@ router.delete(
 // DELETE /holidays/route/:id — delete a future route-specific holiday (Admin+)
 router.delete(
   '/route/:id',
-  authorize(['super_admin', 'admin']),
+  authorize('settings'),
   csrfProtection,
   validate({ params: holidayIdParamSchema }),
   async (req: Request, res: Response, next: NextFunction) => {

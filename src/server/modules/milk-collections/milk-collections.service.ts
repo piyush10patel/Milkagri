@@ -57,7 +57,7 @@ export async function listVillages() {
 
 export async function listCollectionRoutes() {
   return prisma.route.findMany({
-    where: { isActive: true },
+    where: { isActive: true, routeType: 'collection' },
     select: {
       id: true,
       name: true,

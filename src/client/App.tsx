@@ -40,6 +40,12 @@ import UserFormPage from '@/pages/users/UserFormPage';
 import NotificationsPage from '@/pages/notifications/NotificationsPage';
 import AuditLogPage from '@/pages/audit/AuditLogPage';
 import SettingsPage from '@/pages/settings/SettingsPage';
+import AdminCollectionOverviewPage from '@/pages/collections/AdminCollectionOverviewPage';
+import AgentAssignmentPage from '@/pages/collections/AgentAssignmentPage';
+import AgentRemittancePage from '@/pages/collections/AgentRemittancePage';
+import AgentBalancesPage from '@/pages/collections/AgentBalancesPage';
+import AgentCollectionDashboardPage from '@/pages/collections/AgentCollectionDashboardPage';
+import PermissionMatrixPage from '@/pages/settings/PermissionMatrixPage';
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -58,6 +64,13 @@ function RedirectIfAuth({ children }: { children: React.ReactElement }) {
   if (user) return <Navigate to="/" replace />;
   return children;
 }
+
+function RequireRole({ role, children }: { role: string; children: React.ReactElement }) {
+  const { user } = useAuth();
+  if (user?.role !== role) return <Navigate to="/" replace />;
+  return children;
+}
+
 
 export default function App() {
   const auth = useAuthProvider();
@@ -111,6 +124,12 @@ export default function App() {
           <Route path="notifications" element={<NotificationsPage />} />
           <Route path="audit-logs" element={<AuditLogPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="settings/permissions" element={<RequireRole role="super_admin"><PermissionMatrixPage /></RequireRole>} />
+          <Route path="collections/overview" element={<AdminCollectionOverviewPage />} />
+          <Route path="collections/assignments" element={<AgentAssignmentPage />} />
+          <Route path="collections/remittances" element={<AgentRemittancePage />} />
+          <Route path="collections/balances" element={<AgentBalancesPage />} />
+          <Route path="collections/dashboard" element={<AgentCollectionDashboardPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

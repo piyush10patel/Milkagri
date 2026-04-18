@@ -222,7 +222,7 @@ export default function MilkCollectionPage() {
 
   const { data: collectionRoutesData } = useQuery({
     queryKey: ['milk-collection-routes'],
-    queryFn: () => api.get<{ items: CollectionRoute[] }>('/api/v1/milk-collections/routes'),
+    queryFn: () => api.get<{ items: CollectionRoute[] }>('/api/v1/milk-collections/routes?routeType=collection'),
   });
 
   const { data: allAgents } = useQuery({

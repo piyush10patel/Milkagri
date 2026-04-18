@@ -1,29 +1,41 @@
 import type { Request, Response, NextFunction } from 'express';
-import { ForbiddenError, UnauthorizedError } from '../lib/errors.js';
+import { AppError, ForbiddenError, UnauthorizedError } from '../lib/errors.js';
+import * as permissionService from '../modules/permissions/permissions.service.js';
 
 /**
- * RBAC middleware factory. Returns middleware that checks the session's
- * userRole against the provided list of allowed roles.
+ * Permission-based RBAC middleware factory. Returns middleware that checks
+ * whether the session's userRole has the given permission via the
+ * PermissionService (database-driven, cached).
+ *
+ * - super_admin always passes without a DB lookup.
+ * - On service error the request is denied with 500 (fail-closed).
  *
  * Usage:
  * ```ts
- * router.get('/users', authenticate, authorize(['super_admin']), controller.list);
+ * router.get('/users', authenticate, authorize('users'), controller.list);
  * ```
  */
-export function authorize(allowedRoles: string[]) {
-  return (req: Request, _res: Response, next: NextFunction): void => {
+export function authorize(permission: string) {
+  return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
     const userRole = (req.session as any)?.userRole;
 
     if (!userRole) {
-      next(new UnauthorizedError('Authentication required'));
-      return;
+      return next(new UnauthorizedError('Authentication required'));
     }
 
-    if (!allowedRoles.includes(userRole)) {
-      next(new ForbiddenError('Insufficient privileges'));
-      return;
+    // super_admin always passes
+    if (userRole === 'super_admin') {
+      return next();
     }
 
-    next();
+    try {
+      const allowed = await permissionService.hasPermission(userRole, permission);
+      if (!allowed) {
+        return next(new ForbiddenError('Insufficient privileges'));
+      }
+      next();
+    } catch (_err) {
+      next(new AppError('Permission check failed', 500, 'INTERNAL_ERROR'));
+    }
   };
 }

@@ -11,10 +11,10 @@ const router = Router();
 
 router.use(authenticate);
 
-// GET /settings — retrieve all system settings (Super_Admin only)
+// GET /settings — retrieve all system settings
 router.get(
   '/',
-  authorize(['super_admin']),
+  authorize('settings'),
   async (_req: Request, res: Response, next: NextFunction) => {
     try {
       const settings = await settingsService.getSettings();
@@ -25,10 +25,10 @@ router.get(
   },
 );
 
-// PUT /settings — update system settings (Super_Admin only)
+// PUT /settings — update system settings
 router.put(
   '/',
-  authorize(['super_admin']),
+  authorize('settings'),
   csrfProtection,
   validate({ body: updateSettingsSchema }),
   async (req: Request, res: Response, next: NextFunction) => {

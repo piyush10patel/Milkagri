@@ -14,16 +14,12 @@ import * as controller from './billing.controller.js';
 
 const router = Router();
 
-const billingStaffAndSuperAdmin = ['billing_staff', 'super_admin'];
-const adminAndBillingStaff = ['admin', 'billing_staff', 'super_admin'];
-const billingStaffOnly = ['billing_staff', 'super_admin'];
-
 router.use(authenticate);
 
 // POST /billing/generate
 router.post(
   '/generate',
-  authorize(billingStaffAndSuperAdmin),
+  authorize('billing'),
   csrfProtection,
   validate({ body: generateInvoicesSchema }),
   controller.generate,
@@ -32,7 +28,7 @@ router.post(
 // GET /billing/invoices
 router.get(
   '/invoices',
-  authorize(adminAndBillingStaff),
+  authorize('billing'),
   validate({ query: listInvoicesQuerySchema }),
   controller.listInvoices,
 );
@@ -40,7 +36,7 @@ router.get(
 // GET /billing/invoices/:id
 router.get(
   '/invoices/:id',
-  authorize(adminAndBillingStaff),
+  authorize('billing'),
   validate({ params: invoiceIdParamSchema }),
   controller.getInvoice,
 );
@@ -48,7 +44,7 @@ router.get(
 // GET /billing/invoices/:id/pdf
 router.get(
   '/invoices/:id/pdf',
-  authorize(adminAndBillingStaff),
+  authorize('billing'),
   validate({ params: invoiceIdParamSchema }),
   controller.getInvoicePdf,
 );
@@ -56,7 +52,7 @@ router.get(
 // POST /billing/invoices/:id/adjustments
 router.post(
   '/invoices/:id/adjustments',
-  authorize(billingStaffOnly),
+  authorize('billing'),
   csrfProtection,
   validate({ params: invoiceIdParamSchema, body: addAdjustmentSchema }),
   controller.addAdjustment,
@@ -65,7 +61,7 @@ router.post(
 // POST /billing/invoices/:id/discounts
 router.post(
   '/invoices/:id/discounts',
-  authorize(billingStaffOnly),
+  authorize('billing'),
   csrfProtection,
   validate({ params: invoiceIdParamSchema, body: addDiscountSchema }),
   controller.addDiscount,
@@ -74,7 +70,7 @@ router.post(
 // POST /billing/invoices/:id/regenerate
 router.post(
   '/invoices/:id/regenerate',
-  authorize(billingStaffOnly),
+  authorize('billing'),
   csrfProtection,
   validate({ params: invoiceIdParamSchema }),
   controller.regenerateInvoice,

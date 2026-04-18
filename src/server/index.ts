@@ -32,6 +32,10 @@ import inventoryRoutes from './modules/inventory/inventory.routes.js';
 import pricingCategoriesRoutes from './modules/pricing-categories/pricing-categories.routes.js';
 import milkCollectionsRoutes from './modules/milk-collections/milk-collections.routes.js';
 import handoverRoutes from './modules/handover/handover.routes.js';
+import agentAssignmentsRoutes from './modules/agent-assignments/agent-assignments.routes.js';
+import agentCollectionsRoutes from './modules/agent-collections/agent-collections.routes.js';
+import agentRemittancesRoutes from './modules/agent-remittances/agent-remittances.routes.js';
+import permissionsRoutes from './modules/permissions/permissions.routes.js';
 import {
   bootstrapSuperAdmin,
   hasBootstrapAdminEnv,
@@ -258,6 +262,10 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/pricing-categories', pricingCategoriesRoutes);
 app.use('/api/milk-collections', milkCollectionsRoutes);
 app.use('/api/handover', handoverRoutes);
+app.use('/api/agent-assignments', agentAssignmentsRoutes);
+app.use('/api/agent-collections', agentCollectionsRoutes);
+app.use('/api/agent-remittances', agentRemittancesRoutes);
+app.use('/api/permissions', permissionsRoutes);
 
 // Duplicate under /api/v1 so client calls with v1 prefix work
 app.use('/api/v1/auth', authRoutes);
@@ -280,6 +288,10 @@ app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/pricing-categories', pricingCategoriesRoutes);
 app.use('/api/v1/milk-collections', milkCollectionsRoutes);
 app.use('/api/v1/handover', handoverRoutes);
+app.use('/api/v1/agent-assignments', agentAssignmentsRoutes);
+app.use('/api/v1/agent-collections', agentCollectionsRoutes);
+app.use('/api/v1/agent-remittances', agentRemittancesRoutes);
+app.use('/api/v1/permissions', permissionsRoutes);
 
 // ---------------------------------------------------------------------------
 // Serve built frontend in production

@@ -16,15 +16,12 @@ import * as controller from './orders.controller.js';
 
 const router = Router();
 
-const adminPlus = ['super_admin', 'admin', 'billing_staff', 'read_only'];
-const adminOnly = ['super_admin', 'admin'];
-
 router.use(authenticate);
 
 // GET /orders
 router.get(
   '/',
-  authorize(adminPlus),
+  authorize('orders'),
   validate({ query: orderQuerySchema }),
   controller.list,
 );
@@ -32,25 +29,25 @@ router.get(
 // GET /orders/summary
 router.get(
   '/summary',
-  authorize(adminPlus),
+  authorize('orders'),
   validate({ query: summaryQuerySchema }),
   controller.summary,
 );
 
 router.get(
   '/milk-summary',
-  authorize(adminPlus),
+  authorize('orders'),
   validate({ query: summaryQuerySchema }),
   controller.milkSummary,
 );
 
 // GET /orders/:id
-router.get('/:id', authorize(adminPlus), validate({ params: uuidParamSchema }), controller.getById);
+router.get('/:id', authorize('orders'), validate({ params: uuidParamSchema }), controller.getById);
 
 // POST /orders (one-time order)
 router.post(
   '/',
-  authorize(adminOnly),
+  authorize('orders'),
   csrfProtection,
   validate({ body: createOneTimeOrderSchema }),
   auditLog(),
@@ -60,7 +57,7 @@ router.post(
 // PUT /orders/:id
 router.put(
   '/:id',
-  authorize(adminOnly),
+  authorize('orders'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: updateOrderSchema }),
   auditLog(),
@@ -70,17 +67,17 @@ router.put(
 // DELETE /orders/:id
 router.delete(
   '/:id',
-  authorize(adminOnly),
+  authorize('orders'),
   csrfProtection,
   validate({ params: uuidParamSchema }),
   auditLog(),
   controller.remove,
 );
 
-// POST /orders/generate (manual trigger — super_admin only)
+// POST /orders/generate (manual trigger)
 router.post(
   '/generate',
-  authorize(['super_admin']),
+  authorize('orders'),
   csrfProtection,
   validate({ body: generateOrdersSchema }),
   controller.generate,

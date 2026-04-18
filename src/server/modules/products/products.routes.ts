@@ -19,33 +19,29 @@ import * as controller from './products.controller.js';
 
 const router = Router();
 
-const adminPlus = ['super_admin', 'admin', 'billing_staff', 'read_only'];
-const adminOnly = ['super_admin', 'admin'];
-const pricingEditors = ['super_admin', 'admin', 'billing_staff'];
-
 router.use(authenticate);
 
 // GET /products
 router.get(
   '/',
-  authorize(adminPlus),
+  authorize('products'),
   validate({ query: productQuerySchema }),
   controller.list,
 );
 
 router.get(
   '/pricing-matrix',
-  authorize(adminPlus),
+  authorize('products'),
   controller.getPricingMatrix,
 );
 
 // GET /products/:id
-router.get('/:id', authorize(adminPlus), validate({ params: uuidParamSchema }), controller.getById);
+router.get('/:id', authorize('products'), validate({ params: uuidParamSchema }), controller.getById);
 
 // POST /products
 router.post(
   '/',
-  authorize(adminOnly),
+  authorize('products'),
   csrfProtection,
   validate({ body: createProductSchema }),
   auditLog(),
@@ -55,7 +51,7 @@ router.post(
 // PUT /products/:id
 router.put(
   '/:id',
-  authorize(adminOnly),
+  authorize('products'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: updateProductSchema }),
   auditLog(),
@@ -65,7 +61,7 @@ router.put(
 // GET /products/:id/variants
 router.get(
   '/:id/variants',
-  authorize(adminPlus),
+  authorize('products'),
   validate({ params: uuidParamSchema, query: variantQuerySchema }),
   controller.listVariants,
 );
@@ -73,7 +69,7 @@ router.get(
 // POST /products/:id/variants
 router.post(
   '/:id/variants',
-  authorize(adminOnly),
+  authorize('products'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: createVariantSchema }),
   auditLog(),
@@ -83,7 +79,7 @@ router.post(
 // PUT /products/:id/variants/:vid
 router.put(
   '/:id/variants/:vid',
-  authorize(adminOnly),
+  authorize('products'),
   csrfProtection,
   validate({ params: uuidWithSubParam('vid'), body: updateVariantSchema }),
   auditLog(),
@@ -93,7 +89,7 @@ router.put(
 // DELETE /products/:id/variants/:vid
 router.delete(
   '/:id/variants/:vid',
-  authorize(adminOnly),
+  authorize('products'),
   csrfProtection,
   validate({ params: uuidWithSubParam('vid') }),
   auditLog(),
@@ -103,7 +99,7 @@ router.delete(
 // POST /products/:id/prices (product-level pricing)
 router.post(
   '/:id/prices',
-  authorize(pricingEditors),
+  authorize('products'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: addPriceSchema }),
   auditLog(),
@@ -113,7 +109,7 @@ router.post(
 // GET /products/:id/prices (product-level price history)
 router.get(
   '/:id/prices',
-  authorize(adminPlus),
+  authorize('products'),
   validate({ params: uuidParamSchema, query: priceHistoryQuerySchema }),
   controller.getPriceHistory,
 );

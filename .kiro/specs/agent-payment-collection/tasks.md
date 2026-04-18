@@ -1,0 +1,178 @@
+# Implementation Plan: Agent Payment Collection
+
+## Overview
+
+Implement a two-tier payment collection flow (Customer → Agent → Admin) for the milk delivery platform. Work proceeds bottom-up: schema changes → backend services → API endpoints → frontend pages. The feature adds customer-agent assignment, agent field collection with assignment enforcement, daily expected/received tracking, agent remittance, and dashboards for agents and admins.
+
+## Tasks
+
+- [x] 1. Database schema and migration
+  - [x] 1.1 Add CustomerAgentAssignment model to Prisma schema
+    - Add `CustomerAgentAssignment` model to `prisma/schema.prisma` with fields: id, customerId (@unique), agentId, assignedAt, createdAt, updatedAt
+    - Add relation to Customer (one-to-one optional) and User (one-to-many via "AgentAssignments")
+    - Add index on agentId, map to `customer_agent_assignments`
+    - Add `agentAssignment CustomerAgentAssignment?` relation to Customer model
+    - Add `agentAssignments CustomerAgentAssignment[] @relation("AgentAssignments")` to User model
+    - _Requirements: 1.1, 1.2, 1.4_
+  - [x] 1.2 Add AgentRemittance model to Prisma schema
+    - Add `AgentRemittance` model to `prisma/schema.prisma` with fields: id, agentId, amount (Decimal 12,2), paymentMethod (PaymentMethod enum), remittanceDate (Date), notes (Text?), receivedBy, createdAt
+    - Add relations to User: "AgentRemittances" for agentId, "RemittanceReceiver" for receivedBy
+    - Add indexes on agentId and remittanceDate, map to `agent_remittances`
+    - Add `agentRemittances AgentRemittance[] @relation("AgentRemittances")` and `receivedRemittances AgentRemittance[] @relation("RemittanceReceiver")` to User model
+    - _Requirements: 5.1, 5.2_
+  - [x] 1.3 Generate and apply the Prisma migration
+    - Run `npx prisma migrate dev --name agent_payment_collection` to create the migration SQL
+    - Verify both tables are created with correct columns and constraints
+    - _Requirements: 1.1, 5.1_
+
+- [x] 2. Agent Assignments backend module
+  - [x] 2.1 Create types and validation schemas (`src/server/modules/agent-assignments/agent-assignments.types.ts`)
+    - Create `assignCustomerSchema` (customerId: uuid, agentId: uuid)
+    - Create `listAssignmentsQuerySchema` (agentId?: uuid, page?, limit?)
+    - Export inferred types
+    - _Requirements: 1.1, 1.7_
+  - [x] 2.2 Create service (`src/server/modules/agent-assignments/agent-assignments.service.ts`)
+    - Implement `assignCustomer(customerId, agentId)` — validate customer and agent exist, verify agent has delivery_agent role, upsert assignment (unique on customerId)
+    - Implement `getAssignmentsByAgent(agentId)` — return all assignments with customer details
+    - Implement `getAssignmentByCustomer(customerId)` — return the assignment with agent details
+    - Implement `removeAssignment(assignmentId)` — delete assignment
+    - Implement `listAssignments(query)` — paginated list with optional agentId filter
+    - _Requirements: 1.1, 1.2, 1.3, 1.5, 1.6, 1.7_
+  - [x] 2.3 Create controller (`src/server/modules/agent-assignments/agent-assignments.controller.ts`)
+    - Implement handlers: assign, getByAgent, getByCustomer, remove, list
+    - Follow existing controller pattern (try/catch with next(err))
+    - _Requirements: 1.1, 1.5, 1.6_
+  - [x] 2.4 Create routes (`src/server/modules/agent-assignments/agent-assignments.routes.ts`)
+    - POST `/` — admin only, assign customer
+    - GET `/` — admin only, list assignments
+    - GET `/agent/:agentId` — admin + agent(self), get by agent
+    - GET `/customer/:customerId` — admin only, get by customer
+    - DELETE `/:id` — admin only, remove assignment
+    - Register with authenticate, authorize, csrfProtection, validate, auditLog middleware
+    - _Requirements: 1.1, 1.5, 1.6_
+  - [x] 2.5 Register routes in server index
+    - Import and mount at `/api/agent-assignments` in `src/server/index.ts`
+    - _Requirements: 1.1_
+  - [x] 2.6 Write property tests for assignment service
+    - Create `src/server/modules/agent-assignments/agent-assignments.service.test.ts`
+    - **Property 1: Assignment round-trip** — assign then query returns correct data
+    - **Property 2: At most one assignment per customer** — reassign replaces previous
+    - Unit tests: non-existent customer/agent returns error, non-agent role returns error
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7_
+
+- [x] 3. Agent Collections backend module
+  - [x] 3.1 Create types and validation schemas (`src/server/modules/agent-collections/agent-collections.types.ts`)
+    - Create `recordAgentCollectionSchema` (customerId: uuid, amount: positive number, paymentMethod: enum, paymentDate: YYYY-MM-DD)
+    - Create `collectionSummaryQuerySchema` (date: YYYY-MM-DD)
+    - Create `agentDashboardQuerySchema` (date?: YYYY-MM-DD)
+    - Export inferred types
+    - _Requirements: 2.1, 2.4, 3.1, 4.1_
+  - [x] 3.2 Create service (`src/server/modules/agent-collections/agent-collections.service.ts`)
+    - Implement `recordAgentCollection(input, agentUserId)` — verify assignment exists, create Payment (isFieldCollection=true, collectedBy=agentId) + LedgerEntry in transaction
+    - Implement `getDailyCollectionSummary(date)` — for each agent with assignments, calculate expected (sum of positive ledger balances of assigned customers) and received (sum of field collections on date), return with difference
+    - Implement `getAgentDashboard(agentId, date)` — return assigned customers with balances, total expected, total received, remaining, and paid indicator per customer
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 6.1, 6.2, 6.3, 6.4, 6.5_
+  - [x] 3.3 Create controller (`src/server/modules/agent-collections/agent-collections.controller.ts`)
+    - Implement handlers: recordCollection, getSummary, getDashboard
+    - _Requirements: 2.1, 3.1, 6.1_
+  - [x] 3.4 Create routes (`src/server/modules/agent-collections/agent-collections.routes.ts`)
+    - POST `/` — agent only, record collection
+    - GET `/summary` — admin only, daily summary
+    - GET `/dashboard` — agent only, agent dashboard
+    - Register with authenticate, authorize, csrfProtection, validate middleware
+    - _Requirements: 2.1, 3.1, 6.1_
+  - [x] 3.5 Register routes in server index
+    - Import and mount at `/api/agent-collections` in `src/server/index.ts`
+    - _Requirements: 2.1_
+  - [x] 3.6 Write property tests for collection service
+    - Create `src/server/modules/agent-collections/agent-collections.service.test.ts`
+    - **Property 3: Field collection creates correct Payment and LedgerEntry**
+    - **Property 4: Assignment enforcement on field collection**
+    - **Property 5: Expected payment calculation**
+    - **Property 6: Received payment calculation**
+    - **Property 7: Collection summary difference**
+    - **Property 11: Agent dashboard paid-customer indicator**
+    - Unit tests: collection with invalid customer, collection with unassigned customer, empty assignments summary
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.4, 6.5_
+
+- [x] 4. Agent Remittances backend module
+  - [x] 4.1 Create types and validation schemas (`src/server/modules/agent-remittances/agent-remittances.types.ts`)
+    - Create `recordRemittanceSchema` (agentId: uuid, amount: positive number, paymentMethod: enum, remittanceDate: YYYY-MM-DD, notes?: string)
+    - Create `listRemittancesQuerySchema` (agentId?: uuid, startDate?, endDate?, page?, limit?)
+    - Export inferred types
+    - _Requirements: 5.1, 5.2_
+  - [x] 4.2 Create service (`src/server/modules/agent-remittances/agent-remittances.service.ts`)
+    - Implement `getUnremittedBalance(agentId)` — sum of field collections minus sum of remittances for agent
+    - Implement `recordRemittance(input, adminUserId)` — validate agent exists, calculate un-remitted balance, reject if amount exceeds balance, create AgentRemittance record
+    - Implement `listRemittances(query)` — paginated list with agentId and date range filters
+    - Implement `getAgentBalances()` — return all agents with un-remitted balances, sorted descending, with pending flag
+    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 8.1, 8.2, 8.3, 8.4_
+  - [x] 4.3 Create controller (`src/server/modules/agent-remittances/agent-remittances.controller.ts`)
+    - Implement handlers: recordRemittance, listRemittances, getBalances
+    - _Requirements: 5.1, 5.6, 8.2_
+  - [x] 4.4 Create routes (`src/server/modules/agent-remittances/agent-remittances.routes.ts`)
+    - POST `/` — admin only, record remittance
+    - GET `/` — admin only, list remittances
+    - GET `/balances` — admin only, get agent balances
+    - Register with authenticate, authorize, csrfProtection, validate middleware
+    - _Requirements: 5.1, 5.6, 8.2_
+  - [x] 4.5 Register routes in server index
+    - Import and mount at `/api/agent-remittances` in `src/server/index.ts`
+    - _Requirements: 5.1_
+  - [x] 4.6 Write property tests for remittance service
+    - Create `src/server/modules/agent-remittances/agent-remittances.service.test.ts`
+    - **Property 9: Un-remitted balance invariant**
+    - **Property 10: Remittance rejection on overpayment**
+    - **Property 13: Agent balances ordering and flagging**
+    - Unit tests: remittance with non-existent agent, remittance history listing, zero-balance agent not flagged
+    - _Requirements: 5.1, 5.3, 5.4, 5.5, 8.1, 8.2, 8.3, 8.4_
+
+- [x] 5. Checkpoint — Ensure all backend tests pass
+  - Run all tests and verify passing. Ask the user if questions arise.
+
+- [x] 6. Admin Collection Overview page
+  - [x] 6.1 Create AdminCollectionOverview page (`src/client/pages/collections/AdminCollectionOverviewPage.tsx`)
+    - Date picker to select date (defaults to today)
+    - Fetch daily collection summary from `GET /api/agent-collections/summary?date=YYYY-MM-DD`
+    - Display table: Agent Name, Expected, Received, Difference, Un-remitted Balance
+    - Display grand totals row
+    - Add agent filter dropdown
+    - Add date range filter for historical view
+    - _Requirements: 7.1, 7.2, 7.3, 7.4_
+  - [x] 6.2 Create AgentAssignmentPage (`src/client/pages/collections/AgentAssignmentPage.tsx`)
+    - List all current assignments with customer name and agent name
+    - Form to assign/reassign: customer dropdown + agent dropdown + submit
+    - Delete button to remove assignment
+    - Filter by agent
+    - _Requirements: 1.1, 1.2, 1.3, 1.5, 1.6_
+  - [x] 6.3 Create AgentRemittancePage (`src/client/pages/collections/AgentRemittancePage.tsx`)
+    - Form to record remittance: agent dropdown, amount, payment method, date, notes
+    - List of recent remittances with filters (agent, date range)
+    - _Requirements: 5.1, 5.2, 5.6_
+  - [x] 6.4 Create AgentBalancesPage (`src/client/pages/collections/AgentBalancesPage.tsx`)
+    - Fetch agent balances from `GET /api/agent-remittances/balances`
+    - Display table: Agent Name, Un-remitted Balance, Pending Flag
+    - Sorted by balance descending
+    - _Requirements: 8.1, 8.2, 8.3, 8.4_
+
+- [x] 7. Agent Collection Dashboard page
+  - [x] 7.1 Create AgentCollectionDashboard page (`src/client/pages/collections/AgentCollectionDashboardPage.tsx`)
+    - Fetch dashboard data from `GET /api/agent-collections/dashboard`
+    - Display summary cards: Total Expected, Total Received, Remaining
+    - Display assigned customers list with outstanding balance and paid indicator
+    - Add "Record Payment" button per customer that opens a collection form
+    - Collection form: amount, payment method, submit
+    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 2.1, 2.4_
+
+- [x] 8. Frontend routing and navigation
+  - [x] 8.1 Add routes to App.tsx
+    - Add routes: `/collections/overview`, `/collections/assignments`, `/collections/remittances`, `/collections/balances`, `/collections/dashboard`
+    - Import all new page components
+    - _Requirements: 6.1, 7.1_
+  - [x] 8.2 Add navigation links to Layout
+    - Add "Collections" section to sidebar navigation in `src/client/components/Layout.tsx`
+    - Show agent-specific links for delivery_agent role, admin links for admin roles
+    - _Requirements: 6.1, 7.1_
+
+- [x] 9. Final checkpoint — Ensure all tests pass and feature works end-to-end
+  - Run all tests and verify passing. Ask the user if questions arise.

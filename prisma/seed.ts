@@ -9,6 +9,62 @@ async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, BCRYPT_ROUNDS);
 }
 
+// ---------------------------------------------------------------------------
+// Default permission matrix — matches the old hardcoded NAV_ITEMS role arrays
+// ---------------------------------------------------------------------------
+type ManageableRole = 'admin' | 'billing_staff' | 'delivery_agent' | 'read_only';
+
+const DEFAULT_PERMISSIONS: Record<string, Record<ManageableRole, boolean>> = {
+  customers:                    { admin: true,  billing_staff: true,  delivery_agent: false, read_only: true  },
+  products:                     { admin: true,  billing_staff: true,  delivery_agent: false, read_only: true  },
+  pricing:                      { admin: true,  billing_staff: true,  delivery_agent: false, read_only: true  },
+  subscriptions:                { admin: true,  billing_staff: true,  delivery_agent: false, read_only: true  },
+  orders:                       { admin: true,  billing_staff: true,  delivery_agent: false, read_only: true  },
+  milk_summary:                 { admin: true,  billing_staff: true,  delivery_agent: false, read_only: true  },
+  milk_collection:              { admin: true,  billing_staff: true,  delivery_agent: false, read_only: true  },
+  deliveries:                   { admin: true,  billing_staff: false, delivery_agent: true,  read_only: false },
+  routes:                       { admin: true,  billing_staff: true,  delivery_agent: false, read_only: true  },
+  route_map:                    { admin: true,  billing_staff: true,  delivery_agent: true,  read_only: true  },
+  live_gps:                     { admin: false, billing_staff: false, delivery_agent: false, read_only: false },
+  billing:                      { admin: true,  billing_staff: true,  delivery_agent: false, read_only: false },
+  payments:                     { admin: true,  billing_staff: true,  delivery_agent: false, read_only: false },
+  reports:                      { admin: true,  billing_staff: true,  delivery_agent: false, read_only: true  },
+  users:                        { admin: false, billing_staff: false, delivery_agent: false, read_only: false },
+  notifications:                { admin: true,  billing_staff: true,  delivery_agent: true,  read_only: true  },
+  audit_logs:                   { admin: true,  billing_staff: false, delivery_agent: false, read_only: false },
+  settings:                     { admin: false, billing_staff: false, delivery_agent: false, read_only: false },
+  collections_overview:         { admin: true,  billing_staff: false, delivery_agent: false, read_only: false },
+  agent_assignments:            { admin: true,  billing_staff: false, delivery_agent: false, read_only: false },
+  remittances:                  { admin: true,  billing_staff: false, delivery_agent: false, read_only: false },
+  agent_balances:               { admin: true,  billing_staff: false, delivery_agent: false, read_only: false },
+  agent_collections_dashboard:  { admin: false, billing_staff: false, delivery_agent: true,  read_only: false },
+};
+
+async function seedPermissions() {
+  console.log('Seeding default permissions...');
+
+  const roles = ['admin', 'billing_staff', 'delivery_agent', 'read_only'] as const;
+
+  for (const [permission, roleGrants] of Object.entries(DEFAULT_PERMISSIONS)) {
+    for (const role of roles) {
+      await prisma.rolePermission.upsert({
+        where: {
+          role_permission: { role, permission },
+        },
+        update: {},          // no-op — preserve existing records
+        create: {
+          role,
+          permission,
+          granted: roleGrants[role],
+        },
+      });
+    }
+  }
+
+  console.log('Default permissions seeded.');
+}
+
+
 function envOrFallback(name: string, fallback: string): string {
   return process.env[name]?.trim() || fallback;
 }
@@ -374,6 +430,8 @@ async function main() {
       description: 'Time after which subscription changes apply to next delivery (HH:mm)',
     },
   });
+
+  await seedPermissions();
 
   console.log('Seed complete.');
   console.log('Seed credentials used for this run:');

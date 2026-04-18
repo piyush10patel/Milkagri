@@ -2,39 +2,52 @@ import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { usePermissions } from '@/hooks/usePermissions';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { api } from '@/lib/api';
 
 interface NavItem {
   label: string;
   to: string;
-  roles: string[];
+  permission?: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard', to: '/', roles: ['super_admin', 'admin', 'billing_staff', 'delivery_agent', 'read_only'] },
-  { label: 'Customers', to: '/customers', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
-  { label: 'Products', to: '/products', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
-  { label: 'Pricing', to: '/pricing', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
-  { label: 'Subscriptions', to: '/subscriptions', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
-  { label: 'Orders', to: '/orders', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
-  { label: 'Milk Summary', to: '/orders/summary', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
-  { label: 'Milk Collection', to: '/milk-collections', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
-  { label: 'Deliveries', to: '/deliveries', roles: ['super_admin', 'admin', 'delivery_agent'] },
-  { label: 'Routes', to: '/routes', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
-  { label: 'Route Map', to: '/routes/map', roles: ['super_admin', 'admin', 'billing_staff', 'delivery_agent', 'read_only'] },
-  { label: 'Live GPS', to: '/tracking/live-gps', roles: ['super_admin'] },
-  { label: 'Billing', to: '/billing', roles: ['super_admin', 'admin', 'billing_staff'] },
-  { label: 'Payments', to: '/payments', roles: ['super_admin', 'admin', 'billing_staff'] },
-  { label: 'Reports', to: '/reports', roles: ['super_admin', 'admin', 'billing_staff', 'read_only'] },
-  { label: 'Users', to: '/users', roles: ['super_admin'] },
-  { label: 'Notifications', to: '/notifications', roles: ['super_admin', 'admin', 'delivery_agent', 'billing_staff', 'read_only'] },
-  { label: 'Audit Log', to: '/audit-logs', roles: ['super_admin', 'admin'] },
-  { label: 'Settings', to: '/settings', roles: ['super_admin'] },
+  { label: 'Dashboard', to: '/' },
+  { label: 'Customers', to: '/customers', permission: 'customers' },
+  { label: 'Products', to: '/products', permission: 'products' },
+  { label: 'Pricing', to: '/pricing', permission: 'pricing' },
+  { label: 'Subscriptions', to: '/subscriptions', permission: 'subscriptions' },
+  { label: 'Orders', to: '/orders', permission: 'orders' },
+  { label: 'Milk Summary', to: '/orders/summary', permission: 'milk_summary' },
+  { label: 'Milk Collection', to: '/milk-collections', permission: 'milk_collection' },
+  { label: 'Deliveries', to: '/deliveries', permission: 'deliveries' },
+  { label: 'Routes', to: '/routes', permission: 'routes' },
+  { label: 'Route Map', to: '/routes/map', permission: 'route_map' },
+  { label: 'Live GPS', to: '/tracking/live-gps', permission: 'live_gps' },
+  { label: 'Billing', to: '/billing', permission: 'billing' },
+  { label: 'Payments', to: '/payments', permission: 'payments' },
+  { label: 'Reports', to: '/reports', permission: 'reports' },
+  { label: 'Users', to: '/users', permission: 'users' },
+  { label: 'Notifications', to: '/notifications', permission: 'notifications' },
+  { label: 'Audit Log', to: '/audit-logs', permission: 'audit_logs' },
+  { label: 'Settings', to: '/settings', permission: 'settings' },
 ];
 
-function getVisibleItems(role: string): NavItem[] {
-  return NAV_ITEMS.filter((item) => item.roles.includes(role));
+const COLLECTION_NAV_ITEMS: NavItem[] = [
+  { label: 'Collection Overview', to: '/collections/overview', permission: 'collections_overview' },
+  { label: 'Agent Assignments', to: '/collections/assignments', permission: 'agent_assignments' },
+  { label: 'Remittances', to: '/collections/remittances', permission: 'remittances' },
+  { label: 'Agent Balances', to: '/collections/balances', permission: 'agent_balances' },
+  { label: 'My Collections', to: '/collections/dashboard', permission: 'agent_collections_dashboard' },
+];
+
+function getVisibleItems(permissions: Set<string>, isSuperAdmin: boolean): NavItem[] {
+  return NAV_ITEMS.filter((item) => !item.permission || isSuperAdmin || permissions.has(item.permission));
+}
+
+function getVisibleCollectionItems(permissions: Set<string>, isSuperAdmin: boolean): NavItem[] {
+  return COLLECTION_NAV_ITEMS.filter((item) => !item.permission || isSuperAdmin || permissions.has(item.permission));
 }
 
 function RoleBadge({ role }: { role: string }) {
@@ -76,12 +89,15 @@ function NotificationBell() {
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { permissions, isLoading: permissionsLoading } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   usePageTitle();
 
   if (!user) return null;
 
-  const items = getVisibleItems(user.role);
+  const isSuperAdmin = user.role === 'super_admin';
+  const items = getVisibleItems(permissions, isSuperAdmin);
+  const collectionItems = getVisibleCollectionItems(permissions, isSuperAdmin);
 
   return (
     <div className="min-h-screen flex bg-gray-50">
@@ -135,6 +151,30 @@ export default function Layout() {
               )}
             </NavLink>
           ))}
+          {collectionItems.length > 0 && (
+            <>
+              <div className="mx-4 my-2 border-t border-gray-200" />
+              <p className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">Collections</p>
+              {collectionItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setSidebarOpen(false)}
+                  className={({ isActive }) =>
+                    `block px-4 py-2 text-sm rounded-md mx-2 my-0.5 ${
+                      isActive
+                        ? 'bg-blue-50 text-blue-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <span aria-current={isActive ? 'page' : undefined}>{item.label}</span>
+                  )}
+                </NavLink>
+              ))}
+            </>
+          )}
         </nav>
       </aside>
 

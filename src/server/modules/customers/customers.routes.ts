@@ -17,9 +17,6 @@ import * as controller from './customers.controller.js';
 
 const router = Router();
 
-const adminPlus = ['super_admin', 'admin', 'billing_staff', 'read_only'];
-const adminOnly = ['super_admin', 'admin'];
-
 // All routes require authentication
 router.use(authenticate);
 
@@ -28,14 +25,14 @@ router.use(authenticate);
 // ---------------------------------------------------------------------------
 router.get(
   '/',
-  authorize(adminPlus),
+  authorize('customers'),
   validate({ query: customerQuerySchema }),
   controller.list,
 );
 
 router.post(
   '/reset-operational-data',
-  authorize(['super_admin', 'admin']),
+  authorize('customers'),
   csrfProtection,
   auditLog(),
   controller.resetOperationalData,
@@ -44,14 +41,14 @@ router.post(
 // ---------------------------------------------------------------------------
 // GET /customers/:id — detail
 // ---------------------------------------------------------------------------
-router.get('/:id', authorize(adminPlus), validate({ params: uuidParamSchema }), controller.getById);
+router.get('/:id', authorize('customers'), validate({ params: uuidParamSchema }), controller.getById);
 
 // ---------------------------------------------------------------------------
 // POST /customers — create
 // ---------------------------------------------------------------------------
 router.post(
   '/',
-  authorize(adminOnly),
+  authorize('customers'),
   csrfProtection,
   validate({ body: createCustomerSchema }),
   auditLog(),
@@ -63,7 +60,7 @@ router.post(
 // ---------------------------------------------------------------------------
 router.put(
   '/:id',
-  authorize(adminOnly),
+  authorize('customers'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: updateCustomerSchema }),
   auditLog(),
@@ -75,7 +72,7 @@ router.put(
 // ---------------------------------------------------------------------------
 router.patch(
   '/:id/status',
-  authorize(adminOnly),
+  authorize('customers'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: changeStatusSchema }),
   auditLog(),
@@ -85,14 +82,14 @@ router.patch(
 // ---------------------------------------------------------------------------
 // GET /customers/:id/addresses — list addresses
 // ---------------------------------------------------------------------------
-router.get('/:id/addresses', authorize(adminPlus), validate({ params: uuidParamSchema }), controller.listAddresses);
+router.get('/:id/addresses', authorize('customers'), validate({ params: uuidParamSchema }), controller.listAddresses);
 
 // ---------------------------------------------------------------------------
 // POST /customers/:id/addresses — add address
 // ---------------------------------------------------------------------------
 router.post(
   '/:id/addresses',
-  authorize(adminOnly),
+  authorize('customers'),
   csrfProtection,
   validate({ params: uuidParamSchema, body: createAddressSchema }),
   auditLog(),
@@ -104,7 +101,7 @@ router.post(
 // ---------------------------------------------------------------------------
 router.put(
   '/:id/addresses/:addrId',
-  authorize(adminOnly),
+  authorize('customers'),
   csrfProtection,
   validate({ params: uuidWithSubParam('addrId'), body: updateAddressSchema }),
   auditLog(),
