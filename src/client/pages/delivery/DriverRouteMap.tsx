@@ -65,7 +65,7 @@ export default function DriverRouteMap({ routeId }: DriverRouteMapProps) {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['driver-route-path', routeId],
-    queryFn: () => api.get<RoutePathResponse | { path: null }>(`/api/v1/routes/${routeId}/path`),
+    queryFn: () => api.get<RoutePathResponse | { path: null }>(`/api/v1/delivery/routes/${routeId}/path`),
     enabled: Boolean(routeId),
   });
 

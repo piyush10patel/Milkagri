@@ -92,7 +92,7 @@ export default function CustomerFormPage() {
 
   const { data: routesData } = useQuery({
     queryKey: ['routes-options'],
-    queryFn: () => api.get<{ data: RouteOption[] }>('/api/v1/routes?limit=200'),
+    queryFn: () => api.get<{ data: RouteOption[] }>('/api/v1/delivery/routes?limit=200'),
   });
 
   const { data: pricingCategoriesData } = useQuery({

@@ -93,7 +93,7 @@ export default function SubscriptionFormPage() {
 
   const { data: routesData } = useQuery({
     queryKey: ['routes-options'],
-    queryFn: () => api.get<{ data: RouteOption[] }>('/api/v1/routes?limit=200&isActive=true'),
+    queryFn: () => api.get<{ data: RouteOption[] }>('/api/v1/delivery/routes?limit=200&isActive=true'),
   });
 
   const { data: parentSubscriptionsData } = useQuery({

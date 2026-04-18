@@ -115,7 +115,7 @@ export default function DeliveryManifestPage() {
 
   const { data: deliveryRoutesData } = useQuery({
     queryKey: ['delivery-routes'],
-    queryFn: () => api.get<{ data: Array<{ id: string; name: string }> }>('/api/v1/routes?routeType=delivery'),
+    queryFn: () => api.get<{ data: Array<{ id: string; name: string }> }>('/api/v1/delivery/routes?routeType=delivery'),
   });
 
   const { data: manifestData, isLoading } = useQuery({

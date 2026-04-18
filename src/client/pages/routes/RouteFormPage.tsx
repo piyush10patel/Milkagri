@@ -151,7 +151,7 @@ export default function RouteFormPage() {
 
   const { data: existing } = useQuery({
     queryKey: ['route', id],
-    queryFn: () => api.get<RouteDetail>(`/api/v1/routes/${id}`),
+    queryFn: () => api.get<RouteDetail>(`/api/v1/delivery/routes/${id}`),
     enabled: isEdit,
   });
 
@@ -175,7 +175,7 @@ export default function RouteFormPage() {
         durationSeconds: number | null;
         waypoints: RouteWaypoint[] | null;
         isStale: boolean;
-      }>(`/api/v1/routes/${id}/path`),
+      }>(`/api/v1/delivery/routes/${id}/path`),
     enabled: isEdit,
   });
 
@@ -197,7 +197,7 @@ export default function RouteFormPage() {
         distanceMeters: number;
         durationSeconds: number;
         waypoints: RouteWaypoint[];
-      }>(`/api/v1/routes/${id}/generate-path`, { waypoints: wpData }),
+      }>(`/api/v1/delivery/routes/${id}/generate-path`, { waypoints: wpData }),
     onMutate: () => {
       setIsGenerating(true);
       setPathError(null);
@@ -282,7 +282,7 @@ export default function RouteFormPage() {
 
   const routeMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
-      isEdit ? api.put(`/api/v1/routes/${id}`, data) : api.post<{ data: { id: string } }>('/api/v1/routes', data),
+      isEdit ? api.put(`/api/v1/delivery/routes/${id}`, data) : api.post<{ data: { id: string } }>('/api/v1/delivery/routes', data),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['routes'] });
       if (!isEdit && result && typeof result === 'object' && 'data' in result) {
@@ -313,12 +313,12 @@ export default function RouteFormPage() {
           dropLongitude?: number;
         }>;
       },
-    ) => api.put(`/api/v1/routes/${id}/customers`, data),
+    ) => api.put(`/api/v1/delivery/routes/${id}/customers`, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['route', id] }),
   });
 
   const agentsMutation = useMutation({
-    mutationFn: (data: { agentIds: string[] }) => api.put(`/api/v1/routes/${id}/agents`, data),
+    mutationFn: (data: { agentIds: string[] }) => api.put(`/api/v1/delivery/routes/${id}/agents`, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['route', id] }),
   });
 

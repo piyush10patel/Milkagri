@@ -32,11 +32,11 @@ export default function RouteListPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['routes', page, search, routeTypeFilter],
-    queryFn: () => api.get<ListResponse>(`/api/v1/routes?${params}`),
+    queryFn: () => api.get<ListResponse>(`/api/v1/delivery/routes?${params}`),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (routeId: string) => api.delete(`/api/v1/routes/${routeId}`),
+    mutationFn: (routeId: string) => api.delete(`/api/v1/delivery/routes/${routeId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['routes'] });
       setDeleteTarget(null);

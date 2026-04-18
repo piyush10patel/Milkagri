@@ -104,7 +104,7 @@ export default function DailyOperationsPage() {
 
   const { data: routes } = useQuery({
     queryKey: ['routes-list'],
-    queryFn: () => api.get<{ data: Route[] }>('/api/v1/routes?limit=100'),
+    queryFn: () => api.get<{ data: Route[] }>('/api/v1/delivery/routes?limit=100'),
   });
 
   const isHoliday = holidays?.data?.some(

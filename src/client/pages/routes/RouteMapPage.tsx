@@ -224,7 +224,7 @@ export default function RouteMapPage() {
 
   const { data: selectedRouteDetail } = useQuery({
     queryKey: ['route-start-config', selectedRouteId],
-    queryFn: () => api.get<RouteDetailStartConfig>(`/api/v1/routes/${selectedRouteId}`),
+    queryFn: () => api.get<RouteDetailStartConfig>(`/api/v1/delivery/routes/${selectedRouteId}`),
     enabled: mapMode === 'delivery' && selectedRouteId !== 'all',
   });
 
