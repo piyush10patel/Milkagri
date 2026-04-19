@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
 
 interface NotifPref {
   dashboard: boolean;
@@ -31,6 +33,7 @@ interface HolidayListResponse {
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   // Settings
   const { data: settings, isLoading } = useQuery({
@@ -110,6 +113,19 @@ export default function SettingsPage() {
   return (
     <div className="max-w-3xl">
       <h1 className="text-xl font-semibold text-gray-900 mb-6">System Settings</h1>
+
+      {user?.role === 'super_admin' && (
+        <Link
+          to="/settings/permissions"
+          className="mb-6 flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 hover:bg-gray-50 transition-colors"
+        >
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Permission Matrix</p>
+            <p className="text-xs text-gray-500 mt-0.5">Configure which roles can access each feature</p>
+          </div>
+          <span className="text-gray-400 text-sm">→</span>
+        </Link>
+      )}
 
       {/* Billing & Cutoff */}
       <section className="bg-white rounded-lg border border-gray-200 p-5 mb-6">
