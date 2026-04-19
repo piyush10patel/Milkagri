@@ -1,6 +1,6 @@
 import { prisma } from '../../index.js';
 import { NotFoundError } from '../../lib/errors.js';
-import type { CreateHandoverNoteInput, HandoverQuery } from './handover.types.js';
+import type { CreateHandoverNoteInput, UpdateHandoverNoteInput, HandoverQuery } from './handover.types.js';
 
 export async function listHandoverNotes(query: HandoverQuery) {
   const today = new Date();
@@ -46,4 +46,14 @@ export async function deleteHandoverNote(id: string, userId: string) {
   if (!note) throw new NotFoundError('Handover note not found');
   await prisma.handoverNote.delete({ where: { id } });
   return { id };
+}
+
+export async function updateHandoverNote(id: string, input: UpdateHandoverNoteInput, userId: string) {
+  const note = await prisma.handoverNote.findUnique({ where: { id } });
+  if (!note) throw new NotFoundError('Handover note not found');
+  return prisma.handoverNote.update({
+    where: { id },
+    data: { content: input.content.trim() },
+    include: { creator: { select: { id: true, name: true } } },
+  });
 }

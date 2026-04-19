@@ -143,10 +143,11 @@ export default function DashboardPage() {
   );
 }
 
-function rollingWeekDates(): string[] {
+function rollingWeekDates(offset: number): string[] {
   const dates: string[] = [];
   const today = new Date();
-  for (let i = -3; i <= 3; i++) {
+  const base = offset * 7;
+  for (let i = base - 3; i <= base + 3; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() + i);
     dates.push(d.toISOString().slice(0, 10));
@@ -170,7 +171,10 @@ function HandoverSection() {
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [newNote, setNewNote] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const weekDates = rollingWeekDates();
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const weekDates = rollingWeekDates(weekOffset);
 
   const { data: handoverData, isLoading } = useQuery({
     queryKey: ['handover-notes', weekDates[0], weekDates[6]],
@@ -183,6 +187,15 @@ function HandoverSection() {
       queryClient.invalidateQueries({ queryKey: ['handover-notes'] });
       setNewNote('');
       setShowForm(false);
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, content }: { id: string; content: string }) => api.put(`/api/v1/handover/${id}`, { content }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['handover-notes'] });
+      setEditingId(null);
+      setEditContent('');
     },
   });
 
@@ -207,6 +220,17 @@ function HandoverSection() {
     createMutation.mutate({ noteDate: selectedDate, content: newNote.trim() });
   }
 
+  function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId || !editContent.trim()) return;
+    updateMutation.mutate({ id: editingId, content: editContent.trim() });
+  }
+
+  function startEdit(note: HandoverNote) {
+    setEditingId(note.id);
+    setEditContent(note.content);
+  }
+
   return (
     <div className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
       <div className="flex items-center justify-between mb-4">
@@ -217,6 +241,35 @@ function HandoverSection() {
           className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
         >
           {showForm ? 'Cancel' : 'Add Note'}
+        </button>
+      </div>
+
+      {/* Week navigation */}
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          type="button"
+          onClick={() => setWeekOffset((o) => o - 1)}
+          className="rounded-md px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
+          aria-label="Previous week"
+        >
+          ← Prev
+        </button>
+        {weekOffset !== 0 && (
+          <button
+            type="button"
+            onClick={() => setWeekOffset(0)}
+            className="rounded-md px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+          >
+            Today
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setWeekOffset((o) => o + 1)}
+          className="rounded-md px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
+          aria-label="Next week"
+        >
+          Next →
         </button>
       </div>
 
@@ -281,20 +334,59 @@ function HandoverSection() {
       <div className="space-y-3">
         {selectedNotes.map((note) => (
           <div key={note.id} className="rounded-md border border-gray-200 bg-white p-3">
-            <div className="flex items-start justify-between gap-2">
-              <p className="text-sm text-gray-900 whitespace-pre-wrap flex-1">{note.content}</p>
-              <button
-                type="button"
-                onClick={() => { if (window.confirm('Delete this note?')) deleteMutation.mutate(note.id); }}
-                disabled={deleteMutation.isPending}
-                className="flex-shrink-0 text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
-              >
-                Delete
-              </button>
-            </div>
-            <p className="mt-1 text-xs text-gray-400">
-              {note.creator.name} · {new Date(note.createdAt).toLocaleString()}
-            </p>
+            {editingId === note.id ? (
+              <form onSubmit={handleEditSubmit}>
+                <textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+                <div className="mt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                    className="rounded-md px-3 py-1 text-sm text-gray-600 hover:bg-gray-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updateMutation.isPending || !editContent.trim()}
+                    className="rounded-md bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {updateMutation.isPending ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm text-gray-900 whitespace-pre-wrap flex-1">{note.content}</p>
+                  <div className="flex-shrink-0 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(note)}
+                      className="text-xs text-blue-500 hover:text-blue-700"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { if (window.confirm('Delete this note?')) deleteMutation.mutate(note.id); }}
+                      disabled={deleteMutation.isPending}
+                      className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-1 text-xs text-gray-400">
+                  {note.creator.name} · {new Date(note.createdAt).toLocaleString()}
+                </p>
+              </>
+            )}
           </div>
         ))}
       </div>

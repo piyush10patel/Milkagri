@@ -5,10 +5,15 @@ export const createHandoverNoteSchema = z.object({
   content: z.string().min(1, 'Content is required').max(5000),
 });
 
+export const updateHandoverNoteSchema = z.object({
+  content: z.string().min(1, 'Content is required').max(5000),
+});
+
 export const handoverQuerySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export type CreateHandoverNoteInput = z.infer<typeof createHandoverNoteSchema>;
+export type UpdateHandoverNoteInput = z.infer<typeof updateHandoverNoteSchema>;
 export type HandoverQuery = z.infer<typeof handoverQuerySchema>;

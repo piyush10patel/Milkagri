@@ -36,3 +36,12 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
     next(err);
   }
 }
+
+export async function update(req: Request, res: Response, next: NextFunction) {
+  try {
+    const note = await service.updateHandoverNote(param(req, 'id'), req.body, sessionUserId(req));
+    res.json(note);
+  } catch (err) {
+    next(err);
+  }
+}
