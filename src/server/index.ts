@@ -170,6 +170,18 @@ if (isProduction) {
 // 4. Session management (Redis store)
 // ---------------------------------------------------------------------------
 const sessionSecret = process.env.SESSION_SECRET || 'dev-secret-change-me';
+const rawSameSite = (process.env.SESSION_COOKIE_SAMESITE || 'lax').toLowerCase();
+const cookieSameSite: 'lax' | 'strict' | 'none' =
+  rawSameSite === 'strict' || rawSameSite === 'none' ? rawSameSite : 'lax';
+const cookieSecure =
+  process.env.SESSION_COOKIE_SECURE === 'true'
+    ? true
+    : process.env.SESSION_COOKIE_SECURE === 'false'
+      ? false
+      : process.env.NODE_ENV === 'production';
+if (cookieSameSite === 'none' && !cookieSecure) {
+  throw new Error('SESSION_COOKIE_SAMESITE=none requires SESSION_COOKIE_SECURE=true');
+}
 const sessionConfig: SessionOptions = {
   secret: sessionSecret,
   resave: false,
@@ -177,8 +189,8 @@ const sessionConfig: SessionOptions = {
   name: 'milk.sid',
   cookie: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: cookieSecure,
+    sameSite: cookieSameSite,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
   },
 };
