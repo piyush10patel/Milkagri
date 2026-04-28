@@ -26,6 +26,22 @@ interface HandoverResponse {
   endDate: string;
 }
 
+interface AgentCollectionDashboardResponse {
+  date: string;
+  deliveryRoutes: Array<{ id: string; name: string }>;
+  collectionRoutes: Array<{
+    id: string;
+    name: string;
+    stops: Array<{
+      villageId: string;
+      villageName: string;
+      deliverySession: 'morning' | 'evening';
+      sequenceOrder: number;
+      farmers: Array<{ id: string; name: string }>;
+    }>;
+  }>;
+}
+
 function StatCard({ label, value, format }: { label: string; value: number | undefined; format?: 'currency' }) {
   const display =
     value === undefined
@@ -104,6 +120,13 @@ export default function DashboardPage() {
     <div>
       <h1 className="text-xl font-semibold text-gray-900 mb-4">Dashboard</h1>
 
+      {user?.role === 'delivery_agent' && (
+        <AgentWorkPanel
+          today={today}
+          data={agentDashboardData}
+        />
+      )}
+
       {loading && (
         <p className="text-sm text-gray-500 mb-4">Loading dashboard data…</p>
       )}
@@ -139,6 +162,78 @@ export default function DashboardPage() {
       )}
 
       <HandoverSection />
+    </div>
+  );
+}
+
+function AgentWorkPanel({ today, data }: { today: string; data: AgentCollectionDashboardResponse | undefined }) {
+  const queryClient = useQueryClient();
+  const [selectedVillageId, setSelectedVillageId] = useState('');
+  const [selectedFarmerId, setSelectedFarmerId] = useState('');
+  const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('morning');
+  const [quantity, setQuantity] = useState('');
+  const [error, setError] = useState('');
+
+  const assignedStops = (data?.collectionRoutes ?? []).flatMap((route) => route.stops);
+  const villageOptions = Array.from(new Map(assignedStops.map((stop) => [stop.villageId, { id: stop.villageId, name: stop.villageName }])).values());
+  const selectedStop = assignedStops.find((stop) => stop.villageId === selectedVillageId && stop.deliverySession === selectedSession);
+  const farmerOptions = selectedStop?.farmers ?? [];
+
+  const saveMutation = useMutation({
+    mutationFn: (body: { villageId: string; farmerId: string; collectionDate: string; deliverySession: 'morning' | 'evening'; quantity: number }) =>
+      api.post('/api/v1/milk-collections', body),
+    onSuccess: () => {
+      setQuantity('');
+      setError('');
+      queryClient.invalidateQueries({ queryKey: ['agent-collection-dashboard'] });
+    },
+    onError: (err: any) => {
+      setError(err?.message || 'Failed to save milk collection');
+    },
+  });
+
+  return (
+    <div className="mb-6 rounded-lg border border-gray-200 bg-white p-5">
+      <h2 className="text-lg font-semibold text-gray-900">My Assigned Work</h2>
+      <p className="mt-1 text-sm text-gray-500">
+        Delivery routes: {(data?.deliveryRoutes ?? []).map((route) => route.name).join(', ') || 'None assigned'}
+      </p>
+      <p className="mt-1 text-sm text-gray-500">
+        Collection routes: {(data?.collectionRoutes ?? []).map((route) => route.name).join(', ') || 'None assigned'}
+      </p>
+
+      <form
+        className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!selectedVillageId || !selectedFarmerId || !quantity) return;
+          saveMutation.mutate({
+            villageId: selectedVillageId,
+            farmerId: selectedFarmerId,
+            collectionDate: today,
+            deliverySession: selectedSession,
+            quantity: Number(quantity),
+          });
+        }}
+      >
+        <select value={selectedVillageId} onChange={(e) => { setSelectedVillageId(e.target.value); setSelectedFarmerId(''); }} className="rounded-md border border-gray-300 px-3 py-2 text-sm" required>
+          <option value="">Select village</option>
+          {villageOptions.map((village) => <option key={village.id} value={village.id}>{village.name}</option>)}
+        </select>
+        <select value={selectedSession} onChange={(e) => { setSelectedSession(e.target.value as 'morning' | 'evening'); setSelectedFarmerId(''); }} className="rounded-md border border-gray-300 px-3 py-2 text-sm">
+          <option value="morning">Morning</option>
+          <option value="evening">Evening</option>
+        </select>
+        <select value={selectedFarmerId} onChange={(e) => setSelectedFarmerId(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm" required>
+          <option value="">{selectedStop ? 'Select farmer' : 'No farmer for selected village/shift'}</option>
+          {farmerOptions.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name}</option>)}
+        </select>
+        <input type="number" min="0.001" step="0.001" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="Liters" className="rounded-md border border-gray-300 px-3 py-2 text-sm" required />
+        <button type="submit" disabled={saveMutation.isPending} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+          {saveMutation.isPending ? 'Saving...' : 'Save Milk'}
+        </button>
+      </form>
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </div>
   );
 }
@@ -393,3 +488,8 @@ function HandoverSection() {
     </div>
   );
 }
+  const { data: agentDashboardData } = useQuery({
+    queryKey: ['agent-collection-dashboard', today],
+    queryFn: () => api.get<AgentCollectionDashboardResponse>(`/api/v1/milk-collections/agent-dashboard?date=${today}`),
+    enabled: user?.role === 'delivery_agent',
+  });

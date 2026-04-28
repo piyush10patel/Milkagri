@@ -4,6 +4,10 @@ export const milkCollectionDateQuerySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
 });
 
+export const agentCollectionDashboardQuerySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+});
+
 export const collectionRouteStopsQuerySchema = z.object({
   routeId: z.string().uuid('Invalid route ID'),
   deliverySession: z.enum(['morning', 'evening']),
@@ -113,3 +117,4 @@ export type CollectionRouteStopsQuery = z.infer<typeof collectionRouteStopsQuery
 export type SaveCollectionRouteStopsInput = z.infer<typeof saveCollectionRouteStopsSchema>;
 export type CollectionRouteManifestQuery = z.infer<typeof collectionRouteManifestQuerySchema>;
 export type AssignCollectionRouteAgentsInput = z.infer<typeof assignCollectionRouteAgentsSchema>;
+export type AgentCollectionDashboardQuery = z.infer<typeof agentCollectionDashboardQuerySchema>;

@@ -31,6 +31,38 @@ function villageSessionKey(villageId: string, deliverySession: 'morning' | 'even
   return `${villageId}:${deliverySession}`;
 }
 
+async function getAgentAssignedVillageSessionSet(userId: string): Promise<Set<string>> {
+  const stops = await prismaAny().milkCollectionRouteStop.findMany({
+    where: {
+      route: {
+        routeType: 'collection',
+        routeAgents: { some: { userId } },
+      },
+    },
+    select: { villageId: true, deliverySession: true },
+  });
+
+  return new Set(stops.map((stop: any) => villageSessionKey(stop.villageId, stop.deliverySession)));
+}
+
+async function assertAgentCanRecordVillageCollection(
+  userId: string,
+  villageId: string,
+  deliverySession: 'morning' | 'evening',
+) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true },
+  });
+  if (!user) throw new NotFoundError('User not found');
+  if (user.role !== 'delivery_agent') return;
+
+  const assigned = await getAgentAssignedVillageSessionSet(userId);
+  if (!assigned.has(villageSessionKey(villageId, deliverySession))) {
+    throw new ValidationError('You can only record milk for villages assigned to your collection route and shift');
+  }
+}
+
 export async function listVillages() {
   return prismaAny().village.findMany({
     include: {
@@ -752,6 +784,8 @@ export async function deleteFarmer(id: string) {
 }
 
 export async function saveMilkCollection(input: SaveMilkCollectionInput, userId: string) {
+  await assertAgentCanRecordVillageCollection(userId, input.villageId, input.deliverySession);
+
   const farmer = await prisma.farmer.findUnique({
     where: { id: input.farmerId },
     include: { village: true },
@@ -796,6 +830,8 @@ export async function saveMilkCollection(input: SaveMilkCollectionInput, userId:
 }
 
 export async function saveVillageIndividualCollection(input: SaveVillageIndividualCollectionInput, userId: string) {
+  await assertAgentCanRecordVillageCollection(userId, input.villageId, input.deliverySession);
+
   const village = await prisma.village.findUnique({ where: { id: input.villageId } });
   if (!village) throw new NotFoundError('Village not found');
   if (!village.isActive) throw new ValidationError('Cannot record individual collection for an inactive village');
@@ -917,6 +953,102 @@ export async function deleteMilkVehicleShiftLoad(id: string) {
   if (!existing) throw new NotFoundError('Vehicle shift load record not found');
   await prisma.milkVehicleShiftLoad.delete({ where: { id } });
   return { id };
+}
+
+export async function getAgentCollectionDashboard(userId: string, date: string) {
+  const [deliveryRoutes, collectionRoutes, entries, individualCollections] = await Promise.all([
+    prisma.route.findMany({
+      where: {
+        isActive: true,
+        routeType: 'delivery',
+        routeAgents: { some: { userId } },
+      },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.route.findMany({
+      where: {
+        isActive: true,
+        routeType: 'collection',
+        routeAgents: { some: { userId } },
+      },
+      select: {
+        id: true,
+        name: true,
+        collectionRouteStops: {
+          include: {
+            village: {
+              select: {
+                id: true,
+                name: true,
+                farmers: {
+                  where: { isActive: true },
+                  select: { id: true, name: true },
+                  orderBy: { name: 'asc' },
+                },
+              },
+            },
+          },
+          orderBy: [{ deliverySession: 'asc' }, { sequenceOrder: 'asc' }],
+        },
+      },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.milkCollection.findMany({
+      where: {
+        collectionDate: new Date(date),
+        recordedBy: userId,
+      },
+      select: {
+        id: true,
+        villageId: true,
+        farmerId: true,
+        deliverySession: true,
+        quantity: true,
+      },
+    }),
+    prisma.villageIndividualCollection.findMany({
+      where: {
+        collectionDate: new Date(date),
+        recordedBy: userId,
+      },
+      select: {
+        id: true,
+        villageId: true,
+        deliverySession: true,
+        quantity: true,
+      },
+    }),
+  ]);
+
+  return {
+    date,
+    deliveryRoutes,
+    collectionRoutes: collectionRoutes.map((route) => ({
+      id: route.id,
+      name: route.name,
+      stops: route.collectionRouteStops.map((stop: any) => ({
+        villageId: stop.villageId,
+        villageName: stop.village.name,
+        deliverySession: stop.deliverySession,
+        sequenceOrder: stop.sequenceOrder,
+        farmers: stop.village.farmers,
+      })),
+    })),
+    recordedMilkCollections: entries.map((entry) => ({
+      id: entry.id,
+      villageId: entry.villageId,
+      farmerId: entry.farmerId,
+      deliverySession: entry.deliverySession,
+      quantity: Number(entry.quantity),
+    })),
+    recordedVillageTotals: individualCollections.map((entry) => ({
+      id: entry.id,
+      villageId: entry.villageId,
+      deliverySession: entry.deliverySession,
+      quantity: Number(entry.quantity),
+    })),
+  };
 }
 
 export async function getMilkCollectionSummary(date: string) {

@@ -158,6 +158,15 @@ export async function listSummary(req: Request, res: Response, next: NextFunctio
   }
 }
 
+export async function getAgentDashboard(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await service.getAgentCollectionDashboard(sessionUserId(req), req.query.date as string);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function saveEntry(req: Request, res: Response, next: NextFunction) {
   try {
     const entry = await service.saveMilkCollection(req.body, sessionUserId(req));
