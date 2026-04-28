@@ -161,7 +161,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <HandoverSection />
+      {(user?.role === 'admin' || user?.role === 'super_admin') && <HandoverSection />}
     </div>
   );
 }

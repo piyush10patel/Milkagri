@@ -1,6 +1,11 @@
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
+import webpush from 'web-push';
 import { prisma } from '../index.js';
+
+function prismaAny() {
+  return prisma as any;
+}
 
 // ─── Provider Interface ──────────────────────────────────────────────────────
 
@@ -162,6 +167,18 @@ export interface DispatchNotificationInput {
   webhookUrl?: string;
 }
 
+let vapidConfigured = false;
+function configureWebPush() {
+  if (vapidConfigured) return true;
+  const publicKey = process.env.VAPID_PUBLIC_KEY?.trim();
+  const privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
+  const subject = process.env.VAPID_SUBJECT?.trim() || 'mailto:admin@example.com';
+  if (!publicKey || !privateKey) return false;
+  webpush.setVapidDetails(subject, publicKey, privateKey);
+  vapidConfigured = true;
+  return true;
+}
+
 /**
  * Dispatches notifications through configured channels.
  * Checks system_settings for notification preferences per event type.
@@ -201,6 +218,40 @@ export async function dispatchNotification(input: DispatchNotificationInput): Pr
   if (channels.includes('webhook')) {
     const provider = new WebhookNotificationProvider(eventType, webhookUrl);
     await provider.send(recipientUserIds[0] ?? '', title, body);
+  }
+
+  // Web push notifications
+  if (channels.includes('push') && recipientUserIds.length > 0 && configureWebPush()) {
+    const subscriptions = await prismaAny().pushSubscription.findMany({
+      where: { userId: { in: recipientUserIds } },
+      select: { id: true, endpoint: true, p256dh: true, auth: true },
+    });
+
+    const payload = JSON.stringify({
+      title,
+      body,
+      eventType,
+      timestamp: new Date().toISOString(),
+    });
+
+    await Promise.all(
+      subscriptions.map(async (sub: any) => {
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: sub.endpoint,
+              keys: { p256dh: sub.p256dh, auth: sub.auth },
+            },
+            payload,
+          );
+        } catch (error: any) {
+          const statusCode = error?.statusCode as number | undefined;
+          if (statusCode === 404 || statusCode === 410) {
+            await prismaAny().pushSubscription.delete({ where: { id: sub.id } });
+          }
+        }
+      }),
+    );
   }
 }
 

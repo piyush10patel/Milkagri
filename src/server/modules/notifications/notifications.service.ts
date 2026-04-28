@@ -3,6 +3,11 @@ import type { Prisma } from '@prisma/client';
 import type { PaginationParams } from '../../lib/pagination.js';
 import type { NotificationQuery } from './notifications.types.js';
 import { dispatchNotification } from '../../lib/notificationProvider.js';
+import type { PushSubscriptionInput } from './notifications.types.js';
+
+function prismaAny() {
+  return prisma as any;
+}
 
 /**
  * Query notifications for a specific user with filtering and pagination.
@@ -133,9 +138,9 @@ export async function getNotificationPreferences(): Promise<Record<string, strin
 
   // Default preferences: all events → dashboard only
   return {
-    daily_generation_failure: ['dashboard'],
-    billing_error: ['dashboard'],
-    account_lockout: ['dashboard'],
+    daily_generation_failure: ['dashboard', 'push'],
+    billing_error: ['dashboard', 'push'],
+    account_lockout: ['dashboard', 'push'],
   };
 }
 
@@ -161,4 +166,45 @@ export async function updateNotificationPreferences(
   });
 
   return preferences;
+}
+
+export function getWebPushPublicKey(): string | null {
+  const key = process.env.VAPID_PUBLIC_KEY?.trim();
+  return key || null;
+}
+
+export async function upsertPushSubscription(
+  userId: string,
+  input: PushSubscriptionInput,
+  userAgent?: string,
+) {
+  const expirationTime =
+    input.expirationTime === null || input.expirationTime === undefined
+      ? null
+      : new Date(input.expirationTime);
+
+  return prismaAny().pushSubscription.upsert({
+    where: { endpoint: input.endpoint },
+    update: {
+      userId,
+      p256dh: input.keys.p256dh,
+      auth: input.keys.auth,
+      expirationTime,
+      userAgent: userAgent ?? null,
+    },
+    create: {
+      userId,
+      endpoint: input.endpoint,
+      p256dh: input.keys.p256dh,
+      auth: input.keys.auth,
+      expirationTime,
+      userAgent: userAgent ?? null,
+    },
+  });
+}
+
+export async function removePushSubscription(userId: string, endpoint: string) {
+  await prismaAny().pushSubscription.deleteMany({
+    where: { userId, endpoint },
+  });
 }

@@ -60,11 +60,12 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
-function NotificationBell() {
+function NotificationBell({ enabled }: { enabled: boolean }) {
   const navigate = useNavigate();
   const { data } = useQuery({
     queryKey: ['notifications', 'unread-count'],
     queryFn: () => api.get<{ data: Array<{ id: string }>; pagination: { total: number } }>('/api/v1/notifications?isRead=false&limit=1'),
+    enabled,
     refetchInterval: 30000,
   });
   const unread = data?.pagination?.total ?? 0;
@@ -97,6 +98,7 @@ export default function Layout() {
   if (!user) return null;
 
   const isSuperAdmin = user.role === 'super_admin';
+  const canViewNotifications = isSuperAdmin || permissions.has('notifications');
   const items = getVisibleItems(permissions, isSuperAdmin);
   const collectionItems = getVisibleCollectionItems(permissions, isSuperAdmin);
 
@@ -201,7 +203,7 @@ export default function Layout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-3">
-            <NotificationBell />
+            {canViewNotifications && <NotificationBell enabled={canViewNotifications} />}
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-gray-900">{user.name}</p>
               <RoleBadge role={user.role} />

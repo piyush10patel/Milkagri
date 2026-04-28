@@ -14,7 +14,7 @@ export const markReadParamsSchema = z.object({
 
 /** Valid event types for notification configuration */
 const validEventTypes = ['daily_generation_failure', 'billing_error', 'account_lockout'] as const;
-const validChannels = ['dashboard', 'email', 'sms', 'webhook'] as const;
+const validChannels = ['dashboard', 'email', 'sms', 'webhook', 'push'] as const;
 
 export const notificationPreferencesSchema = z.record(
   z.enum(validEventTypes),
@@ -28,7 +28,22 @@ export type NotificationEventType =
   | 'account_lockout';
 
 /** Channels through which notifications can be delivered */
-export type NotificationChannel = 'dashboard' | 'email' | 'sms' | 'webhook';
+export type NotificationChannel = 'dashboard' | 'email' | 'sms' | 'webhook' | 'push';
+
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.string().url('Invalid push endpoint URL'),
+  expirationTime: z.number().nullable().optional(),
+  keys: z.object({
+    p256dh: z.string().min(1, 'Missing p256dh key'),
+    auth: z.string().min(1, 'Missing auth key'),
+  }),
+});
+
+export const pushUnsubscribeSchema = z.object({
+  endpoint: z.string().url('Invalid push endpoint URL'),
+});
+
+export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
 
 export interface NotificationPayload {
   title: string;
