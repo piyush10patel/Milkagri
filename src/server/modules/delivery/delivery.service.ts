@@ -588,9 +588,22 @@ export async function getAdminOverview(date: string) {
 // Save GPS location ping from app/device
 // ---------------------------------------------------------------------------
 export async function saveLocationPing(userId: string, input: GpsLocationPingInput) {
-  if (input.routeId) {
+  let routeId = input.routeId;
+
+  if (!routeId) {
+    const assignments = await prisma.routeAgent.findMany({
+      where: { userId },
+      select: { routeId: true },
+      take: 2,
+    });
+    if (assignments.length === 1) {
+      routeId = assignments[0].routeId;
+    }
+  }
+
+  if (routeId) {
     const route = await prisma.route.findUnique({
-      where: { id: input.routeId },
+      where: { id: routeId },
       select: { id: true },
     });
     if (!route) throw new NotFoundError('Route not found');
@@ -603,7 +616,7 @@ export async function saveLocationPing(userId: string, input: GpsLocationPingInp
     ping = await prisma.vehicleGpsPing.create({
       data: {
         userId,
-        routeId: input.routeId,
+        routeId,
         latitude: new Prisma.Decimal(input.latitude),
         longitude: new Prisma.Decimal(input.longitude),
         accuracyMeters:

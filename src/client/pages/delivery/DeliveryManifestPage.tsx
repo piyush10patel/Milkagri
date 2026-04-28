@@ -175,6 +175,18 @@ export default function DeliveryManifestPage() {
     return first?.routeId ?? null;
   }, [filteredManifest]);
 
+  const gpsRouteId = useMemo(() => {
+    if (selectedRouteId) return selectedRouteId;
+    const uniqueRouteIds = Array.from(
+      new Set(
+        filteredManifest
+          .map((item) => item.routeId)
+          .filter((value): value is string => typeof value === 'string' && value.length > 0),
+      ),
+    );
+    return uniqueRouteIds.length === 1 ? uniqueRouteIds[0] : null;
+  }, [filteredManifest, selectedRouteId]);
+
   useEffect(() => {
     if (!gpsEnabled || user?.role !== 'delivery_agent') return;
     if (!navigator.geolocation) {
@@ -200,6 +212,7 @@ export default function DeliveryManifestPage() {
             accuracyMeters: position.coords.accuracy,
             speedKmph,
             headingDegrees: position.coords.heading ?? undefined,
+            routeId: gpsRouteId ?? undefined,
             deliverySession: selectedSession,
             capturedAt: new Date(position.timestamp).toISOString(),
           });
@@ -224,7 +237,7 @@ export default function DeliveryManifestPage() {
         watchIdRef.current = null;
       }
     };
-  }, [gpsEnabled, selectedSession, user?.role]);
+  }, [gpsEnabled, gpsRouteId, selectedSession, user?.role]);
 
   return (
     <div className="max-w-lg mx-auto">

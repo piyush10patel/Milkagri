@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { api } from '@/lib/api';
 
 interface LiveVehicle {
@@ -79,6 +80,7 @@ function formatAgo(isoDate: string) {
 }
 
 export default function LiveVehicleTrackingPage() {
+  const location = useLocation();
   const [minutes, setMinutes] = useState(120);
   const [mapError, setMapError] = useState('');
   const mapRef = useRef<any>(null);
@@ -166,8 +168,27 @@ export default function LiveVehicleTrackingPage() {
         mapRef.current.remove();
         mapRef.current = null;
       }
+      if (layerRef.current) {
+        layerRef.current = null;
+      }
+      if (mapElRef.current) {
+        mapElRef.current.innerHTML = '';
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (location.pathname === '/tracking/live-gps') return;
+
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
+    layerRef.current = null;
+    if (mapElRef.current) {
+      mapElRef.current.innerHTML = '';
+    }
+  }, [location.pathname]);
 
   return (
     <div className="space-y-4">
