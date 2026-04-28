@@ -3,10 +3,13 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
+const enablePwa = process.env.ENABLE_PWA === 'true';
+
 export default defineConfig({
   plugins: [
     react(),
-    VitePWA({
+    ...(enablePwa
+      ? [VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
@@ -44,7 +47,8 @@ export default defineConfig({
           },
         ],
       },
-    }),
+    })]
+      : []),
   ],
   root: path.resolve(__dirname),
   build: {

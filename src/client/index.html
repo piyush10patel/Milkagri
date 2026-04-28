@@ -33,6 +33,43 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function () {
+        var root = document.getElementById('root');
+        function showBootError(message) {
+          if (!root) return;
+          root.innerHTML =
+            '<div style="padding:16px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;margin:16px;">' +
+            '<h2 style="margin:0 0 8px 0;font-size:16px;">App failed to load</h2>' +
+            '<p style="margin:0;font-size:14px;line-height:1.4;">' + message + '</p>' +
+            '</div>';
+        }
+        window.addEventListener('error', function (event) {
+          var msg = event && event.message ? event.message : 'Unknown JavaScript error';
+          showBootError(msg);
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+          var reason = event && event.reason ? String(event.reason) : 'Unhandled promise rejection';
+          showBootError(reason);
+        });
+
+        if (!('serviceWorker' in navigator)) return;
+        if (!window.location.protocol.startsWith('http')) return;
+        navigator.serviceWorker.getRegistrations()
+          .then(function (registrations) {
+            return Promise.all(registrations.map(function (registration) {
+              return registration.unregister();
+            }));
+          })
+          .then(function () {
+            if (!('caches' in window)) return;
+            return caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+            });
+          })
+          .catch(function () {});
+      })();
+    </script>
     <script type="module" src="/main.tsx"></script>
   </body>
 </html>

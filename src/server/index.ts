@@ -312,9 +312,22 @@ app.use('/api/v1/permissions', permissionsRoutes);
 // Serve built frontend in production
 // ---------------------------------------------------------------------------
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(clientDistPath));
+  app.use(
+    express.static(clientDistPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+          return;
+        }
+        if (/\.(js|css|png|svg|ico|woff2?)$/i.test(filePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    }),
+  );
 
   app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 }
