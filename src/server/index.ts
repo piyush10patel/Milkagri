@@ -171,7 +171,7 @@ if (isProduction) {
 // ---------------------------------------------------------------------------
 const sessionSecret = process.env.SESSION_SECRET || 'dev-secret-change-me';
 const rawSameSite = (process.env.SESSION_COOKIE_SAMESITE || 'lax').toLowerCase();
-const cookieSameSite: 'lax' | 'strict' | 'none' =
+let cookieSameSite: 'lax' | 'strict' | 'none' =
   rawSameSite === 'strict' || rawSameSite === 'none' ? rawSameSite : 'lax';
 const cookieSecure =
   process.env.SESSION_COOKIE_SECURE === 'true'
@@ -180,7 +180,10 @@ const cookieSecure =
       ? false
       : process.env.NODE_ENV === 'production';
 if (cookieSameSite === 'none' && !cookieSecure) {
-  throw new Error('SESSION_COOKIE_SAMESITE=none requires SESSION_COOKIE_SECURE=true');
+  console.warn(
+    'SESSION_COOKIE_SAMESITE=none requires SESSION_COOKIE_SECURE=true. Falling back to sameSite=lax.',
+  );
+  cookieSameSite = 'lax';
 }
 const sessionConfig: SessionOptions = {
   secret: sessionSecret,
