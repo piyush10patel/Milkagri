@@ -35,6 +35,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const COLLECTION_NAV_ITEMS: NavItem[] = [
+  { label: 'Agents Management', to: '/collections/agents-management', permission: 'agent_assignments' },
   { label: 'Collection Overview', to: '/collections/overview', permission: 'collections_overview' },
   { label: 'Agent Assignments', to: '/collections/assignments', permission: 'agent_assignments' },
   { label: 'Remittances', to: '/collections/remittances', permission: 'remittances' },

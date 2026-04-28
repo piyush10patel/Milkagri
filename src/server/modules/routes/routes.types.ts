@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Re-export RouteWaypoint from the shared waypoints module
-export { RouteWaypoint } from '../../lib/waypoints';
+export type { RouteWaypoint } from '../../lib/waypoints.js';
 
 // ---------------------------------------------------------------------------
 // Route type enum

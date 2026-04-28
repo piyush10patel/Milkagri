@@ -46,6 +46,7 @@ import AgentRemittancePage from '@/pages/collections/AgentRemittancePage';
 import AgentBalancesPage from '@/pages/collections/AgentBalancesPage';
 import AgentCollectionDashboardPage from '@/pages/collections/AgentCollectionDashboardPage';
 import PermissionMatrixPage from '@/pages/settings/PermissionMatrixPage';
+import AgentsManagementPage from '@/pages/collections/AgentsManagementPage';
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -130,6 +131,7 @@ export default function App() {
           <Route path="collections/remittances" element={<AgentRemittancePage />} />
           <Route path="collections/balances" element={<AgentBalancesPage />} />
           <Route path="collections/dashboard" element={<AgentCollectionDashboardPage />} />
+          <Route path="collections/agents-management" element={<AgentsManagementPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
