@@ -117,4 +117,11 @@ export type CollectionRouteStopsQuery = z.infer<typeof collectionRouteStopsQuery
 export type SaveCollectionRouteStopsInput = z.infer<typeof saveCollectionRouteStopsSchema>;
 export type CollectionRouteManifestQuery = z.infer<typeof collectionRouteManifestQuerySchema>;
 export type AssignCollectionRouteAgentsInput = z.infer<typeof assignCollectionRouteAgentsSchema>;
+export const farmerMilkReportQuerySchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date must be YYYY-MM-DD'),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be YYYY-MM-DD'),
+  villageId: z.string().uuid('Invalid village ID').optional(),
+});
+
 export type AgentCollectionDashboardQuery = z.infer<typeof agentCollectionDashboardQuerySchema>;
+export type FarmerMilkReportQuery = z.infer<typeof farmerMilkReportQuerySchema>;

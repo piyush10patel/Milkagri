@@ -1268,6 +1268,78 @@ export async function getMilkCollectionSummary(date: string) {
   };
 }
 
+export async function getFarmerMilkReport(query: { startDate: string; endDate: string; villageId?: string }) {
+  const startDate = new Date(query.startDate);
+  const endDate = new Date(query.endDate);
+
+  const where: any = {
+    collectionDate: { gte: startDate, lte: endDate },
+  };
+  if (query.villageId) {
+    where.villageId = query.villageId;
+  }
+
+  const grouped = await prisma.milkCollection.groupBy({
+    by: ['farmerId', 'villageId', 'deliverySession'],
+    where,
+    _sum: { quantity: true },
+  });
+
+  const farmerIds = [...new Set(grouped.map((g: any) => g.farmerId))];
+  const villageIds = [...new Set(grouped.map((g: any) => g.villageId))];
+
+  const [farmers, villages] = await Promise.all([
+    prisma.farmer.findMany({
+      where: { id: { in: farmerIds } },
+      select: { id: true, name: true },
+    }),
+    prisma.village.findMany({
+      where: { id: { in: villageIds } },
+      select: { id: true, name: true },
+    }),
+  ]);
+
+  const farmerMap = new Map(farmers.map((f) => [f.id, f.name]));
+  const villageMap = new Map(villages.map((v) => [v.id, v.name]));
+
+  const farmerTotals = new Map<string, { farmerId: string; farmerName: string; villageId: string; villageName: string; morning: number; evening: number; total: number; dayCount: Set<string> }>();
+
+  for (const g of grouped as any[]) {
+    const key = g.farmerId;
+    if (!farmerTotals.has(key)) {
+      farmerTotals.set(key, {
+        farmerId: g.farmerId,
+        farmerName: farmerMap.get(g.farmerId) ?? 'Unknown',
+        villageId: g.villageId,
+        villageName: villageMap.get(g.villageId) ?? 'Unknown',
+        morning: 0,
+        evening: 0,
+        total: 0,
+        dayCount: new Set(),
+      });
+    }
+    const entry = farmerTotals.get(key)!;
+    const qty = Number(g._sum.quantity ?? 0);
+    if (g.deliverySession === 'morning') entry.morning += qty;
+    if (g.deliverySession === 'evening') entry.evening += qty;
+    entry.total += qty;
+  }
+
+  return {
+    items: Array.from(farmerTotals.values())
+      .map((entry) => ({
+        farmerId: entry.farmerId,
+        farmerName: entry.farmerName,
+        villageId: entry.villageId,
+        villageName: entry.villageName,
+        totalMorningQuantity: Number(entry.morning.toFixed(3)),
+        totalEveningQuantity: Number(entry.evening.toFixed(3)),
+        totalQuantity: Number(entry.total.toFixed(3)),
+      }))
+      .sort((a, b) => a.farmerName.localeCompare(b.farmerName)),
+  };
+}
+
 export async function getMilkCollectionTotalsByDate(date: Date) {
   const [farmerGrouped, individualTotals] = await Promise.all([
     prisma.milkCollection.groupBy({

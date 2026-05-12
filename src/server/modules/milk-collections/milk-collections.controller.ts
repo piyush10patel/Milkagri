@@ -221,6 +221,19 @@ export async function removeIndividualRecord(req: Request, res: Response, next: 
   }
 }
 
+export async function getFarmerMilkReport(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await service.getFarmerMilkReport({
+      startDate: req.query.startDate as string,
+      endDate: req.query.endDate as string,
+      villageId: req.query.villageId as string | undefined,
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function removeVehicleShiftLoad(req: Request, res: Response, next: NextFunction) {
   try {
     const result = await service.deleteMilkVehicleShiftLoad(param(req, 'id'));

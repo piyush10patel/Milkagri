@@ -21,6 +21,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Orders', to: '/orders', permission: 'orders' },
   { label: 'Milk Summary', to: '/orders/summary', permission: 'milk_summary' },
   { label: 'Milk Collection', to: '/milk-collections', permission: 'milk_collection' },
+  { label: 'Collection Routes', to: '/milk-collections/routes', permission: 'milk_collection' },
   { label: 'Deliveries', to: '/deliveries', permission: 'deliveries' },
   { label: 'Routes', to: '/routes', permission: 'routes' },
   { label: 'Route Map', to: '/routes/map', permission: 'route_map' },

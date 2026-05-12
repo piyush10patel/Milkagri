@@ -8,6 +8,7 @@ const REPORTS = [
   { key: 'product-sales', label: 'Product Sales', description: 'Total quantities delivered per product variant' },
   { key: 'missed-deliveries', label: 'Missed Deliveries', description: 'Skipped or failed deliveries with reasons' },
   { key: 'subscription-changes', label: 'Subscription Changes', description: 'Subscription modifications audit trail' },
+  { key: 'farmer-milk', label: 'Farmer Milk & Payment', description: 'Farmer-wise total milk collected and payment calculation', to: '/milk-collections/farmer-report' },
 ];
 
 export default function ReportsDashboardPage() {
@@ -18,7 +19,7 @@ export default function ReportsDashboardPage() {
         {REPORTS.map((r) => (
           <Link
             key={r.key}
-            to={`/reports/${r.key}`}
+            to={(r as any).to || `/reports/${r.key}`}
             className="block bg-white rounded-lg border border-gray-200 p-5 hover:border-blue-300 hover:shadow-sm transition-all"
           >
             <h2 className="text-sm font-semibold text-gray-900">{r.label}</h2>

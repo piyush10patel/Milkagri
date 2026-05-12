@@ -15,6 +15,7 @@ import {
   saveCollectionRouteStopsSchema,
   assignCollectionRouteAgentsSchema,
   agentCollectionDashboardQuerySchema,
+  farmerMilkReportQuerySchema,
   saveMilkVehicleLoadSchema,
   saveMilkVehicleShiftLoadSchema,
   saveVillageIndividualCollectionSchema,
@@ -32,6 +33,7 @@ router.get('/agent-dashboard', authorize('milk_collection'), validate({ query: a
 router.get('/routes', authorize('milk_collection'), controller.listCollectionRoutes);
 router.get('/route-stops', authorize('milk_collection'), validate({ query: collectionRouteStopsQuerySchema }), controller.getCollectionRouteStops);
 router.get('/route-manifest', authorize('milk_collection'), validate({ query: collectionRouteManifestQuerySchema }), controller.getCollectionRouteManifest);
+router.get('/farmer-report', authorize('milk_collection'), validate({ query: farmerMilkReportQuerySchema }), controller.getFarmerMilkReport);
 router.get('/villages', authorize('milk_collection'), controller.listVillages);
 router.put('/route-stops', authorize('milk_collection'), csrfProtection, validate({ body: saveCollectionRouteStopsSchema }), controller.saveCollectionRouteStops);
 router.put('/route-agents', authorize('milk_collection'), csrfProtection, validate({ body: assignCollectionRouteAgentsSchema }), controller.assignCollectionRouteAgents);

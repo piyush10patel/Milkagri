@@ -16,6 +16,8 @@ import OrderMilkSummaryPage from '@/pages/orders/OrderMilkSummaryPage';
 import MilkCollectionPage from '@/pages/milk-collections/MilkCollectionPage';
 import VillageCollectionDetailPage from '@/pages/milk-collections/VillageCollectionDetailPage';
 import VillageCollectionsOverviewPage from '@/pages/milk-collections/VillageCollectionsOverviewPage';
+import CollectionRoutesPage from '@/pages/milk-collections/CollectionRoutesPage';
+import FarmerMilkReportPage from '@/pages/milk-collections/FarmerMilkReportPage';
 import TotalCollectionsPage from '@/pages/milk-collections/TotalCollectionsPage';
 import DeliveryManifestPage from '@/pages/delivery/DeliveryManifestPage';
 import RouteListPage from '@/pages/routes/RouteListPage';
@@ -99,6 +101,8 @@ export default function App() {
           <Route path="orders" element={<DailyOperationsPage />} />
           <Route path="orders/summary" element={<OrderMilkSummaryPage />} />
           <Route path="milk-collections" element={<VillageCollectionsOverviewPage />} />
+          <Route path="milk-collections/routes" element={<CollectionRoutesPage />} />
+          <Route path="milk-collections/farmer-report" element={<FarmerMilkReportPage />} />
           <Route path="milk-collections/totals" element={<TotalCollectionsPage />} />
           <Route path="milk-collections/manage" element={<MilkCollectionPage />} />
           <Route path="milk-collections/:villageId" element={<VillageCollectionDetailPage />} />
