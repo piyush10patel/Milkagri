@@ -183,8 +183,7 @@ export default function MilkCollectionPage() {
   const [date, setDate] = useState(todayStr());
   const [showVillageModal, setShowVillageModal] = useState(false);
   const [showVillageStopModal, setShowVillageStopModal] = useState(false);
-  const [showFarmerModal, setShowFarmerModal] = useState(false);
-  const [editFarmerTarget, setEditFarmerTarget] = useState<{ id: string; villageId: string; name: string; isActive: boolean } | null>(null);
+
   const [editStopTarget, setEditStopTarget] = useState<{
     id: string;
     villageId: string;
@@ -353,19 +352,6 @@ export default function MilkCollectionPage() {
     [data?.villages],
   );
 
-  const allFarmers = useMemo(
-    () =>
-      (data?.villages ?? []).flatMap((village) =>
-        village.farmers.map((farmer) => ({
-          id: farmer.id,
-          villageId: village.id,
-          villageName: village.name,
-          name: farmer.name,
-          isActive: farmer.isActive,
-        })),
-      ),
-    [data?.villages],
-  );
 
   const availableRouteStops = useMemo(
     () =>
@@ -452,12 +438,6 @@ export default function MilkCollectionPage() {
   async function handleRemoveVillageStop(stopId: string) {
     if (!window.confirm('Remove this stop? If route history exists it will be deactivated instead.')) return;
     await api.delete(`/api/v1/milk-collections/village-stops/${stopId}`);
-    refresh();
-  }
-
-  async function handleRemoveFarmer(farmerId: string) {
-    if (!window.confirm('Remove this farmer? If collection history exists it will be deactivated instead.')) return;
-    await api.delete(`/api/v1/milk-collections/farmers/${farmerId}`);
     refresh();
   }
 
@@ -574,66 +554,6 @@ export default function MilkCollectionPage() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-gray-200 bg-white">
-        <div className="border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Farmers Management</h2>
-            <p className="text-sm text-gray-500">Add, edit, and deactivate farmers by village.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowFarmerModal(true)}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            + Add Farmer
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Village</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Farmer</th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {allFarmers.map((farmer) => (
-                <tr key={farmer.id}>
-                  <td className="px-4 py-3 text-sm text-gray-900">{farmer.villageName}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">
-                    <span className="font-medium">{farmer.name}</span>
-                    {!farmer.isActive && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">Inactive</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditFarmerTarget(farmer)}
-                        className="rounded-md border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveFarmer(farmer.id)}
-                        className="rounded-md border border-red-300 px-3 py-1 text-xs text-red-700 hover:bg-red-50"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {allFarmers.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-sm text-gray-500">No farmers added yet.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
       <section className="rounded-lg border border-gray-200 bg-white">
         <div className="border-b border-gray-200 px-4 py-3">
@@ -1008,28 +928,6 @@ export default function MilkCollectionPage() {
         />
       )}
 
-      {showFarmerModal && data && (
-        <AddFarmerModal
-          villages={data.villages}
-          onClose={() => setShowFarmerModal(false)}
-          onSaved={() => {
-            setShowFarmerModal(false);
-            refresh();
-          }}
-        />
-      )}
-
-      {editFarmerTarget && (
-        <EditFarmerModal
-          farmer={editFarmerTarget}
-          onClose={() => setEditFarmerTarget(null)}
-          onSaved={() => {
-            setEditFarmerTarget(null);
-            refresh();
-          }}
-        />
-      )}
-
       {editStopTarget && data && (
         <EditVillageStopModal
           stop={editStopTarget}
@@ -1250,119 +1148,6 @@ function AddVillageStopModal({
             }}
           />
         )}
-      </div>
-    </div>
-  );
-}
-
-function AddFarmerModal({
-  villages,
-  onClose,
-  onSaved,
-}: {
-  villages: Village[];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const activeVillages = villages.filter((village) => village.isActive);
-  const [villageId, setVillageId] = useState(activeVillages[0]?.id ?? '');
-  const [name, setName] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError('');
-    try {
-      await api.post('/api/v1/milk-collections/farmers', { villageId, name });
-      onSaved();
-    } catch (err: any) {
-      setError(err.message || 'Failed to add farmer');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-gray-900">Add Farmer</h2>
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Village</label>
-            <select value={villageId} onChange={(e) => setVillageId(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required>
-              {activeVillages.map((village) => (
-                <option key={village.id} value={village.id}>{village.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Farmer Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
-          </div>
-          <div className="flex justify-end gap-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
-            <button type="submit" disabled={submitting || !villageId} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-              {submitting ? 'Saving...' : 'Save Farmer'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function EditFarmerModal({
-  farmer,
-  onClose,
-  onSaved,
-}: {
-  farmer: { id: string; villageId: string; name: string; isActive: boolean };
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [name, setName] = useState(farmer.name);
-  const [isActive, setIsActive] = useState(farmer.isActive);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError('');
-    try {
-      await api.put(`/api/v1/milk-collections/farmers/${farmer.id}`, { name, isActive });
-      onSaved();
-    } catch (err: any) {
-      setError(err.message || 'Failed to update farmer');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-gray-900">Edit Farmer</h2>
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Farmer Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-            Active
-          </label>
-          <div className="flex justify-end gap-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
-            <button type="submit" disabled={submitting} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-              {submitting ? 'Saving...' : 'Save Farmer'}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );
