@@ -15,7 +15,7 @@ export default defineConfig({
       ? [VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Milk Delivery Platform',
         short_name: 'MilkDelivery',
@@ -56,6 +56,8 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, '../../dist/client'),
     emptyOutDir: true,
+    reportCompressedSize: false,
+    sourcemap: false,
   },
   server: {
     proxy: {

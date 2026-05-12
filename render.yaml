@@ -3,7 +3,7 @@ services:
     name: milkagri-app
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build
+    buildCommand: NODE_OPTIONS="--max-old-space-size=2048" npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeploy: true
@@ -20,3 +20,5 @@ services:
         sync: false
       - key: CORS_ORIGIN
         sync: false
+      - key: ENABLE_PWA
+        value: "true"
