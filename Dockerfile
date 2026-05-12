@@ -17,7 +17,7 @@ COPY prisma/ prisma/
 RUN npx prisma generate
 
 # Build client (Vite → dist/client) and server (tsc → dist/server)
-RUN npm run build
+RUN ENABLE_PWA=true npm run build
 
 # Stage 2: Production image
 FROM node:20-alpine AS production

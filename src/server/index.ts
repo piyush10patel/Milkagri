@@ -309,6 +309,39 @@ app.use('/api/v1/agent-remittances', agentRemittancesRoutes);
 app.use('/api/v1/permissions', permissionsRoutes);
 
 // ---------------------------------------------------------------------------
+// Force reset endpoint — unregisters SW, clears caches, redirects to /
+// ---------------------------------------------------------------------------
+app.get('/__reset', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.send(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Resetting…</title></head>
+<body>
+<script>
+(function(){
+  var steps = [];
+  if ('serviceWorker' in navigator) {
+    steps.push(navigator.serviceWorker.getRegistrations().then(function(regs) {
+      return Promise.all(regs.map(function(r){ return r.unregister(); }));
+    }));
+  }
+  if ('caches' in window) {
+    steps.push(caches.keys().then(function(keys) {
+      return Promise.all(keys.map(function(k){ return caches.delete(k); }));
+    }));
+  }
+  localStorage.clear();
+  Promise.all(steps).then(function(){
+    window.location.href = '/';
+  }).catch(function(){
+    window.location.href = '/';
+  });
+})();
+</script>
+<p style="font-family:system-ui;padding:2rem;text-align:center;color:#666;">Clearing cached data…</p>
+</body></html>`);
+});
+
+// ---------------------------------------------------------------------------
 // Serve built frontend in production
 // ---------------------------------------------------------------------------
 if (process.env.NODE_ENV === 'production') {
