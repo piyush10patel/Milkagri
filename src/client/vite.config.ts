@@ -6,6 +6,9 @@ import path from 'path';
 const enablePwa = process.env.ENABLE_PWA === 'true';
 
 export default defineConfig({
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     react(),
     ...(enablePwa

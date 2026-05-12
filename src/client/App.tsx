@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthContext, useAuthProvider, useAuth } from '@/hooks/useAuth';
 import Layout from '@/components/Layout';
@@ -78,8 +79,25 @@ function RequireRole({ role, children }: { role: string; children: React.ReactEl
 }
 
 
+declare const __BUILD_TIME__: string;
+
 export default function App() {
   const auth = useAuthProvider();
+
+  useEffect(() => {
+    const currentBuild = __BUILD_TIME__;
+    const prevBuild = localStorage.getItem('app-build');
+    if (prevBuild && prevBuild !== currentBuild) {
+      if ('caches' in window) {
+        caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
+      }
+      localStorage.clear();
+      localStorage.setItem('app-build', currentBuild);
+      window.location.reload();
+      return;
+    }
+    localStorage.setItem('app-build', currentBuild);
+  }, []);
 
   return (
     <AuthContext.Provider value={auth}>

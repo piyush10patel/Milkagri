@@ -53,21 +53,6 @@
           showBootError(reason);
         });
 
-        if (!('serviceWorker' in navigator)) return;
-        if (!window.location.protocol.startsWith('http')) return;
-        navigator.serviceWorker.getRegistrations()
-          .then(function (registrations) {
-            return Promise.all(registrations.map(function (registration) {
-              return registration.unregister();
-            }));
-          })
-          .then(function () {
-            if (!('caches' in window)) return;
-            return caches.keys().then(function (keys) {
-              return Promise.all(keys.map(function (key) { return caches.delete(key); }));
-            });
-          })
-          .catch(function () {});
       })();
     </script>
     <script type="module" src="/main.tsx"></script>
