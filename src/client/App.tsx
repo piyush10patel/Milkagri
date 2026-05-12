@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthContext, useAuthProvider, useAuth } from '@/hooks/useAuth';
 import Layout from '@/components/Layout';
+import { ToastProvider } from '@/components/ui/toast';
 import LoginPage from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
 import CustomerListPage from '@/pages/customers/CustomerListPage';
@@ -82,6 +83,7 @@ export default function App() {
 
   return (
     <AuthContext.Provider value={auth}>
+      <ToastProvider>
       <Routes>
         <Route path="/login" element={<RedirectIfAuth><LoginPage /></RedirectIfAuth>} />
         <Route element={<RequireAuth><Layout /></RequireAuth>}>
@@ -143,6 +145,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
+      </ToastProvider>
     </AuthContext.Provider>
   );
 }

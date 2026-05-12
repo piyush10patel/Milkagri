@@ -2,8 +2,19 @@ import { useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { useModalFocusTrap } from '@/hooks/useModalFocusTrap';
-
+import { motion } from 'framer-motion';
+import { Phone, Mail, MapPin, Route, Tag, Calendar, Clock, FileText, Pencil, PauseCircle, PlayCircle, StopCircle, Download, History } from 'lucide-react';
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
+import { Button } from '@/components/ui/button';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { Badge } from '@/components/ui/badge';
+import { DataTable, type Column } from '@/components/ui/data-table';
+import { Modal } from '@/components/ui/modal';
+import { PageLoader } from '@/components/ui/spinner';
+import { useToast } from '@/components/ui/toast';
+import { cn } from '@/lib/cn';
+import type { LucideIcon } from 'lucide-react';
 
 interface Address { id: string; addressLine1: string; addressLine2?: string; city?: string; state?: string; pincode?: string; isPrimary: boolean; }
 interface Subscription {
@@ -28,16 +39,29 @@ interface CustomerDetail {
 }
 interface PricingCategoryOption { id: string; code: string; name: string; }
 
-function formatDateOnly(value?: string) {
-  return value ? value.slice(0, 10) : '—';
+function fmtDate(value?: string) { return value ? value.slice(0, 10) : '—'; }
+
+const freqLabel: Record<string, string> = { daily: 'Daily', alternate_day: 'Alternate Day', custom_weekday: 'Custom Weekday' };
+const billingFreqLabel: Record<string, string> = { daily: 'Daily', every_2_days: 'Every 2 Days', weekly: 'Weekly', every_10_days: 'Every 10 Days', monthly: 'Monthly' };
+
+function InfoField({ label, value, icon: Icon }: { label: string; value: React.ReactNode; icon?: LucideIcon }) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-1.5 text-xs text-neutral-500 mb-0.5">
+        {Icon && <Icon className="h-3 w-3" />}
+        {label}
+      </div>
+      <div className="text-sm text-neutral-900">{value}</div>
+    </div>
+  );
 }
 
 export default function CustomerDetailPage() {
   const { id } = useParams();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
   const closeConfirm = useCallback(() => setConfirmAction(null), []);
-  const { modalRef: confirmModalRef } = useModalFocusTrap(!!confirmAction, closeConfirm);
 
   const { data: customerData, isLoading } = useQuery({
     queryKey: ['customer', id],
@@ -60,154 +84,189 @@ export default function CustomerDetailPage() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: (status: string) => api.patch(`/api/v1/customers/${id}/status`, { status }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customer', id] }); setConfirmAction(null); },
+    mutationFn: ({ status }: { status: string }) => api.patch(`/api/v1/customers/${id}/status`, { status }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['customer', id] });
+      setConfirmAction(null);
+      toast('success', 'Status updated', `Customer status changed to ${variables.status}`);
+    },
+    onError: () => {
+      toast('error', 'Failed to update status');
+    },
   });
 
-  if (isLoading) return <p className="text-sm text-gray-500">Loading…</p>;
+  if (isLoading) return <PageLoader />;
   const c = customerData?.data;
-  if (!c) return <p className="text-sm text-red-600">Customer not found</p>;
+  if (!c) return (
+    <div className="flex flex-col items-center justify-center py-20 text-neutral-500">
+      <p className="text-lg font-medium">Customer not found</p>
+      <Link to="/customers" className="mt-2 text-sm text-primary-600 hover:underline">Back to customers</Link>
+    </div>
+  );
 
-  const statusColors: Record<string, string> = { active: 'bg-green-100 text-green-800', paused: 'bg-yellow-100 text-yellow-800', stopped: 'bg-red-100 text-red-800' };
-  const freqLabel: Record<string, string> = { daily: 'Daily', alternate_day: 'Alternate Day', custom_weekday: 'Custom Weekday' };
-  const billingFrequencyLabel: Record<string, string> = { daily: 'Daily', every_2_days: 'Every 2 Days', weekly: 'Weekly', every_10_days: 'Every 10 Days', monthly: 'Monthly' };
   const pricingCategoryLabel = pricingCategoriesData?.data?.find((item) => item.code === c.pricingCategory)?.name ?? c.pricingCategory;
 
-  return (
-    <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <div>
-          <Link to="/customers" className="text-sm text-blue-600 hover:underline">← Customers</Link>
-          <h1 className="text-xl font-semibold text-gray-900 mt-1">{c.name}</h1>
-        </div>
-        <div className="flex gap-2">
-          <Link to={`/customers/${c.id}/edit`} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">Edit</Link>
-          {c.status === 'active' && (
-            <>
-              <button onClick={() => setConfirmAction('paused')} className="rounded-md border border-yellow-300 px-3 py-1.5 text-sm text-yellow-700 hover:bg-yellow-50">Pause</button>
-              <button onClick={() => setConfirmAction('stopped')} className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50">Stop</button>
-            </>
-          )}
-          {(c.status === 'paused' || c.status === 'stopped') && (
-            <button onClick={() => setConfirmAction('active')} className="rounded-md border border-green-300 px-3 py-1.5 text-sm text-green-700 hover:bg-green-50">Reactivate</button>
-          )}
-        </div>
+  const subscriptionColumns: Column<Subscription>[] = [
+    { key: 'product', label: 'Product', render: (row) => (
+      <span className="font-medium text-neutral-900 text-xs">{row.productVariant?.product?.name} ({row.productVariant?.quantityPerUnit} {row.productVariant?.unitType})</span>
+    )},
+    { key: 'quantity', label: 'Qty', align: 'right', render: (row) => (
+      <div className="text-right">
+        <span className="font-medium">{row.quantity}</span>
+        {row.packs?.length ? <div className="text-[10px] text-neutral-400">{row.packs.map((p) => `${p.packCount}x${Number(p.packSize)}L`).join(', ')}</div> : null}
       </div>
+    )},
+    { key: 'deliverySession', label: 'Session', render: (row) => <StatusBadge status={row.deliverySession} /> },
+    { key: 'route', label: 'Route', render: (row) => <span className="text-neutral-600">{row.route?.name ?? '—'}</span> },
+    { key: 'frequencyType', label: 'Frequency', render: (row) => <span className="text-neutral-600 text-xs">{freqLabel[row.frequencyType] ?? row.frequencyType}</span> },
+    { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    { key: 'startDate', label: 'Start', format: (v) => fmtDate(v as string) },
+  ];
 
-      {/* Profile */}
-      <div className="bg-white rounded-lg border border-gray-200 p-5 mb-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div><p className="text-xs text-gray-500">Phone</p><p className="text-sm">{c.phone}</p></div>
-          <div><p className="text-xs text-gray-500">Email</p><p className="text-sm">{c.email || '—'}</p></div>
-          <div><p className="text-xs text-gray-500">Status</p><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[c.status] ?? ''}`}>{c.status}</span></div>
-          <div><p className="text-xs text-gray-500">Route</p><p className="text-sm">{c.route?.name ?? '—'}</p></div>
-          <div><p className="text-xs text-gray-500">Delivery Notes</p><p className="text-sm">{c.deliveryNotes || '—'}</p></div>
-          <div><p className="text-xs text-gray-500">Preferred Window</p><p className="text-sm">{c.preferredDeliveryWindow || '—'}</p></div>
-          <div><p className="text-xs text-gray-500">Pricing Category</p><p className="text-sm">{c.pricingCategory ? pricingCategoryLabel : '—'}</p></div>
-          <div><p className="text-xs text-gray-500">Billing Frequency</p><p className="text-sm">{c.billingFrequency ? billingFrequencyLabel[c.billingFrequency] ?? c.billingFrequency : '—'}</p></div>
-        </div>
-      </div>
+  const ledgerColumns: Column<LedgerEntry>[] = [
+    { key: 'entryDate', label: 'Date', render: (row) => <span className="text-neutral-600">{row.entryDate}</span> },
+    { key: 'transactionType', label: 'Type', render: (row) => <span className="capitalize text-neutral-900">{row.transactionType.replace(/_/g, ' ')}</span> },
+    { key: 'debitAmount', label: 'Debit', align: 'right', render: (row) => (
+      <span className={cn(row.debitAmount > 0 ? 'text-danger-600' : 'text-neutral-400')}>{row.debitAmount > 0 ? `₹${row.debitAmount.toFixed(2)}` : '—'}</span>
+    )},
+    { key: 'creditAmount', label: 'Credit', align: 'right', render: (row) => (
+      <span className={cn(row.creditAmount > 0 ? 'text-success-600' : 'text-neutral-400')}>{row.creditAmount > 0 ? `₹${row.creditAmount.toFixed(2)}` : '—'}</span>
+    )},
+    { key: 'runningBalance', label: 'Balance', align: 'right', render: (row) => (
+      <span className="font-medium text-neutral-900">₹{row.runningBalance.toFixed(2)}</span>
+    )},
+  ];
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <PageHeader
+        title={c.name}
+        breadcrumbs={[{ label: 'Customers', to: '/customers' }, { label: c.name }]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Link to={`/customers/${c.id}/edit`}>
+              <Button variant="secondary" size="sm"><Pencil className="h-3.5 w-3.5" /> Edit</Button>
+            </Link>
+            {c.status === 'active' && (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => setConfirmAction('paused')}><PauseCircle className="h-3.5 w-3.5" /> Pause</Button>
+                <Button variant="danger" size="sm" onClick={() => setConfirmAction('stopped')}><StopCircle className="h-3.5 w-3.5" /> Stop</Button>
+              </>
+            )}
+            {(c.status === 'paused' || c.status === 'stopped') && (
+              <Button variant="success" size="sm" onClick={() => setConfirmAction('active')}><PlayCircle className="h-3.5 w-3.5" /> Reactivate</Button>
+            )}
+          </div>
+        }
+      />
+
+      {/* Customer Information */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-neutral-500" />
+            <h2 className="text-sm font-semibold text-neutral-900">Customer Information</h2>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-5">
+            <InfoField label="Phone" value={c.phone} icon={Phone} />
+            <InfoField label="Email" value={c.email || '—'} icon={Mail} />
+            <InfoField label="Status" value={<StatusBadge status={c.status} />} />
+            <InfoField label="Route" value={c.route?.name ?? '—'} icon={Route} />
+            <InfoField label="Pricing Category" value={c.pricingCategory ? pricingCategoryLabel : '—'} icon={Tag} />
+            <InfoField label="Billing Frequency" value={c.billingFrequency ? billingFreqLabel[c.billingFrequency] ?? c.billingFrequency : '—'} icon={Calendar} />
+            <InfoField label="Delivery Notes" value={c.deliveryNotes || '—'} icon={FileText} />
+            <InfoField label="Preferred Window" value={c.preferredDeliveryWindow || '—'} icon={Clock} />
+            <InfoField label="Created" value={fmtDate(c.createdAt)} icon={Calendar} />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Addresses */}
-      <div className="bg-white rounded-lg border border-gray-200 p-5 mb-4">
-        <h2 className="text-sm font-semibold text-gray-900 mb-3">Addresses</h2>
-        {c.addresses?.length ? (
-          <div className="space-y-2">
-            {c.addresses.map((a) => (
-              <div key={a.id} className="border border-gray-100 rounded p-3 text-sm">
-                {a.isPrimary && <span className="text-xs bg-blue-100 text-blue-700 rounded-full px-2 py-0.5 mr-2">Primary</span>}
-                {[a.addressLine1, a.addressLine2, a.city, a.state, a.pincode].filter(Boolean).join(', ')}
-              </div>
-            ))}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-neutral-500" />
+            <h2 className="text-sm font-semibold text-neutral-900">Addresses</h2>
           </div>
-        ) : <p className="text-sm text-gray-500">No addresses</p>}
-      </div>
+        </CardHeader>
+        <CardContent>
+          {c.addresses?.length ? (
+            <div className="space-y-3">
+              {c.addresses.map((a) => (
+                <div key={a.id} className="flex items-start gap-3 rounded-lg border border-neutral-100 bg-neutral-50/50 p-3 text-sm">
+                  <MapPin className="h-4 w-4 text-neutral-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    {a.isPrimary && <Badge variant="info" className="mb-1">Primary</Badge>}
+                    <p className="text-neutral-900">{a.addressLine1}{a.addressLine2 ? `, ${a.addressLine2}` : ''}</p>
+                    <p className="text-neutral-500 text-xs">{[a.city, a.state, a.pincode].filter(Boolean).join(', ')}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-neutral-400 py-2">No addresses on file</p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Subscriptions */}
-      <div className="bg-white rounded-lg border border-gray-200 p-5 mb-4">
-        <h2 className="text-sm font-semibold text-gray-900 mb-3">Subscriptions</h2>
-        {subsData?.data?.length ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead><tr>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Session</th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Route</th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Frequency</th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Status</th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Start</th>
-              </tr></thead>
-              <tbody className="divide-y divide-gray-100">
-                {subsData.data.map((s) => (
-                  <tr key={s.id}>
-                    <td className="px-3 py-2">{s.productVariant?.product?.name} ({s.productVariant?.quantityPerUnit} {s.productVariant?.unitType})</td>
-                    <td className="px-3 py-2">
-                      <div>{s.quantity}</div>
-                      <div className="text-xs text-gray-500">
-                        {s.packs?.length ? s.packs.map((pack) => `${pack.packCount} x ${Number(pack.packSize)}L`).join(', ') : 'No packs'}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 capitalize">{s.deliverySession}</td>
-                    <td className="px-3 py-2">{s.route?.name ?? '—'}</td>
-                    <td className="px-3 py-2">{freqLabel[s.frequencyType] ?? s.frequencyType}</td>
-                    <td className="px-3 py-2">{s.status}</td>
-                    <td className="px-3 py-2">{formatDateOnly(s.startDate)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <History className="h-4 w-4 text-neutral-500" />
+            <h2 className="text-sm font-semibold text-neutral-900">Subscriptions</h2>
           </div>
-        ) : <p className="text-sm text-gray-500">No subscriptions</p>}
-      </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <DataTable
+            columns={subscriptionColumns}
+            data={subsData?.data ?? []}
+            emptyTitle="No subscriptions"
+            emptyDescription="This customer does not have any subscriptions."
+            pageSize={10}
+          />
+        </CardContent>
+      </Card>
 
-      {/* Ledger Summary */}
-      <div className="bg-white rounded-lg border border-gray-200 p-5 mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-900">Ledger (Recent)</h2>
-          <a href={`/api/v1/customers/${id}/ledger/pdf`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">Download PDF</a>
-        </div>
-        {ledgerData?.data?.length ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead><tr>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Date</th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Type</th>
-                <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500">Debit</th>
-                <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500">Credit</th>
-                <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500">Balance</th>
-              </tr></thead>
-              <tbody className="divide-y divide-gray-100">
-                {ledgerData.data.map((e) => (
-                  <tr key={e.id}>
-                    <td className="px-3 py-2">{e.entryDate}</td>
-                    <td className="px-3 py-2">{e.transactionType}</td>
-                    <td className="px-3 py-2 text-right">{e.debitAmount > 0 ? `₹${e.debitAmount.toFixed(2)}` : '—'}</td>
-                    <td className="px-3 py-2 text-right">{e.creditAmount > 0 ? `₹${e.creditAmount.toFixed(2)}` : '—'}</td>
-                    <td className="px-3 py-2 text-right font-medium">₹{e.runningBalance.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <p className="text-sm text-gray-500">No ledger entries</p>}
-      </div>
-
-      {/* Confirmation dialog */}
-      {confirmAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="confirm-detail-title">
-          <div ref={confirmModalRef} className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
-            <h2 id="confirm-detail-title" className="text-lg font-semibold text-gray-900 mb-2">Confirm Status Change</h2>
-            <p className="text-sm text-gray-600 mb-4">Change status to <span className="font-medium">{confirmAction}</span>?</p>
-            <div className="flex justify-end gap-2">
-              <button onClick={closeConfirm} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">Cancel</button>
-              <button onClick={() => statusMutation.mutate(confirmAction)} disabled={statusMutation.isPending} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
-                {statusMutation.isPending ? 'Updating…' : 'Confirm'}
-              </button>
+      {/* Ledger */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-neutral-500" />
+              <h2 className="text-sm font-semibold text-neutral-900">Ledger (Recent)</h2>
             </div>
+            <a href={`/api/v1/customers/${id}/ledger/pdf`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-600 hover:text-primary-700 inline-flex items-center gap-1 transition-colors">
+              <Download className="h-3 w-3" /> PDF
+            </a>
           </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <DataTable
+            columns={ledgerColumns}
+            data={ledgerData?.data ?? []}
+            emptyTitle="No ledger entries"
+            emptyDescription="No transactions recorded for this customer."
+            pageSize={10}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Confirmation Modal */}
+      <Modal open={!!confirmAction} onClose={closeConfirm} title="Confirm Status Change" description={`Change customer status to "${confirmAction}"?`} size="sm">
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={closeConfirm}>Cancel</Button>
+          <Button
+            onClick={() => confirmAction && statusMutation.mutate({ status: confirmAction })}
+            loading={statusMutation.isPending}
+            variant={confirmAction === 'stopped' ? 'danger' : confirmAction === 'active' ? 'success' : 'primary'}
+          >
+            Confirm
+          </Button>
         </div>
-      )}
-    </div>
+      </Modal>
+    </motion.div>
   );
 }

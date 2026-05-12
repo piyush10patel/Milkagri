@@ -3,6 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
+import { motion } from 'framer-motion';
+import { DollarSign, History, Plus, Receipt } from 'lucide-react';
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { DataTable, type Column } from '@/components/ui/data-table';
+import { EmptyState } from '@/components/ui/empty-state';
 
 interface OutstandingCustomer {
   customer: {
@@ -27,6 +35,10 @@ interface ReconciliationEntry {
 interface ListResponse {
   data: OutstandingCustomer[];
   pagination: { page: number; limit: number; total: number; totalPages: number };
+}
+
+function fmt(amount: number) {
+  return `₹${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 }
 
 export default function OutstandingPage() {
@@ -58,116 +70,119 @@ export default function OutstandingPage() {
 
   const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
 
-  function handleSort(col: 'name' | 'totalOutstanding') {
-    if (sortBy === col) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    else { setSortBy(col); setSortOrder('desc'); }
-  }
-
-  const sortIcon = (col: string) => sortBy === col ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : '';
+  const columns: Column<OutstandingCustomer>[] = [
+    { key: 'customer', label: 'Customer', render: (row) => (
+      <Link to={`/customers/${row.customer.id}`} className="font-medium text-primary-600 hover:text-primary-700 transition-colors">
+        {row.customer.name}
+      </Link>
+    )},
+    { key: 'phone', label: 'Phone', render: (row) => <span className="text-neutral-600">{row.customer.phone}</span> },
+    { key: 'totalOutstanding', label: 'Outstanding', align: 'right', render: (row) => (
+      <span className="font-semibold text-danger-600">{fmt(row.totalOutstanding)}</span>
+    )},
+    { key: 'invoiceCount', label: 'Invoices', align: 'right' },
+    { key: 'oldestUnpaidDate', label: 'Oldest Unpaid', render: (row) => <span className="text-neutral-600">{row.oldestUnpaidDate ?? '—'}</span> },
+    { key: 'actions', label: 'Actions', align: 'right', sortable: false, render: (row) => (
+      <Link to={`/payments/new?customerId=${row.customer.id}`}>
+        <Button variant="secondary" size="sm">
+          <DollarSign className="h-3 w-3" />
+          Pay
+        </Button>
+      </Link>
+    )},
+  ];
 
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h1 className="text-xl font-semibold text-gray-900">Outstanding Payments</h1>
-        <div className="flex gap-2">
-          <Link to="/payments/history" className="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50">
-            History
-          </Link>
-          <Link to="/payments/new" className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
-            + Record Payment
-          </Link>
-          {isAdmin && (
-            <button
-              onClick={() => setShowReconciliation(!showReconciliation)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
-              aria-label="Toggle collection reconciliation"
-            >
-              Reconciliation
-            </button>
-          )}
-        </div>
-      </div>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <PageHeader
+        title="Outstanding Payments"
+        description="Track and manage customer payment collections"
+        actions={
+          <>
+            <Link to="/payments/history">
+              <Button variant="secondary" size="sm">
+                <History className="h-3.5 w-3.5" />
+                History
+              </Button>
+            </Link>
+            {isAdmin && (
+              <Button variant="secondary" size="sm" onClick={() => setShowReconciliation(!showReconciliation)}>
+                <Receipt className="h-3.5 w-3.5" />
+                Reconciliation
+              </Button>
+            )}
+            <Link to="/payments/new">
+              <Button size="sm">
+                <Plus className="h-3.5 w-3.5" />
+                Record Payment
+              </Button>
+            </Link>
+          </>
+        }
+      />
 
       {/* Collection Reconciliation (Admin only) */}
       {showReconciliation && isAdmin && (
-        <div className="bg-white rounded-lg border border-gray-200 p-5 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-900">Collection Reconciliation</h2>
-            <input
-              type="date"
-              value={reconDate}
-              onChange={(e) => setReconDate(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-              aria-label="Reconciliation date"
-            />
-          </div>
-          {reconData?.agents?.length ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead><tr>
-                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500">Agent</th>
-                  <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500">Collected</th>
-              <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500">Collections</th>
-                </tr></thead>
-                <tbody className="divide-y divide-gray-100">
-                  {reconData.agents.map((r) => (
-                    <tr key={r.agent.id}>
-                      <td className="px-3 py-2">{r.agent.name}</td>
-                      <td className="px-3 py-2 text-right">₹{Number(r.totalCollected).toFixed(2)}</td>
-                      <td className="px-3 py-2 text-right">{r.collectionCount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : <p className="text-sm text-gray-500">No collection data for this date</p>}
-        </div>
+        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-neutral-900">Collection Reconciliation</h2>
+                <input
+                  type="date"
+                  value={reconDate}
+                  onChange={(e) => setReconDate(e.target.value)}
+                  className="rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-200 focus:border-primary-400 transition-all"
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {reconData?.agents?.length ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-neutral-100 text-sm">
+                    <thead>
+                      <tr className="border-b border-neutral-100">
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-neutral-500 uppercase">Agent</th>
+                        <th className="px-3 py-2.5 text-right text-xs font-semibold text-neutral-500 uppercase">Collected</th>
+                        <th className="px-3 py-2.5 text-right text-xs font-semibold text-neutral-500 uppercase">Collections</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-50">
+                      {reconData.agents.map((r) => (
+                        <tr key={r.agent.id} className="hover:bg-neutral-50">
+                          <td className="px-3 py-2.5 font-medium text-neutral-900">{r.agent.name}</td>
+                          <td className="px-3 py-2.5 text-right font-semibold text-neutral-900">{fmt(r.totalCollected)}</td>
+                          <td className="px-3 py-2.5 text-right text-neutral-600">{r.collectionCount}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-neutral-50 font-semibold">
+                        <td className="px-3 py-2.5 text-neutral-900">Grand Total</td>
+                        <td className="px-3 py-2.5 text-right text-neutral-900">{fmt(reconData.grandTotal)}</td>
+                        <td className="px-3 py-2.5 text-right text-neutral-900">{reconData.agents.reduce((s, r) => s + r.collectionCount, 0)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState title="No reconciliation data" description="No collection data for this date" />
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
 
-      {isLoading && <p className="text-sm text-gray-500" aria-live="polite">Loading…</p>}
-
-      {/* Outstanding table */}
-      <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleSort('totalOutstanding')} tabIndex={0} role="button" onKeyDown={(e) => e.key === 'Enter' && handleSort('totalOutstanding')}>Outstanding{sortIcon('totalOutstanding')}</th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Invoices</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Oldest Unpaid</th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {data?.data?.map((c) => (
-              <tr key={c.customer.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 text-sm"><Link to={`/customers/${c.customer.id}`} className="text-blue-600 hover:underline">{c.customer.name}</Link></td>
-                <td className="px-4 py-3 text-sm text-gray-700">{c.customer.phone}</td>
-                <td className="px-4 py-3 text-sm text-right font-medium text-red-700">₹{Number(c.totalOutstanding).toFixed(2)}</td>
-                <td className="px-4 py-3 text-sm text-right">{c.invoiceCount}</td>
-                <td className="px-4 py-3 text-sm text-gray-700">{c.oldestUnpaidDate ?? '—'}</td>
-                <td className="px-4 py-3 text-sm text-right">
-                  <Link to={`/payments/new?customerId=${c.customer.id}`} className="text-blue-600 hover:underline text-xs">Pay</Link>
-                </td>
-              </tr>
-            ))}
-            {data?.data?.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">No outstanding payments</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {data?.pagination && data.pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-gray-500">Page {data.pagination.page} of {data.pagination.totalPages} ({data.pagination.total} total)</p>
-          <div className="flex gap-2">
-            <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded-md border border-gray-300 px-3 py-1 text-sm disabled:opacity-50">Previous</button>
-            <button disabled={page >= data.pagination.totalPages} onClick={() => setPage(page + 1)} className="rounded-md border border-gray-300 px-3 py-1 text-sm disabled:opacity-50">Next</button>
-          </div>
-        </div>
-      )}
-    </div>
+      <Card>
+        <DataTable
+          columns={columns}
+          data={data?.data ?? []}
+          loading={isLoading}
+          searchable
+          searchPlaceholder="Search customers..."
+          emptyTitle="No outstanding payments"
+          emptyDescription="All customer invoices have been paid."
+          pageSize={limit}
+        />
+      </Card>
+    </motion.div>
   );
 }

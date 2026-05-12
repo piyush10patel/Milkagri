@@ -5,60 +5,81 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { api } from '@/lib/api';
+import { cn } from '@/lib/cn';
+import {
+  LayoutDashboard,
+  Users,
+  Package,
+  Tag,
+  ClipboardList,
+  Milk,
+  Truck,
+  MapPin,
+  Navigation,
+  Receipt,
+  CreditCard,
+  BarChart3,
+  Bell,
+  Settings,
+  Shield,
+  UserCircle,
+  LogOut,
+  Menu,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  Inbox,
+  DollarSign,
+  BookOpen,
+  ClipboardCheck,
+  RefreshCw,
+  UserCheck,
+  Warehouse,
+  FileText,
+} from 'lucide-react';
 
 interface NavItem {
   label: string;
   to: string;
   permission?: string;
+  icon: React.ReactNode;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard', to: '/' },
-  { label: 'Customers', to: '/customers', permission: 'customers' },
-  { label: 'Products', to: '/products', permission: 'products' },
-  { label: 'Pricing', to: '/pricing', permission: 'pricing' },
-  { label: 'Subscriptions', to: '/subscriptions', permission: 'subscriptions' },
-  { label: 'Orders', to: '/orders', permission: 'orders' },
-  { label: 'Milk Summary', to: '/orders/summary', permission: 'milk_summary' },
-  { label: 'Milk Collection', to: '/milk-collections', permission: 'milk_collection' },
-  { label: 'Collection Routes', to: '/milk-collections/routes', permission: 'milk_collection' },
-  { label: 'Deliveries', to: '/deliveries', permission: 'deliveries' },
-  { label: 'Routes', to: '/routes', permission: 'routes' },
-  { label: 'Route Map', to: '/routes/map', permission: 'route_map' },
-  { label: 'Live GPS', to: '/tracking/live-gps', permission: 'live_gps' },
-  { label: 'Billing', to: '/billing', permission: 'billing' },
-  { label: 'Payments', to: '/payments', permission: 'payments' },
-  { label: 'Reports', to: '/reports', permission: 'reports' },
-  { label: 'Users', to: '/users', permission: 'users' },
-  { label: 'Notifications', to: '/notifications', permission: 'notifications' },
-  { label: 'Audit Log', to: '/audit-logs', permission: 'audit_logs' },
-  { label: 'Settings', to: '/settings', permission: 'settings' },
+  { label: 'Dashboard', to: '/', icon: <LayoutDashboard className="h-4 w-4" /> },
+  { label: 'Customers', to: '/customers', permission: 'customers', icon: <Users className="h-4 w-4" /> },
+  { label: 'Products', to: '/products', permission: 'products', icon: <Package className="h-4 w-4" /> },
+  { label: 'Pricing', to: '/pricing', permission: 'pricing', icon: <Tag className="h-4 w-4" /> },
+  { label: 'Subscriptions', to: '/subscriptions', permission: 'subscriptions', icon: <ClipboardList className="h-4 w-4" /> },
+  { label: 'Orders', to: '/orders', permission: 'orders', icon: <ClipboardCheck className="h-4 w-4" /> },
+  { label: 'Milk Summary', to: '/orders/summary', permission: 'milk_summary', icon: <BarChart3 className="h-4 w-4" /> },
+  { label: 'Milk Collection', to: '/milk-collections', permission: 'milk_collection', icon: <Milk className="h-4 w-4" /> },
+  { label: 'Collection Routes', to: '/milk-collections/routes', permission: 'milk_collection', icon: <Navigation className="h-4 w-4" /> },
+  { label: 'Deliveries', to: '/deliveries', permission: 'deliveries', icon: <Truck className="h-4 w-4" /> },
+  { label: 'Routes', to: '/routes', permission: 'routes', icon: <MapPin className="h-4 w-4" /> },
+  { label: 'Live GPS', to: '/tracking/live-gps', permission: 'live_gps', icon: <Navigation className="h-4 w-4" /> },
+  { label: 'Billing', to: '/billing', permission: 'billing', icon: <Receipt className="h-4 w-4" /> },
+  { label: 'Payments', to: '/payments', permission: 'payments', icon: <CreditCard className="h-4 w-4" /> },
+  { label: 'Reports', to: '/reports', permission: 'reports', icon: <BarChart3 className="h-4 w-4" /> },
+  { label: 'Users', to: '/users', permission: 'users', icon: <UserCircle className="h-4 w-4" /> },
+  { label: 'Notifications', to: '/notifications', permission: 'notifications', icon: <Bell className="h-4 w-4" /> },
+  { label: 'Inventory', to: '/inventory', permission: 'inventory', icon: <Warehouse className="h-4 w-4" /> },
+  { label: 'Settings', to: '/settings', permission: 'settings', icon: <Settings className="h-4 w-4" /> },
+  { label: 'Audit Log', to: '/audit-logs', permission: 'audit_logs', icon: <FileText className="h-4 w-4" /> },
 ];
 
 const COLLECTION_NAV_ITEMS: NavItem[] = [
-  { label: 'Agents Management', to: '/collections/agents-management', permission: 'agent_assignments' },
-  { label: 'Collection Overview', to: '/collections/overview', permission: 'collections_overview' },
-  { label: 'Agent Assignments', to: '/collections/assignments', permission: 'agent_assignments' },
-  { label: 'Remittances', to: '/collections/remittances', permission: 'remittances' },
-  { label: 'Agent Balances', to: '/collections/balances', permission: 'agent_balances' },
-  { label: 'My Collections', to: '/collections/dashboard', permission: 'agent_collections_dashboard' },
+  { label: 'Agents Management', to: '/collections/agents-management', permission: 'agent_assignments', icon: <UserCheck className="h-4 w-4" /> },
+  { label: 'Collection Overview', to: '/collections/overview', permission: 'collections_overview', icon: <DollarSign className="h-4 w-4" /> },
+  { label: 'Agent Assignments', to: '/collections/assignments', permission: 'agent_assignments', icon: <ClipboardList className="h-4 w-4" /> },
+  { label: 'Remittances', to: '/collections/remittances', permission: 'remittances', icon: <RefreshCw className="h-4 w-4" /> },
+  { label: 'Agent Balances', to: '/collections/balances', permission: 'agent_balances', icon: <BookOpen className="h-4 w-4" /> },
+  { label: 'My Collections', to: '/collections/dashboard', permission: 'agent_collections_dashboard', icon: <ClipboardCheck className="h-4 w-4" /> },
 ];
 
-function getVisibleItems(permissions: Set<string>, isSuperAdmin: boolean): NavItem[] {
-  return NAV_ITEMS.filter((item) => !item.permission || isSuperAdmin || permissions.has(item.permission));
-}
-
-function getVisibleCollectionItems(permissions: Set<string>, isSuperAdmin: boolean): NavItem[] {
-  return COLLECTION_NAV_ITEMS.filter((item) => !item.permission || isSuperAdmin || permissions.has(item.permission));
-}
-
-function RoleBadge({ role }: { role: string }) {
-  const label = role.replace(/_/g, ' ');
-  return (
-    <span className="inline-block rounded-full bg-blue-100 text-blue-800 text-xs px-2 py-0.5 capitalize">
-      {label}
-    </span>
-  );
+function getVisibleItems(items: NavItem[], permissions: Set<string>, isSuperAdmin: boolean) {
+  return items.filter((item) => !item.permission || isSuperAdmin || permissions.has(item.permission));
 }
 
 function NotificationBell({ enabled }: { enabled: boolean }) {
@@ -75,14 +96,12 @@ function NotificationBell({ enabled }: { enabled: boolean }) {
     <button
       type="button"
       onClick={() => navigate('/notifications')}
-      className="relative p-2 rounded-md text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      className="relative rounded-lg p-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-all focus:outline-none"
       aria-label={`Notifications${unread > 0 ? `, ${unread} unread` : ''}`}
     >
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-      </svg>
+      <Bell className="h-5 w-5" />
       {unread > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center h-4 min-w-[1rem] rounded-full bg-red-600 text-white text-[10px] font-medium px-1">
+        <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center h-4 min-w-[1rem] rounded-full bg-danger-500 text-white text-[10px] font-semibold px-1 ring-2 ring-white">
           {unread > 99 ? '99+' : unread}
         </span>
       )}
@@ -90,33 +109,59 @@ function NotificationBell({ enabled }: { enabled: boolean }) {
   );
 }
 
+function SidebarNav({ items, label }: { items: NavItem[]; label?: string }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="py-2">
+      {label && (
+        <p className="px-4 py-1 text-[10px] font-semibold text-neutral-400 uppercase tracking-widest">
+          {label}
+        </p>
+      )}
+      {items.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.to === '/'}
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm font-medium transition-all duration-150',
+              isActive
+                ? 'bg-primary-50 text-primary-700 shadow-soft'
+                : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900',
+            )
+          }
+        >
+          {item.icon}
+          <span>{item.label}</span>
+        </NavLink>
+      ))}
+    </div>
+  );
+}
+
 export default function Layout() {
   const { user, logout } = useAuth();
   const { permissions, isLoading: permissionsLoading } = usePermissions();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   usePageTitle();
 
   if (!user) return null;
 
   const isSuperAdmin = user.role === 'super_admin';
   const canViewNotifications = isSuperAdmin || permissions.has('notifications');
-  const items = getVisibleItems(permissions, isSuperAdmin);
-  const collectionItems = getVisibleCollectionItems(permissions, isSuperAdmin);
+  const items = getVisibleItems(NAV_ITEMS, permissions, isSuperAdmin);
+  const collectionItems = getVisibleItems(COLLECTION_NAV_ITEMS, permissions, isSuperAdmin);
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
-      {/* Skip to main content link */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-md focus:text-sm focus:font-medium"
-      >
-        Skip to main content
-      </a>
-
+    <div className="min-h-screen bg-neutral-50 flex">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          className="fixed inset-0 z-30 bg-black/40 md:hidden animate-fade-in"
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />
@@ -124,106 +169,141 @@ export default function Layout() {
 
       {/* Sidebar */}
       <aside
-        className={`
-          fixed inset-y-0 left-0 z-40 w-60 bg-white border-r border-gray-200 flex flex-col
-          transform transition-transform duration-200 ease-in-out
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:translate-x-0 md:static md:z-auto
-        `}
+        className={cn(
+          'fixed inset-y-0 left-0 z-40 bg-white border-r border-neutral-200 flex flex-col',
+          'transform transition-all duration-300 ease-in-out',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          'md:translate-x-0 md:static md:z-auto',
+          sidebarCollapsed ? 'md:w-16' : 'md:w-60',
+        )}
       >
-        <div className="h-14 flex items-center px-4 border-b border-gray-200 shrink-0">
-          <span className="text-lg font-bold text-gray-900">MilkDelivery</span>
+        {/* Logo */}
+        <div className={cn(
+          'h-14 flex items-center border-b border-neutral-100 shrink-0',
+          sidebarCollapsed ? 'justify-center px-0' : 'px-4',
+        )}>
+          {sidebarCollapsed ? (
+            <span className="text-lg font-bold text-primary-600">M</span>
+          ) : (
+            <span className="text-lg font-bold text-neutral-900">
+              <span className="text-primary-600">Milk</span>Delivery
+            </span>
+          )}
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-2" aria-label="Main navigation">
-          {items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              onClick={() => setSidebarOpen(false)}
-              className={({ isActive }) =>
-                `block px-4 py-2 text-sm rounded-md mx-2 my-0.5 ${
-                  isActive
-                    ? 'bg-blue-50 text-blue-700 font-medium'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <span aria-current={isActive ? 'page' : undefined}>{item.label}</span>
-              )}
-            </NavLink>
-          ))}
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto py-2 scrollbar-thin" aria-label="Main navigation">
+          <SidebarNav items={items} />
           {collectionItems.length > 0 && (
             <>
-              <div className="mx-4 my-2 border-t border-gray-200" />
-              <p className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">Collections</p>
-              {collectionItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setSidebarOpen(false)}
-                  className={({ isActive }) =>
-                    `block px-4 py-2 text-sm rounded-md mx-2 my-0.5 ${
-                      isActive
-                        ? 'bg-blue-50 text-blue-700 font-medium'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`
-                  }
-                >
-                  {({ isActive }) => (
-                    <span aria-current={isActive ? 'page' : undefined}>{item.label}</span>
-                  )}
-                </NavLink>
-              ))}
+              <div className="mx-4 my-1 border-t border-neutral-100" />
+              <SidebarNav items={collectionItems} label="Collections" />
             </>
           )}
         </nav>
+
+        {/* Collapse toggle */}
+        <div className="hidden md:flex items-center justify-center p-2 border-t border-neutral-100">
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="rounded-lg p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-all"
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
+        </div>
       </aside>
 
       {/* Main content area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className={cn('flex-1 flex flex-col min-w-0 transition-all duration-300')}>
         {/* Top bar */}
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 shrink-0">
+        <header className="sticky top-0 z-20 h-14 bg-white/80 backdrop-blur-md border-b border-neutral-200 flex items-center justify-between px-4 lg:px-6 shrink-0">
           <button
             type="button"
-            className="md:hidden p-2 -ml-2 rounded-md text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            aria-label="Toggle navigation menu"
+            className="md:hidden rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 transition-colors"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open navigation menu"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              {sidebarOpen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              )}
-            </svg>
+            <Menu className="h-5 w-5" />
           </button>
 
-          <div className="flex-1" />
-
-          <div className="flex items-center gap-3">
-            {canViewNotifications && <NotificationBell enabled={canViewNotifications} />}
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium text-gray-900">{user.name}</p>
-              <RoleBadge role={user.role} />
+          <div className="hidden sm:flex items-center flex-1 max-w-md ml-4">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+              <input
+                type="text"
+                placeholder="Search..."
+                className="w-full rounded-lg border border-neutral-200 bg-neutral-50 pl-9 pr-3 py-1.5 text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400 focus:bg-white transition-all"
+              />
             </div>
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              Logout
-            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {canViewNotifications && <NotificationBell enabled={canViewNotifications} />}
+
+            {/* User menu */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
+              >
+                <div className="h-7 w-7 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs font-semibold">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="hidden sm:block text-left">
+                  <p className="text-sm font-medium text-neutral-900 leading-tight">{user.name}</p>
+                  <p className="text-[10px] text-neutral-500 capitalize leading-tight">{user.role.replace(/_/g, ' ')}</p>
+                </div>
+              </button>
+
+              {showUserMenu && (
+                <div
+                  className="absolute right-0 mt-1 w-56 rounded-xl bg-white border border-neutral-200 shadow-dropdown py-1.5 animate-scale-in"
+                  onMouseLeave={() => setShowUserMenu(false)}
+                >
+                  <div className="px-4 py-2 border-b border-neutral-100">
+                    <p className="text-sm font-medium text-neutral-900">{user.name}</p>
+                    <p className="text-xs text-neutral-500">{user.email}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setShowUserMenu(false); navigate('/settings'); }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowUserMenu(false); navigate('/milk-collections/farmer-report'); }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
+                  >
+                    <BarChart3 className="h-4 w-4" />
+                    Farmer Report
+                  </button>
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-danger-600 hover:bg-danger-50 transition-colors"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
         {/* Page content */}
-        <main id="main-content" className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main id="main-content" className="flex-1 overflow-y-auto p-4 lg:p-6">
           <Outlet />
         </main>
       </div>
     </div>
   );
 }
+
+

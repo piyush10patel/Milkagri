@@ -2,7 +2,17 @@ import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
-import { useModalFocusTrap } from '@/hooks/useModalFocusTrap';
+import { motion } from 'framer-motion';
+import { Plus, PauseCircle, XCircle, Trash2, CalendarClock, Sigma, History, ClipboardList } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { DataTable, type Column } from '@/components/ui/data-table';
+import { Input } from '@/components/ui/input';
+import { Modal } from '@/components/ui/modal';
+import { PageLoader } from '@/components/ui/spinner';
 
 interface Subscription {
   id: string;
@@ -27,30 +37,19 @@ interface Subscription {
 
 interface ListResponse { data: Subscription[]; pagination: { page: number; limit: number; total: number; totalPages: number }; }
 
-const FREQ_LABELS: Record<string, string> = { daily: 'Daily', alternate_day: 'Alternate Day', custom_weekday: 'Custom Weekday' };
-const STATUS_COLORS: Record<string, string> = { active: 'bg-green-100 text-green-800', paused: 'bg-yellow-100 text-yellow-800', cancelled: 'bg-red-100 text-red-800' };
+const FREQ_LABELS: Record<string, string> = { daily: 'Daily', alternate_day: 'Alt Day', custom_weekday: 'Custom' };
 
-function formatDateOnly(value?: string) {
-  return value ? value.slice(0, 10) : '—';
-}
+function fmtDate(value?: string) { return value ? value.slice(0, 10) : '—'; }
 
 export default function SubscriptionListPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const closeDeleteModal = useCallback(() => setDeleteTarget(null), []);
-  const { modalRef: deleteModalRef } = useModalFocusTrap(!!deleteTarget, closeDeleteModal);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
-  const closeCancelModal = useCallback(() => setCancelTarget(null), []);
-  const { modalRef: cancelModalRef } = useModalFocusTrap(!!cancelTarget, closeCancelModal);
   const [holdTarget, setHoldTarget] = useState<string | null>(null);
-  const closeHoldModal = useCallback(() => { setHoldTarget(null); setHoldForm({ startDate: '', endDate: '' }); }, []);
-  const { modalRef: holdModalRef } = useModalFocusTrap(!!holdTarget, closeHoldModal);
   const [holdForm, setHoldForm] = useState({ startDate: '', endDate: '' });
   const [qtyTarget, setQtyTarget] = useState<string | null>(null);
-  const closeQtyModal = useCallback(() => { setQtyTarget(null); setQtyForm({ newQuantity: '', effectiveDate: '' }); }, []);
-  const { modalRef: qtyModalRef } = useModalFocusTrap(!!qtyTarget, closeQtyModal);
   const [qtyForm, setQtyForm] = useState({ newQuantity: '', effectiveDate: '' });
   const [historyTarget, setHistoryTarget] = useState<string | null>(null);
   const limit = 20;
@@ -69,224 +68,152 @@ export default function SubscriptionListPage() {
   });
 
   const holdMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { startDate: string; endDate: string } }) =>
-      api.post(`/api/v1/subscriptions/${id}/vacation-holds`, data),
+    mutationFn: ({ id, data: d }: { id: string; data: { startDate: string; endDate: string } }) =>
+      api.post(`/api/v1/subscriptions/${id}/vacation-holds`, d),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['subscriptions'] }); setHoldTarget(null); setHoldForm({ startDate: '', endDate: '' }); },
   });
 
   const qtyMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { newQuantity: number; effectiveDate: string } }) =>
-      api.post(`/api/v1/subscriptions/${id}/quantity-changes`, data),
+    mutationFn: ({ id, data: d }: { id: string; data: { newQuantity: number; effectiveDate: string } }) =>
+      api.post(`/api/v1/subscriptions/${id}/quantity-changes`, d),
     onSuccess: () => { setQtyTarget(null); setQtyForm({ newQuantity: '', effectiveDate: '' }); },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/api/v1/subscriptions/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
-      setDeleteTarget(null);
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['subscriptions'] }); setDeleteTarget(null); },
   });
 
-  const visibleSubscriptions = data?.data ?? [];
+  const columns: Column<Subscription>[] = [
+    { key: 'customer', label: 'Customer', render: (row) => (
+      <Link to={`/customers/${row.customer.id}`} className="font-medium text-primary-600 hover:text-primary-700 transition-colors">{row.customer.name}</Link>
+    )},
+    { key: 'subscriptionType', label: 'Type', render: (row) => (
+      row.subscriptionType === 'sub_subscription'
+        ? <Badge variant="info">Sub-sub</Badge>
+        : <Badge variant="neutral">Regular</Badge>
+    )},
+    { key: 'productVariant', label: 'Product', render: (row) => (
+      <span className="text-neutral-900 text-xs">{row.productVariant?.product?.name} ({row.productVariant?.quantityPerUnit} {row.productVariant?.unitType})</span>
+    )},
+    { key: 'quantity', label: 'Qty', align: 'right', render: (row) => (
+      <div>
+        <span className="font-medium">{row.subscriptionType === 'sub_subscription' ? row.quantity : (row.rolledUpQuantity ?? row.quantity)}</span>
+        {row.packs?.length ? <div className="text-[10px] text-neutral-400">{row.packs.map((p) => `${p.packCount}x${Number(p.packSize)}L`).join(', ')}</div> : null}
+        {row.subscriptionType !== 'sub_subscription' && (row.childSubscriptionCount ?? 0) > 0 && (
+          <div className="text-[10px] text-primary-500">+{row.childSubscriptionCount} sub: {row.childSubscriptionQuantity}</div>
+        )}
+      </div>
+    )},
+    { key: 'deliverySession', label: 'Session', render: (row) => <StatusBadge status={row.deliverySession} /> },
+    { key: 'route', label: 'Route', render: (row) => <span className="text-neutral-600">{row.route?.name ?? '—'}</span> },
+    { key: 'frequencyType', label: 'Freq', render: (row) => <span className="text-neutral-600 text-xs">{FREQ_LABELS[row.frequencyType] ?? row.frequencyType}</span> },
+    { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    { key: 'startDate', label: 'Start', format: (v) => fmtDate(v as string) },
+    { key: 'actions', label: 'Actions', align: 'right', sortable: false, render: (row) => (
+      <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+        <Link to={`/subscriptions/${row.id}/edit`}><Button variant="ghost" size="sm">Edit</Button></Link>
+        {row.subscriptionType !== 'sub_subscription' && (
+          <Link to={`/subscriptions/new?type=sub_subscription&parentId=${row.id}`}><Button variant="ghost" size="sm">Sub</Button></Link>
+        )}
+        {row.status === 'active' && (
+          <>
+            <button onClick={() => { setHoldTarget(row.id); setHoldForm({ startDate: '', endDate: '' }); }} className="rounded-lg p-1.5 text-neutral-400 hover:text-warning-600 hover:bg-warning-50 transition-colors" title="Vacation hold"><CalendarClock className="h-3.5 w-3.5" /></button>
+            <button onClick={() => { setQtyTarget(row.id); setQtyForm({ newQuantity: '', effectiveDate: '' }); }} className="rounded-lg p-1.5 text-neutral-400 hover:text-primary-600 hover:bg-primary-50 transition-colors" title="Quantity change"><Sigma className="h-3.5 w-3.5" /></button>
+            <button onClick={() => setCancelTarget(row.id)} className="rounded-lg p-1.5 text-neutral-400 hover:text-danger-600 hover:bg-danger-50 transition-colors" title="Cancel"><XCircle className="h-3.5 w-3.5" /></button>
+          </>
+        )}
+        <button onClick={() => setDeleteTarget(row.id)} className="rounded-lg p-1.5 text-neutral-400 hover:text-danger-600 hover:bg-danger-50 transition-colors" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
+        <button onClick={() => setHistoryTarget(historyTarget === row.id ? null : row.id)} className={`rounded-lg p-1.5 transition-colors ${historyTarget === row.id ? 'text-primary-600 bg-primary-50' : 'text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100'}`} title="History"><History className="h-3.5 w-3.5" /></button>
+      </div>
+    )},
+  ];
 
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h1 className="text-xl font-semibold text-gray-900">Subscriptions</h1>
-        <Link to="/subscriptions/new" className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">+ New Subscription</Link>
-      </div>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <PageHeader
+        title="Subscriptions"
+        description={`${data?.pagination?.total ?? 0} total subscriptions`}
+        actions={
+          <Link to="/subscriptions/new">
+            <Button size="sm"><Plus className="h-3.5 w-3.5" /> New Subscription</Button>
+          </Link>
+        }
+      />
 
-      <div className="mb-4">
-        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Filter by status">
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="paused">Paused</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-      </div>
-
-      {isLoading && <p className="text-sm text-gray-500" aria-live="polite">Loading…</p>}
-
-      <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Session</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Route</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Frequency</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Start</th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {visibleSubscriptions.map((s) => (
-              <tr key={s.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 text-sm"><Link to={`/customers/${s.customer.id}`} className="text-blue-600 hover:underline">{s.customer.name}</Link></td>
-                <td className="px-4 py-3 text-sm">
-                  {s.subscriptionType === 'sub_subscription' ? (
-                    <div>
-                      <span className="inline-block rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">Sub-subscription</span>
-                      <div className="text-xs text-gray-500 mt-1">
-                        Parent: {s.parentSubscription?.customer?.name ?? 'Linked'}
-                      </div>
-                    </div>
-                  ) : (
-                    <span className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">Regular</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-sm">{s.productVariant?.product?.name} ({s.productVariant?.quantityPerUnit} {s.productVariant?.unitType})</td>
-                <td className="px-4 py-3 text-sm">
-                  <div>{s.subscriptionType === 'sub_subscription' ? s.quantity : (s.rolledUpQuantity ?? s.quantity)}</div>
-                  <div className="text-xs text-gray-500">
-                    {s.packs?.length ? s.packs.map((pack) => `${pack.packCount} x ${Number(pack.packSize)}L`).join(', ') : 'No packs'}
-                  </div>
-                  {s.subscriptionType !== 'sub_subscription' && (s.childSubscriptionCount ?? 0) > 0 && (
-                    <div className="text-xs text-indigo-600">
-                      Includes {s.childSubscriptionCount} sub-subscription(s): +{Number(s.childSubscriptionQuantity ?? 0)}
-                    </div>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-sm capitalize">{s.deliverySession}</td>
-                <td className="px-4 py-3 text-sm">{s.route?.name ?? '—'}</td>
-                <td className="px-4 py-3 text-sm">{FREQ_LABELS[s.frequencyType] ?? s.frequencyType}</td>
-                <td className="px-4 py-3 text-sm"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[s.status] ?? ''}`}>{s.status}</span></td>
-                <td className="px-4 py-3 text-sm">{formatDateOnly(s.startDate)}</td>
-                <td className="px-4 py-3 text-sm text-right space-x-1">
-                  <Link to={`/subscriptions/${s.id}/edit`} className="text-blue-600 hover:underline text-xs">Edit</Link>
-                  {s.subscriptionType !== 'sub_subscription' && (
-                    <Link
-                      to={`/subscriptions/new?type=sub_subscription&parentId=${s.id}`}
-                      className="text-indigo-600 hover:underline text-xs"
-                    >
-                      Add Sub
-                    </Link>
-                  )}
-                  {s.status === 'active' && (
-                    <>
-                      <button onClick={() => setHoldTarget(s.id)} className="text-yellow-600 hover:underline text-xs">Hold</button>
-                      <button onClick={() => setQtyTarget(s.id)} className="text-purple-600 hover:underline text-xs">Qty</button>
-                      <button onClick={() => setCancelTarget(s.id)} className="text-red-600 hover:underline text-xs">Cancel</button>
-                    </>
-                  )}
-                  <button onClick={() => setDeleteTarget(s.id)} className="text-red-700 hover:underline text-xs">Delete</button>
-                  <button onClick={() => setHistoryTarget(historyTarget === s.id ? null : s.id)} className="text-gray-600 hover:underline text-xs">History</button>
-                </td>
-              </tr>
-            ))}
-            {visibleSubscriptions.length === 0 && <tr><td colSpan={10} className="px-4 py-8 text-center text-sm text-gray-500">No subscriptions found</td></tr>}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination */}
-      {data?.pagination && data.pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-gray-500">Page {data.pagination.page} of {data.pagination.totalPages}</p>
-          <div className="flex gap-2">
-            <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded-md border border-gray-300 px-3 py-1 text-sm disabled:opacity-50">Previous</button>
-            <button disabled={page >= data.pagination.totalPages} onClick={() => setPage(page + 1)} className="rounded-md border border-gray-300 px-3 py-1 text-sm disabled:opacity-50">Next</button>
-          </div>
+      <Card>
+        <div className="px-4 pt-4 pb-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400 transition-all"
+          >
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="paused">Paused</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
         </div>
+
+        <DataTable
+          columns={columns}
+          data={data?.data ?? []}
+          loading={isLoading}
+          emptyTitle="No subscriptions found"
+          emptyDescription="Create a subscription to get started."
+          emptyAction={<Link to="/subscriptions/new"><Button size="sm"><Plus className="h-3.5 w-3.5" /> Add Subscription</Button></Link>}
+          pageSize={limit}
+        />
+      </Card>
+
+      {/* Inline history panel */}
+      {historyTarget && (
+        <Card>
+          <SubscriptionHistory subscriptionId={historyTarget} onClose={() => setHistoryTarget(null)} />
+        </Card>
       )}
 
-      {/* Change history inline */}
-      {historyTarget && <SubscriptionHistory subscriptionId={historyTarget} onClose={() => setHistoryTarget(null)} />}
-
-      {/* Cancel confirmation */}
-      {cancelTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="cancel-sub-title">
-          <div ref={cancelModalRef} className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
-            <h2 id="cancel-sub-title" className="text-lg font-semibold text-gray-900 mb-2">Cancel Subscription</h2>
-            <p className="text-sm text-gray-600 mb-4">Are you sure? This will set the end date to today.</p>
-            <div className="flex justify-end gap-2">
-              <button onClick={closeCancelModal} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">No</button>
-              <button onClick={() => cancelMutation.mutate(cancelTarget)} disabled={cancelMutation.isPending} className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50">
-                {cancelMutation.isPending ? 'Cancelling…' : 'Yes, Cancel'}
-              </button>
-            </div>
-          </div>
+      {/* Cancel modal */}
+      <Modal open={!!cancelTarget} onClose={() => setCancelTarget(null)} title="Cancel Subscription" description="This will set the end date to today." size="sm">
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={() => setCancelTarget(null)}>No</Button>
+          <Button variant="danger" onClick={() => cancelTarget && cancelMutation.mutate(cancelTarget)} loading={cancelMutation.isPending}>Yes, Cancel</Button>
         </div>
-      )}
+      </Modal>
 
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="delete-sub-title">
-          <div ref={deleteModalRef} className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
-            <h2 id="delete-sub-title" className="text-lg font-semibold text-gray-900 mb-2">Delete Subscription</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              This permanently removes the subscription. If it already has delivered or invoiced history, deletion will be blocked and you should cancel it instead.
-            </p>
-            {deleteMutation.isError && (
-              <p className="mb-4 text-sm text-red-600">
-                Failed to delete subscription. If this subscription already has delivery or invoice history, use Cancel instead.
-              </p>
-            )}
-            <div className="flex justify-end gap-2">
-              <button onClick={closeDeleteModal} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">Cancel</button>
-              <button onClick={() => deleteMutation.mutate(deleteTarget)} disabled={deleteMutation.isPending} className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50">
-                {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
+      {/* Delete modal */}
+      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Subscription" description="This permanently removes the subscription. If it has delivery/invoice history, use Cancel instead." size="sm">
+        {deleteMutation.isError && <p className="text-sm text-danger-600 mb-3">Failed to delete. Use Cancel instead.</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+          <Button variant="danger" onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)} loading={deleteMutation.isPending}>Delete</Button>
         </div>
-      )}
+      </Modal>
 
-      {/* Vacation hold dialog */}
-      {holdTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="hold-title">
-          <div ref={holdModalRef} className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
-            <h2 id="hold-title" className="text-lg font-semibold text-gray-900 mb-3">Create Vacation Hold</h2>
-            <form onSubmit={(e) => { e.preventDefault(); holdMutation.mutate({ id: holdTarget, data: holdForm }); }} className="space-y-3">
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Start Date</label>
-                <input type="date" value={holdForm.startDate} onChange={(e) => setHoldForm({ ...holdForm, startDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">End Date</label>
-                <input type="date" value={holdForm.endDate} onChange={(e) => setHoldForm({ ...holdForm, endDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
-              </div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={closeHoldModal} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">Cancel</button>
-                <button type="submit" disabled={holdMutation.isPending} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
-                  {holdMutation.isPending ? 'Creating…' : 'Create Hold'}
-                </button>
-              </div>
-            </form>
+      {/* Hold modal */}
+      <Modal open={!!holdTarget} onClose={() => setHoldTarget(null)} title="Create Vacation Hold" size="sm">
+        <form onSubmit={(e) => { e.preventDefault(); holdTarget && holdMutation.mutate({ id: holdTarget, data: holdForm }); }} className="space-y-4">
+          <Input label="Start Date" type="date" value={holdForm.startDate} onChange={(e) => setHoldForm({ ...holdForm, startDate: e.target.value })} required />
+          <Input label="End Date" type="date" value={holdForm.endDate} onChange={(e) => setHoldForm({ ...holdForm, endDate: e.target.value })} required />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setHoldTarget(null)}>Cancel</Button>
+            <Button type="submit" loading={holdMutation.isPending}>Create Hold</Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
-      {/* Quantity change dialog */}
-      {qtyTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="qty-title">
-          <div ref={qtyModalRef} className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
-            <h2 id="qty-title" className="text-lg font-semibold text-gray-900 mb-3">Schedule Quantity Change</h2>
-            <form onSubmit={(e) => { e.preventDefault(); qtyMutation.mutate({ id: qtyTarget, data: { newQuantity: Number(qtyForm.newQuantity), effectiveDate: qtyForm.effectiveDate } }); }} className="space-y-3">
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">New Quantity</label>
-                <input type="number" step="0.001" min="0.001" value={qtyForm.newQuantity} onChange={(e) => setQtyForm({ ...qtyForm, newQuantity: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Effective Date</label>
-                <input type="date" value={qtyForm.effectiveDate} onChange={(e) => setQtyForm({ ...qtyForm, effectiveDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" required />
-              </div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={closeQtyModal} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">Cancel</button>
-                <button type="submit" disabled={qtyMutation.isPending} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
-                  {qtyMutation.isPending ? 'Scheduling…' : 'Schedule Change'}
-                </button>
-              </div>
-            </form>
+      {/* Quantity modal */}
+      <Modal open={!!qtyTarget} onClose={() => setQtyTarget(null)} title="Schedule Quantity Change" size="sm">
+        <form onSubmit={(e) => { e.preventDefault(); qtyTarget && qtyMutation.mutate({ id: qtyTarget, data: { newQuantity: Number(qtyForm.newQuantity), effectiveDate: qtyForm.effectiveDate } }); }} className="space-y-4">
+          <Input label="New Quantity" type="number" step="0.001" min="0.001" value={qtyForm.newQuantity} onChange={(e) => setQtyForm({ ...qtyForm, newQuantity: e.target.value })} required />
+          <Input label="Effective Date" type="date" value={qtyForm.effectiveDate} onChange={(e) => setQtyForm({ ...qtyForm, effectiveDate: e.target.value })} required />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setQtyTarget(null)}>Cancel</Button>
+            <Button type="submit" loading={qtyMutation.isPending}>Schedule Change</Button>
           </div>
-        </div>
-      )}
-    </div>
+        </form>
+      </Modal>
+    </motion.div>
   );
 }
 
@@ -296,30 +223,35 @@ function SubscriptionHistory({ subscriptionId, onClose }: { subscriptionId: stri
     queryFn: () => api.get<{ data: Array<{ id: string; changeType: string; oldValue?: string; newValue?: string; createdAt: string }> }>(`/api/v1/subscriptions/${subscriptionId}/history`),
   });
 
-  const { modalRef: historyModalRef } = useModalFocusTrap(true, onClose);
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="history-title">
-      <div ref={historyModalRef} className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl max-h-[80vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-3">
-          <h2 id="history-title" className="text-lg font-semibold text-gray-900">Change History</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close history">✕</button>
+    <div>
+      <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+        <div className="flex items-center gap-2">
+          <History className="h-4 w-4 text-neutral-500" />
+          <h2 className="text-sm font-semibold text-neutral-900">Change History</h2>
         </div>
-        {isLoading && <p className="text-sm text-gray-500">Loading…</p>}
-        {data?.data?.length === 0 && <p className="text-sm text-gray-500">No history</p>}
-        <div className="space-y-2">
-          {data?.data?.map((h) => (
-            <div key={h.id} className="border border-gray-100 rounded p-2 text-sm">
-              <div className="flex justify-between">
-                <span className="font-medium">{h.changeType.replace(/_/g, ' ')}</span>
-                <span className="text-xs text-gray-500">{new Date(h.createdAt).toLocaleString()}</span>
-              </div>
-              {(h.oldValue || h.newValue) && (
-                <p className="text-xs text-gray-600 mt-1">{h.oldValue ?? '—'} → {h.newValue ?? '—'}</p>
-              )}
+        <button onClick={onClose} className="rounded-lg p-1 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors" aria-label="Close history">
+          <XCircle className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="p-5 space-y-2 max-h-80 overflow-y-auto">
+        {isLoading && <p className="text-sm text-neutral-500 text-center py-4">Loading...</p>}
+        {!isLoading && (!data?.data?.length) && <p className="text-sm text-neutral-400 text-center py-4">No history found</p>}
+        {data?.data?.map((h) => (
+          <div key={h.id} className="rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-sm">
+            <div className="flex justify-between items-center">
+              <span className="font-medium text-neutral-900 capitalize">{h.changeType.replace(/_/g, ' ')}</span>
+              <span className="text-[10px] text-neutral-400">{new Date(h.createdAt).toLocaleString()}</span>
             </div>
-          ))}
-        </div>
+            {(h.oldValue || h.newValue) && (
+              <div className="flex items-center gap-1.5 mt-1 text-xs text-neutral-600">
+                <span className="bg-neutral-200 px-1.5 py-0.5 rounded">{h.oldValue ?? '—'}</span>
+                <span>→</span>
+                <span className="bg-primary-100 px-1.5 py-0.5 rounded text-primary-700">{h.newValue ?? '—'}</span>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -2,6 +2,16 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
+import { motion } from 'framer-motion';
+import { FileText, Plus } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { DataTable, type Column } from '@/components/ui/data-table';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
+import { Modal } from '@/components/ui/modal';
 
 interface Invoice {
   id: string;
@@ -23,11 +33,15 @@ interface ListResponse {
   pagination: { page: number; limit: number; total: number; totalPages: number };
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  unpaid: 'bg-red-100 text-red-800',
-  partial: 'bg-yellow-100 text-yellow-800',
-  paid: 'bg-green-100 text-green-800',
+const statusMeta: Record<string, { variant: 'danger' | 'warning' | 'success'; label: string }> = {
+  unpaid: { variant: 'danger', label: 'Unpaid' },
+  partial: { variant: 'warning', label: 'Partial' },
+  paid: { variant: 'success', label: 'Paid' },
 };
+
+function fmt(amount: number) {
+  return `₹${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+}
 
 export default function InvoiceListPage() {
   const queryClient = useQueryClient();
@@ -36,10 +50,7 @@ export default function InvoiceListPage() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [cycleFilter, setCycleFilter] = useState('');
   const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const [generateForm, setGenerateForm] = useState({
-    cycleStart: '',
-    cycleEnd: '',
-  });
+  const [generateForm, setGenerateForm] = useState({ cycleStart: '', cycleEnd: '' });
   const [generateError, setGenerateError] = useState('');
   const limit = 20;
 
@@ -63,7 +74,7 @@ export default function InvoiceListPage() {
   const generateMutation = useMutation({
     mutationFn: (payload: { cycleStart: string; cycleEnd: string }) =>
       api.post<{ invoicesCreated: number }>('/api/v1/billing/generate', payload),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       setShowGenerateModal(false);
       setGenerateForm({ cycleStart: '', cycleEnd: '' });
@@ -80,149 +91,83 @@ export default function InvoiceListPage() {
       : true,
   ) ?? [];
 
-  function submitGenerateInvoice(e: React.FormEvent) {
-    e.preventDefault();
-    setGenerateError('');
-    generateMutation.mutate(generateForm);
-  }
+  const columns: Column<Invoice>[] = [
+    { key: 'customer', label: 'Customer', render: (row) => <span className="font-medium text-neutral-900">{row.customer.name}</span> },
+    { key: 'billingCycleStart', label: 'Billing Period', render: (row) => <span className="text-neutral-600 text-xs">{row.billingCycleStart} — {row.billingCycleEnd}</span> },
+    { key: 'totalCharges', label: 'Charges', align: 'right', format: (v) => fmt(Number(v)) },
+    { key: 'closingBalance', label: 'Balance', align: 'right', render: (row) => <span className={`font-semibold ${Number(row.closingBalance) > 0 ? 'text-danger-600' : 'text-success-600'}`}>{fmt(row.closingBalance)}</span> },
+    { key: 'paymentStatus', label: 'Status', render: (row) => {
+      const meta = statusMeta[row.paymentStatus] ?? { variant: 'neutral' as const, label: row.paymentStatus };
+      return <Badge variant={meta.variant} dot>{meta.label}</Badge>;
+    }},
+    { key: 'actions', label: 'Actions', align: 'right', sortable: false, render: (row) => (
+      <Link to={`/billing/${row.id}`}>
+        <Button variant="ghost" size="sm">View</Button>
+      </Link>
+    )},
+  ];
 
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h1 className="text-xl font-semibold text-gray-900">Invoices</h1>
-        <button
-          onClick={() => setShowGenerateModal(true)}
-          className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Generate Invoices
-        </button>
-      </div>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <PageHeader
+        title="Invoices"
+        description="Manage billing cycles and customer invoices"
+        actions={
+          <Button size="sm" onClick={() => setShowGenerateModal(true)}>
+            <FileText className="h-3.5 w-3.5" />
+            Generate Invoices
+          </Button>
+        }
+      />
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-2 mb-4">
-        <input
-          type="text"
-          placeholder="Search customer…"
-          value={customerSearch}
-          onChange={(e) => { setCustomerSearch(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label="Search by customer"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label="Filter by payment status"
-        >
-          <option value="">All statuses</option>
-          <option value="unpaid">Unpaid</option>
-          <option value="partial">Partial</option>
-          <option value="paid">Paid</option>
-        </select>
-        <input
-          type="month"
-          value={cycleFilter}
-          onChange={(e) => { setCycleFilter(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label="Filter by billing cycle"
-        />
-      </div>
-
-      {isLoading && <p className="text-sm text-gray-500" aria-live="polite">Loading…</p>}
-
-      <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Billing Period</th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Charges</th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Balance</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredInvoices.map((inv) => (
-              <tr key={inv.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 text-sm">{inv.customer.name}</td>
-                <td className="px-4 py-3 text-sm text-gray-700">{inv.billingCycleStart} — {inv.billingCycleEnd}</td>
-                <td className="px-4 py-3 text-sm text-right">₹{Number(inv.totalCharges).toFixed(2)}</td>
-                <td className="px-4 py-3 text-sm text-right font-medium">₹{Number(inv.closingBalance).toFixed(2)}</td>
-                <td className="px-4 py-3 text-sm">
-                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[inv.paymentStatus] ?? ''}`}>{inv.paymentStatus}</span>
-                </td>
-                <td className="px-4 py-3 text-sm text-right">
-                  <Link to={`/billing/${inv.id}`} className="text-blue-600 hover:underline text-xs">View</Link>
-                </td>
-              </tr>
-            ))}
-            {filteredInvoices.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">No invoices found</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {data?.pagination && data.pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-gray-500">Page {data.pagination.page} of {data.pagination.totalPages} ({data.pagination.total} total)</p>
-          <div className="flex gap-2">
-            <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded-md border border-gray-300 px-3 py-1 text-sm disabled:opacity-50">Previous</button>
-            <button disabled={page >= data.pagination.totalPages} onClick={() => setPage(page + 1)} className="rounded-md border border-gray-300 px-3 py-1 text-sm disabled:opacity-50">Next</button>
-          </div>
+      <Card>
+        <div className="flex flex-col sm:flex-row gap-3 p-4 pb-2">
+          <input
+            type="text"
+            placeholder="Search customer..."
+            value={customerSearch}
+            onChange={(e) => { setCustomerSearch(e.target.value); setPage(1); }}
+            className="block w-full max-w-xs rounded-lg border border-neutral-300 px-3 py-2 text-sm placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400 transition-all"
+          />
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400 transition-all"
+          >
+            <option value="">All statuses</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="partial">Partial</option>
+            <option value="paid">Paid</option>
+          </select>
+          <input
+            type="month"
+            value={cycleFilter}
+            onChange={(e) => { setCycleFilter(e.target.value); setPage(1); }}
+            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400 transition-all"
+          />
         </div>
-      )}
 
-      {showGenerateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="generate-invoices-title">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
-            <h2 id="generate-invoices-title" className="text-lg font-semibold text-gray-900 mb-3">Generate Invoices</h2>
-            <form onSubmit={submitGenerateInvoice} className="space-y-3">
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Cycle Start</label>
-                <input
-                  type="date"
-                  value={generateForm.cycleStart}
-                  onChange={(e) => setGenerateForm((current) => ({ ...current, cycleStart: e.target.value }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Cycle End</label>
-                <input
-                  type="date"
-                  value={generateForm.cycleEnd}
-                  onChange={(e) => setGenerateForm((current) => ({ ...current, cycleEnd: e.target.value }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-                  required
-                />
-              </div>
-              {generateError && <p className="text-sm text-red-600">{generateError}</p>}
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowGenerateModal(false);
-                    setGenerateError('');
-                  }}
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={generateMutation.isPending}
-                  className="rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {generateMutation.isPending ? 'Generating...' : 'Generate'}
-                </button>
-              </div>
-            </form>
+        <DataTable
+          columns={columns}
+          data={filteredInvoices}
+          loading={isLoading}
+          emptyTitle="No invoices found"
+          emptyDescription={customerSearch || statusFilter ? 'Try adjusting your filters.' : 'Generate invoices to get started.'}
+          pageSize={limit}
+        />
+      </Card>
+
+      <Modal open={showGenerateModal} onClose={() => { setShowGenerateModal(false); setGenerateError(''); }} title="Generate Invoices" description="Select the billing cycle period for invoice generation.">
+        <form onSubmit={(e) => { e.preventDefault(); setGenerateError(''); generateMutation.mutate(generateForm); }} className="space-y-4">
+          <Input label="Cycle Start" type="date" value={generateForm.cycleStart} onChange={(e) => setGenerateForm((f) => ({ ...f, cycleStart: e.target.value }))} required />
+          <Input label="Cycle End" type="date" value={generateForm.cycleEnd} onChange={(e) => setGenerateForm((f) => ({ ...f, cycleEnd: e.target.value }))} required />
+          {generateError && <p className="text-sm text-danger-600">{generateError}</p>}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={() => { setShowGenerateModal(false); setGenerateError(''); }}>Cancel</Button>
+            <Button type="submit" loading={generateMutation.isPending}>Generate</Button>
           </div>
-        </div>
-      )}
-    </div>
+        </form>
+      </Modal>
+    </motion.div>
   );
 }

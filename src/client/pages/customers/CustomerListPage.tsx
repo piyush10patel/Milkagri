@@ -2,8 +2,18 @@ import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
-import { useModalFocusTrap } from '@/hooks/useModalFocusTrap';
 import { useAuth } from '@/hooks/useAuth';
+import { useModalFocusTrap } from '@/hooks/useModalFocusTrap';
+import { motion } from 'framer-motion';
+import { Plus, Search, RotateCcw, UserPlus } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { DataTable, type Column } from '@/components/ui/data-table';
+import { PageLoader } from '@/components/ui/spinner';
+import { EmptyState } from '@/components/ui/empty-state';
 
 interface Customer {
   id: string;
@@ -65,164 +75,126 @@ export default function CustomerListPage() {
     },
   });
 
-  function handleSort(col: string) {
-    if (sortBy === col) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    else { setSortBy(col); setSortOrder('asc'); }
-  }
-
-  const sortIcon = (col: string) => sortBy === col ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : '';
-
-  const statusBadge = (s: string) => {
-    const colors: Record<string, string> = { active: 'bg-green-100 text-green-800', paused: 'bg-yellow-100 text-yellow-800', stopped: 'bg-red-100 text-red-800' };
-    return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors[s] ?? 'bg-gray-100 text-gray-800'}`}>{s}</span>;
-  };
+  const columns: Column<Customer>[] = [
+    {
+      key: 'name',
+      label: 'Customer',
+      render: (row) => (
+        <Link to={`/customers/${row.id}`} className="font-medium text-primary-600 hover:text-primary-700 transition-colors">
+          {row.name}
+        </Link>
+      ),
+    },
+    { key: 'phone', label: 'Phone' },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: 'route',
+      label: 'Route',
+      render: (row) => <span className="text-neutral-600">{row.route?.name ?? '—'}</span>,
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      align: 'right',
+      sortable: false,
+      render: (row) => (
+        <div className="flex justify-end gap-1.5">
+          <Link to={`/customers/${row.id}/edit`}>
+            <Button variant="ghost" size="sm">Edit</Button>
+          </Link>
+          {row.status === 'active' && (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmAction({ id: row.id, status: 'paused' })}>Pause</Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmAction({ id: row.id, status: 'stopped' })} className="text-danger-600 hover:text-danger-700">Stop</Button>
+            </>
+          )}
+          {row.status === 'paused' && (
+            <Button variant="ghost" size="sm" className="text-success-600" onClick={() => setConfirmAction({ id: row.id, status: 'active' })}>Reactivate</Button>
+          )}
+          {row.status === 'stopped' && (
+            <Button variant="ghost" size="sm" className="text-success-600" onClick={() => setConfirmAction({ id: row.id, status: 'active' })}>Reactivate</Button>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h1 className="text-xl font-semibold text-gray-900">Customers</h1>
-        <div className="flex gap-2">
-          {(user?.role === 'super_admin' || user?.role === 'admin') && (
-            <button
-              type="button"
-              onClick={() => setShowResetModal(true)}
-              className="inline-flex items-center rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
-            >
-              Reset Operational Data
-            </button>
-          )}
-          <Link to="/customers/new" className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
-            + New Customer
-          </Link>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-2 mb-4">
-        <input
-          type="text"
-          placeholder="Search name, phone, address…"
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label="Search customers"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label="Filter by status"
-        >
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="paused">Paused</option>
-          <option value="stopped">Stopped</option>
-        </select>
-      </div>
-
-      {isLoading && <p className="text-sm text-gray-500" aria-live="polite">Loading…</p>}
-
-      {/* Table */}
-      <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleSort('name')} tabIndex={0} role="button" onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}>Name{sortIcon('name')}</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleSort('phone')} tabIndex={0} role="button" onKeyDown={(e) => e.key === 'Enter' && handleSort('phone')}>Phone{sortIcon('phone')}</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleSort('status')} tabIndex={0} role="button" onKeyDown={(e) => e.key === 'Enter' && handleSort('status')}>Status{sortIcon('status')}</th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Route</th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {data?.data?.map((c) => (
-              <tr key={c.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 text-sm"><Link to={`/customers/${c.id}`} className="text-blue-600 hover:underline">{c.name}</Link></td>
-                <td className="px-4 py-3 text-sm text-gray-700">{c.phone}</td>
-                <td className="px-4 py-3 text-sm">{statusBadge(c.status)}</td>
-                <td className="px-4 py-3 text-sm text-gray-700">{c.route?.name ?? '—'}</td>
-                <td className="px-4 py-3 text-sm text-right space-x-2">
-                  <Link to={`/customers/${c.id}/edit`} className="text-blue-600 hover:underline text-xs">Edit</Link>
-                  {c.status === 'active' && (
-                    <>
-                      <button onClick={() => setConfirmAction({ id: c.id, status: 'paused' })} className="text-yellow-600 hover:underline text-xs">Pause</button>
-                      <button onClick={() => setConfirmAction({ id: c.id, status: 'stopped' })} className="text-red-600 hover:underline text-xs">Stop</button>
-                    </>
-                  )}
-                  {c.status === 'paused' && (
-                    <button onClick={() => setConfirmAction({ id: c.id, status: 'active' })} className="text-green-600 hover:underline text-xs">Reactivate</button>
-                  )}
-                  {c.status === 'stopped' && (
-                    <button onClick={() => setConfirmAction({ id: c.id, status: 'active' })} className="text-green-600 hover:underline text-xs">Reactivate</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {data?.data?.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-500">No customers found</td></tr>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <PageHeader
+        title="Customers"
+        description={`${data?.pagination?.total ?? 0} total customers`}
+        actions={
+          <>
+            {(user?.role === 'super_admin' || user?.role === 'admin') && (
+              <Button variant="secondary" size="sm" onClick={() => setShowResetModal(true)}>
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset Data
+              </Button>
             )}
-          </tbody>
-        </table>
-      </div>
+            <Link to="/customers/new">
+              <Button size="sm">
+                <UserPlus className="h-3.5 w-3.5" />
+                New Customer
+              </Button>
+            </Link>
+          </>
+        }
+      />
 
-      {/* Pagination */}
-      {data?.pagination && data.pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-gray-500">Page {data.pagination.page} of {data.pagination.totalPages} ({data.pagination.total} total)</p>
-          <div className="flex gap-2">
-            <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded-md border border-gray-300 px-3 py-1 text-sm disabled:opacity-50">Previous</button>
-            <button disabled={page >= data.pagination.totalPages} onClick={() => setPage(page + 1)} className="rounded-md border border-gray-300 px-3 py-1 text-sm disabled:opacity-50">Next</button>
-          </div>
-        </div>
-      )}
+      <Card>
+        <DataTable
+          columns={columns}
+          data={data?.data ?? []}
+          loading={isLoading}
+          searchable
+          searchPlaceholder="Search by name, phone..."
+          emptyTitle="No customers found"
+          emptyDescription={search || statusFilter ? 'Try adjusting your search or filters.' : 'Get started by adding your first customer.'}
+          emptyAction={!search && !statusFilter ? <Link to="/customers/new"><Button size="sm"><Plus className="h-3.5 w-3.5" /> Add Customer</Button></Link> : undefined}
+          pageSize={limit}
+        />
+      </Card>
 
       {/* Confirmation dialog */}
       {confirmAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="confirm-status-title">
-          <div ref={confirmModalRef} className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
-            <h2 id="confirm-status-title" className="text-lg font-semibold text-gray-900 mb-2">Confirm Status Change</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Are you sure you want to change this customer's status to <span className="font-medium">{confirmAction.status}</span>?
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in" role="dialog" aria-modal="true">
+          <div ref={confirmModalRef} className="bg-white rounded-xl p-6 max-w-sm w-full mx-4 shadow-modal animate-scale-in">
+            <h2 className="text-lg font-semibold text-neutral-900 mb-2">Confirm Status Change</h2>
+            <p className="text-sm text-neutral-600 mb-4">
+              Change status to <Badge variant={confirmAction.status === 'active' ? 'success' : confirmAction.status === 'paused' ? 'warning' : 'danger'}>{confirmAction.status}</Badge>?
               {confirmAction.status === 'paused' && ' All active subscriptions will be suspended.'}
               {confirmAction.status === 'stopped' && ' All active subscriptions will be cancelled.'}
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={closeConfirm} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">Cancel</button>
-              <button
-                onClick={() => statusMutation.mutate(confirmAction)}
-                disabled={statusMutation.isPending}
-                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {statusMutation.isPending ? 'Updating…' : 'Confirm'}
-              </button>
+              <Button variant="secondary" size="sm" onClick={closeConfirm}>Cancel</Button>
+              <Button size="sm" onClick={() => statusMutation.mutate(confirmAction)} loading={statusMutation.isPending}>Confirm</Button>
             </div>
           </div>
         </div>
       )}
 
       {showResetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="reset-operational-title">
-          <div ref={resetModalRef} className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-            <h2 id="reset-operational-title" className="text-lg font-semibold text-gray-900 mb-2">Reset Customer Operational Data</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              This will permanently remove customers, subscriptions, orders, invoices, payments, ledger entries, and related history. Users, products, pricing, and routes will stay.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in" role="dialog" aria-modal="true">
+          <div ref={resetModalRef} className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-modal animate-scale-in">
+            <h2 className="text-lg font-semibold text-neutral-900 mb-2">Reset Operational Data</h2>
+            <p className="text-sm text-neutral-600 mb-4">
+              This will permanently remove customers, subscriptions, orders, invoices, payments, ledger entries, and related history. Users, products, pricing, and routes will remain.
             </p>
             {resetMutation.isError && (
-              <p className="mb-4 text-sm text-red-600">Reset failed. Please try again.</p>
+              <p className="mb-3 text-sm text-danger-600">Reset failed. Please try again.</p>
             )}
             <div className="flex justify-end gap-2">
-              <button onClick={closeResetModal} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">Cancel</button>
-              <button
-                onClick={() => resetMutation.mutate()}
-                disabled={resetMutation.isPending}
-                className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50"
-              >
-                {resetMutation.isPending ? 'Resetting...' : 'Reset Now'}
-              </button>
+              <Button variant="secondary" size="sm" onClick={closeResetModal}>Cancel</Button>
+              <Button variant="danger" size="sm" onClick={() => resetMutation.mutate()} loading={resetMutation.isPending}>Reset Now</Button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
