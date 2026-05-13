@@ -51,7 +51,10 @@ export default function AgentCollectionWorkPage() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['agent-collection-dashboard', date],
-    queryFn: () => api.get<AgentDashboardResponse>(`/api/v1/milk-collections/agent-dashboard?date=${date}`),
+    queryFn: () => Promise.race([
+      api.get<AgentDashboardResponse>(`/api/v1/milk-collections/agent-dashboard?date=${date}`),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out')), 20000)),
+    ]),
     enabled: !authLoading,
     retry: false,
   });

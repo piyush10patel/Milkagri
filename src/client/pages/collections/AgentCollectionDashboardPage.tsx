@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
 
 interface CustomerInfo {
   id: string;
@@ -41,6 +42,7 @@ function currency(value: string | number): string {
 }
 
 export default function AgentCollectionDashboardPage() {
+  const { loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
   const [date] = useState(todayStr);
 
@@ -52,7 +54,12 @@ export default function AgentCollectionDashboardPage() {
 
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['agent-dashboard', date],
-    queryFn: () => api.get<DashboardData>(`/api/agent-collections/dashboard?date=${date}`),
+    queryFn: () => Promise.race([
+      api.get<DashboardData>(`/api/agent-collections/dashboard?date=${date}`),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out')), 20000)),
+    ]),
+    enabled: !authLoading,
+    retry: false,
   });
 
   const recordMutation = useMutation({
