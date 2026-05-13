@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { useAuth } from '@/hooks/useAuth';
 import { motion } from 'framer-motion';
 import {
   Milk,
@@ -38,7 +37,6 @@ interface AgentDashboardResponse {
 }
 
 export default function AgentCollectionWorkPage() {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const now = new Date();
@@ -56,7 +54,6 @@ export default function AgentCollectionWorkPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['agent-collection-dashboard', date],
     queryFn: () => api.get<AgentDashboardResponse>(`/api/v1/milk-collections/agent-dashboard?date=${date}`),
-    enabled: user?.role === 'delivery_agent',
   });
 
   const routes = data?.collectionRoutes ?? [];
@@ -207,7 +204,9 @@ export default function AgentCollectionWorkPage() {
                         </div>
 
                         <div className="mt-3 space-y-2">
-                          {stop.farmers.map((farmer) => {
+                          {(stop.farmers ?? []).length === 0 ? (
+                            <p className="text-xs text-neutral-400 italic px-1">No active farmers assigned to this stop.</p>
+                          ) : (stop.farmers ?? []).map((farmer) => {
                             const key = `${stop.villageId}-${farmer.id}`;
                             const isSaving = saveMutation.isPending && saveMutation.variables?.farmerId === farmer.id;
                             return (

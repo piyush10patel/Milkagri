@@ -988,6 +988,24 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
                 },
               },
             },
+            farmers: {
+              include: {
+                farmer: {
+                  select: { id: true, name: true },
+                },
+              },
+            },
+            villageStop: {
+              select: {
+                farmers: {
+                  include: {
+                    farmer: {
+                      select: { id: true, name: true },
+                    },
+                  },
+                },
+              },
+            },
           },
           orderBy: [{ deliverySession: 'asc' }, { sequenceOrder: 'asc' }],
         },
@@ -1027,13 +1045,20 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
     collectionRoutes: collectionRoutes.map((route) => ({
       id: route.id,
       name: route.name,
-      stops: route.collectionRouteStops.map((stop: any) => ({
-        villageId: stop.villageId,
-        villageName: stop.village.name,
-        deliverySession: stop.deliverySession,
-        sequenceOrder: stop.sequenceOrder,
-        farmers: stop.village.farmers,
-      })),
+      stops: route.collectionRouteStops.map((stop: any) => {
+        let farmers = stop.village?.farmers ?? [];
+        const stopFarmers = stop.farmers?.filter((f: any) => f.farmer).map((f: any) => ({ id: f.farmer.id, name: f.farmer.name })) ?? [];
+        const villageStopFarmers = stop.villageStop?.farmers?.filter((f: any) => f.farmer).map((f: any) => ({ id: f.farmer.id, name: f.farmer.name })) ?? [];
+        if (stopFarmers.length > 0) farmers = stopFarmers;
+        else if (villageStopFarmers.length > 0) farmers = villageStopFarmers;
+        return {
+          villageId: stop.villageId,
+          villageName: stop.village?.name ?? 'Unknown Village',
+          deliverySession: stop.deliverySession,
+          sequenceOrder: stop.sequenceOrder,
+          farmers,
+        };
+      }),
     })),
     recordedMilkCollections: entries.map((entry) => ({
       id: entry.id,
