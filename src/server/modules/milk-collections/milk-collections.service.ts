@@ -976,9 +976,7 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
         id: true,
         name: true,
         collectionRouteStops: {
-          select: {
-            villageId: true,
-            deliverySession: true,
+          include: {
             village: {
               select: {
                 id: true,
