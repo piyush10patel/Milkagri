@@ -177,7 +177,6 @@ export default function AgentsManagementPage() {
 
   useEffect(() => {
     if (!routeStopsData) return;
-    setSelectedCollectionAgents(routeStopsData.route.agentIds ?? []);
     const existingStopIds = routeStopsData.stops
       .map((stop) => stop.villageStopId)
       .filter((stopId): stopId is string => Boolean(stopId));
@@ -395,7 +394,10 @@ export default function AgentsManagementPage() {
           <select
             value={collectionRouteId}
             onChange={(e) => {
-              setCollectionRouteId(e.target.value);
+              const nextRouteId = e.target.value;
+              setCollectionRouteId(nextRouteId);
+              const route = collectionRoutes.find((item) => item.id === nextRouteId);
+              setSelectedCollectionAgents(route?.agentIds ?? []);
             }}
             className="rounded-md border border-gray-300 px-3 py-2 text-sm"
           >
