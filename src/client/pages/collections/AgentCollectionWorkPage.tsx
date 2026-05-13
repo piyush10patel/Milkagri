@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
 import { motion } from 'framer-motion';
 import {
   Milk,
@@ -33,6 +34,7 @@ interface AgentDashboardResponse {
 }
 
 export default function AgentCollectionWorkPage() {
+  const { loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const now = new Date();
@@ -50,6 +52,8 @@ export default function AgentCollectionWorkPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['agent-collection-dashboard', date],
     queryFn: () => api.get<AgentDashboardResponse>(`/api/v1/milk-collections/agent-dashboard?date=${date}`),
+    enabled: !authLoading,
+    retry: false,
   });
 
   const routes = data?.collectionRoutes ?? [];
