@@ -593,7 +593,7 @@ export default function MilkCollectionPage() {
             <button
               type="button"
               onClick={() => saveRouteStopsMutation.mutate()}
-              disabled={!selectedCollectionRouteId || saveRouteStopsMutation.isPending}
+              disabled={!selectedCollectionRouteId || saveRouteStopsMutation.isPending || routeStopsLoading}
               className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
               {saveRouteStopsMutation.isPending ? 'Saving...' : 'Save Collection Route'}
@@ -601,7 +601,7 @@ export default function MilkCollectionPage() {
             <button
               type="button"
               onClick={() => saveRouteAgentsMutation.mutate()}
-              disabled={!selectedCollectionRouteId || saveRouteAgentsMutation.isPending}
+              disabled={!selectedCollectionRouteId || saveRouteAgentsMutation.isPending || routeStopsLoading}
               className="rounded-md border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
             >
               {saveRouteAgentsMutation.isPending ? 'Saving...' : 'Save Agents'}
