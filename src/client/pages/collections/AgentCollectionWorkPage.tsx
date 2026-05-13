@@ -53,7 +53,7 @@ export default function AgentCollectionWorkPage() {
   const [selectedRouteId, setSelectedRouteId] = useState('');
   const [showMap, setShowMap] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['agent-collection-dashboard', date],
     queryFn: () => api.get<AgentDashboardResponse>(`/api/v1/milk-collections/agent-dashboard?date=${date}`),
     enabled: user?.role === 'delivery_agent',
@@ -116,7 +116,17 @@ export default function AgentCollectionWorkPage() {
         </div>
       )}
 
-      {!isLoading && routes.length === 0 && (
+      {!isLoading && error && (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Milk className="h-10 w-10 text-red-300 mx-auto mb-3" />
+            <p className="text-red-500 font-medium">Failed to load</p>
+            <p className="text-sm text-neutral-400 mt-1">{(error as any)?.message || 'Unable to fetch your collection routes.'}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isLoading && !error && routes.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center">
             <Milk className="h-10 w-10 text-neutral-300 mx-auto mb-3" />

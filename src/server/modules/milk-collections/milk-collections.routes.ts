@@ -29,7 +29,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', authorize('milk_collection'), validate({ query: milkCollectionDateQuerySchema }), controller.listSummary);
-router.get('/agent-dashboard', authorize('milk_collection'), validate({ query: agentCollectionDashboardQuerySchema }), controller.getAgentDashboard);
+router.get('/agent-dashboard', validate({ query: agentCollectionDashboardQuerySchema }), controller.getAgentDashboard);
 router.get('/routes', authorize('milk_collection'), controller.listCollectionRoutes);
 router.get('/route-stops', authorize('milk_collection'), validate({ query: collectionRouteStopsQuerySchema }), controller.getCollectionRouteStops);
 router.get('/route-manifest', authorize('milk_collection'), validate({ query: collectionRouteManifestQuerySchema }), controller.getCollectionRouteManifest);

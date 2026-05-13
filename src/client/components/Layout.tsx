@@ -76,7 +76,7 @@ const COLLECTION_NAV_ITEMS: NavItem[] = [
   { label: 'Remittances', to: '/collections/remittances', permission: 'remittances', icon: <RefreshCw className="h-4 w-4" /> },
   { label: 'Agent Balances', to: '/collections/balances', permission: 'agent_balances', icon: <BookOpen className="h-4 w-4" /> },
   { label: 'My Collections', to: '/collections/dashboard', permission: 'agent_collections_dashboard', icon: <ClipboardCheck className="h-4 w-4" /> },
-  { label: 'My Collection Work', to: '/collections/my-work', permission: 'milk_collection', icon: <Milk className="h-4 w-4" /> },
+  { label: 'My Collection Work', to: '/collections/my-work', permission: 'agent_collections_dashboard', icon: <Milk className="h-4 w-4" /> },
 ];
 
 function getVisibleItems(items: NavItem[], permissions: Set<string>, isSuperAdmin: boolean) {
