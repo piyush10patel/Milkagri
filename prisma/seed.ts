@@ -29,7 +29,7 @@ const DEFAULT_PERMISSIONS: Record<string, Record<ManageableRole, boolean>> = {
   billing:                      { admin: true,  billing_staff: true,  delivery_agent: false, read_only: false },
   payments:                     { admin: true,  billing_staff: true,  delivery_agent: false, read_only: false },
   reports:                      { admin: true,  billing_staff: true,  delivery_agent: false, read_only: true  },
-  users:                        { admin: false, billing_staff: false, delivery_agent: false, read_only: false },
+  users:                        { admin: true,  billing_staff: false, delivery_agent: false, read_only: false },
   notifications:                { admin: true,  billing_staff: true,  delivery_agent: true,  read_only: true  },
   audit_logs:                   { admin: true,  billing_staff: false, delivery_agent: false, read_only: false },
   settings:                     { admin: false, billing_staff: false, delivery_agent: false, read_only: false },

@@ -11,6 +11,15 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // Injects build time into index.html for cache-busting
+    {
+      name: 'inject-build-time',
+      transformIndexHtml(html) {
+        return html.replace('</head>',
+          `<script>window.__BUILD_TIME__=${JSON.stringify(new Date().toISOString())};</script></head>`
+        );
+      },
+    },
     ...(enablePwa
       ? [VitePWA({
       registerType: 'autoUpdate',

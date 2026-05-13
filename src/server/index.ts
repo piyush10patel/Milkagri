@@ -388,6 +388,14 @@ if (process.env.NODE_ENV !== 'test') {
     console.log('Skipping auto-migration in development (run "npx prisma migrate dev" manually).');
   }
 
+  // Ensure critical permissions exist for existing databases
+  import('./modules/permissions/permissions.service.js')
+    .then(({ setPermission }) =>
+      Promise.all([
+        setPermission('admin', 'users', true),
+      ]).catch((err) => console.error('Failed to sync permissions:', err)),
+    );
+
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 
