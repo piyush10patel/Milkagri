@@ -23,11 +23,31 @@
 
     <title>Milk Delivery Platform</title>
 
-    <!-- iOS safe area padding -->
+    <!-- iOS safe area padding + splash screen -->
     <style>
       body {
         -webkit-tap-highlight-color: transparent;
         padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        margin: 0;
+        background: #f8fafc;
+      }
+      #root:empty {
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #root:empty::after {
+        content: '';
+        width: 32px;
+        height: 32px;
+        border: 3px solid #e2e8f0;
+        border-top-color: #2563eb;
+        border-radius: 50%;
+        animation: splashSpin 0.7s linear infinite;
+      }
+      @keyframes splashSpin {
+        to { transform: rotate(360deg); }
       }
     </style>
   </head>
