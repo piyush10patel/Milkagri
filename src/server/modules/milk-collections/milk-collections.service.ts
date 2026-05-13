@@ -1042,24 +1042,39 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
   return {
     date,
     deliveryRoutes,
-    collectionRoutes: collectionRoutes.map((route) => ({
-      id: route.id,
-      name: route.name,
-      stops: route.collectionRouteStops.map((stop: any) => {
-        let farmers = stop.village?.farmers ?? [];
-        const stopFarmers = stop.farmers?.filter((f: any) => f.farmer).map((f: any) => ({ id: f.farmer.id, name: f.farmer.name })) ?? [];
+    collectionRoutes: collectionRoutes.map((route) => {
+      // Merge stops into villages: deduplicate by village+session, merge farmers
+      const villageMap = new Map<string, { villageId: string; villageName: string; deliverySession: 'morning' | 'evening'; farmers: Map<string, { id: string; name: string }> }>();
+      for (const stop of route.collectionRouteStops) {
+        const key = `${stop.villageId}|${stop.deliverySession}`;
+        if (!villageMap.has(key)) {
+          villageMap.set(key, {
+            villageId: stop.villageId,
+            villageName: stop.village?.name ?? 'Unknown Village',
+            deliverySession: stop.deliverySession,
+            farmers: new Map(),
+          });
+        }
+        const entry = villageMap.get(key)!;
+        const stopSpecificFarmers = stop.farmers?.filter((f: any) => f.farmer).map((f: any) => ({ id: f.farmer.id, name: f.farmer.name })) ?? [];
         const villageStopFarmers = stop.villageStop?.farmers?.filter((f: any) => f.farmer).map((f: any) => ({ id: f.farmer.id, name: f.farmer.name })) ?? [];
-        if (stopFarmers.length > 0) farmers = stopFarmers;
-        else if (villageStopFarmers.length > 0) farmers = villageStopFarmers;
-        return {
-          villageId: stop.villageId,
-          villageName: stop.village?.name ?? 'Unknown Village',
-          deliverySession: stop.deliverySession,
-          sequenceOrder: stop.sequenceOrder,
-          farmers,
-        };
-      }),
-    })),
+        const villageFarmers = stop.village?.farmers ?? [];
+        const farmers = stopSpecificFarmers.length > 0 ? stopSpecificFarmers : villageStopFarmers.length > 0 ? villageStopFarmers : villageFarmers;
+        for (const f of farmers) {
+          entry.farmers.set(f.id, f);
+        }
+      }
+      return {
+        id: route.id,
+        name: route.name,
+        villages: Array.from(villageMap.values()).map((v) => ({
+          villageId: v.villageId,
+          villageName: v.villageName,
+          deliverySession: v.deliverySession,
+          farmers: Array.from(v.farmers.values()),
+        })),
+      };
+    }),
     recordedMilkCollections: entries.map((entry) => ({
       id: entry.id,
       villageId: entry.villageId,

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { motion } from 'framer-motion';
@@ -9,12 +9,9 @@ import {
   CheckCircle2,
   Sun,
   Moon,
-  ChevronRight,
-  ListOrdered,
-  Save,
   Loader2,
 } from 'lucide-react';
-import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/ui/page-header';
@@ -26,11 +23,10 @@ interface AgentDashboardResponse {
   collectionRoutes: Array<{
     id: string;
     name: string;
-    stops: Array<{
+    villages: Array<{
       villageId: string;
       villageName: string;
       deliverySession: 'morning' | 'evening';
-      sequenceOrder: number;
       farmers: Array<{ id: string; name: string }>;
     }>;
   }>;
@@ -58,8 +54,7 @@ export default function AgentCollectionWorkPage() {
 
   const routes = data?.collectionRoutes ?? [];
   const activeRoute = selectedRouteId ? routes.find((r) => r.id === selectedRouteId) : routes[0];
-  const sessionStops = (activeRoute?.stops ?? []).filter((s) => s.deliverySession === selectedSession);
-  const sortedStops = [...sessionStops].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+  const sessionVillages = (activeRoute?.villages ?? []).filter((v) => v.deliverySession === selectedSession);
 
   const saveMutation = useMutation({
     mutationFn: (body: { villageId: string; farmerId: string; collectionDate: string; deliverySession: 'morning' | 'evening'; quantity: number }) =>
@@ -172,18 +167,18 @@ export default function AgentCollectionWorkPage() {
             </Button>
           </div>
 
-          {/* Simple stop list */}
+          {/* Simple village list */}
           <div className="space-y-3">
-            {sortedStops.length === 0 && (
+            {sessionVillages.length === 0 && (
               <Card>
                 <CardContent className="py-8 text-center text-sm text-neutral-400">
-                  No stops scheduled for {selectedSession} session.
+                  No villages scheduled for {selectedSession} session.
                 </CardContent>
               </Card>
             )}
-            {sortedStops.map((stop, idx) => (
+            {sessionVillages.map((village, idx) => (
               <motion.div
-                key={`${stop.villageId}-${selectedSession}`}
+                key={`${village.villageId}-${selectedSession}`}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.03 }}
@@ -191,23 +186,17 @@ export default function AgentCollectionWorkPage() {
                 <Card>
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
-                      <div className="flex flex-col items-center gap-0.5 mt-0.5">
-                        <div className="w-7 h-7 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold">
-                          {stop.sequenceOrder}
-                        </div>
-                        {idx < sortedStops.length - 1 && <div className="w-px flex-1 bg-neutral-200 min-h-[8px]" />}
-                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-semibold text-neutral-900">{stop.villageName}</h3>
-                          <Badge variant="neutral" className="text-[10px]">{stop.farmers.length} farmers</Badge>
+                          <h3 className="text-sm font-semibold text-neutral-900">{village.villageName}</h3>
+                          <Badge variant="neutral" className="text-[10px]">{village.farmers.length} farmers</Badge>
                         </div>
 
                         <div className="mt-3 space-y-2">
-                          {(stop.farmers ?? []).length === 0 ? (
-                            <p className="text-xs text-neutral-400 italic px-1">No active farmers assigned to this stop.</p>
-                          ) : (stop.farmers ?? []).map((farmer) => {
-                            const key = `${stop.villageId}-${farmer.id}`;
+                          {(village.farmers ?? []).length === 0 ? (
+                            <p className="text-xs text-neutral-400 italic px-1">No active farmers in this village.</p>
+                          ) : (village.farmers ?? []).map((farmer) => {
+                            const key = `${village.villageId}-${farmer.id}`;
                             const isSaving = saveMutation.isPending && saveMutation.variables?.farmerId === farmer.id;
                             return (
                               <div key={farmer.id} className="flex items-center gap-2 bg-neutral-50 rounded-lg px-3 py-2">
@@ -223,7 +212,7 @@ export default function AgentCollectionWorkPage() {
                                   className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-xs text-right focus:ring-2 focus:ring-primary-200 focus:border-primary-400"
                                 />
                                 <button
-                                  onClick={() => handleSave(stop.villageId, farmer.id)}
+                                  onClick={() => handleSave(village.villageId, farmer.id)}
                                   disabled={isSaving || !entries[key]}
                                   className="rounded-md bg-primary-500 p-1.5 text-white hover:bg-primary-600 disabled:opacity-40 transition-colors"
                                   title="Save"
