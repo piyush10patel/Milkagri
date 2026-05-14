@@ -956,7 +956,7 @@ export async function deleteMilkVehicleShiftLoad(id: string) {
 }
 
 export async function getAgentCollectionDashboard(userId: string, date: string) {
-  const [deliveryRoutes, collectionRoutes, entries, individualCollections] = await Promise.all([
+  const [deliveryRoutes, rawRoutes, entries, individualCollections] = await Promise.all([
     prisma.route.findMany({
       where: {
         isActive: true,
@@ -966,7 +966,7 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
-    prismaAny().route.findMany({
+    prisma.route.findMany({
       where: {
         isActive: true,
         routeType: 'collection',
@@ -976,20 +976,15 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
         id: true,
         name: true,
         collectionRouteStops: {
-          include: {
+          select: {
+            id: true,
+            villageId: true,
+            deliverySession: true,
             village: {
-              select: {
-                id: true,
-                name: true,
-                farmers: {
-                  where: { isActive: true },
-                  select: { id: true, name: true },
-                  orderBy: { name: 'asc' },
-                },
-              },
+              select: { id: true, name: true },
             },
             farmers: {
-              include: {
+              select: {
                 farmer: {
                   select: { id: true, name: true, isActive: true },
                 },
@@ -1028,31 +1023,57 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
     }),
   ]);
 
+  const villageIdsToFetch = new Set<string>();
+  for (const r of rawRoutes) {
+    for (const stop of r.collectionRouteStops) {
+      if (!stop.farmers || stop.farmers.length === 0) {
+        if (stop.villageId) villageIdsToFetch.add(stop.villageId.toString());
+      }
+    }
+  }
+
+  const villageFarmersMap: Record<string, Array<{ id: string; name: string }>> = {};
+  if (villageIdsToFetch.size > 0) {
+    const vFarmers = await prisma.farmer.findMany({
+      where: {
+        villageId: { in: Array.from(villageIdsToFetch) },
+        isActive: true,
+      },
+      select: { id: true, name: true, villageId: true },
+      orderBy: { name: 'asc' },
+    });
+    for (const f of vFarmers) {
+      if (f.villageId) {
+        const vId = f.villageId.toString();
+        if (!villageFarmersMap[vId]) villageFarmersMap[vId] = [];
+        villageFarmersMap[vId].push({ id: f.id, name: f.name });
+      }
+    }
+  }
+
   return {
     date,
     deliveryRoutes,
-    collectionRoutes: collectionRoutes.map((route: any) => {
+    collectionRoutes: rawRoutes.map((route: any) => {
       const seen = new Set<string>();
       const villages: Array<{ villageId: string; villageName: string; deliverySession: 'morning' | 'evening'; farmers: Array<{ id: string; name: string }> }> = [];
       for (const stop of route.collectionRouteStops) {
-        const key = `${stop.villageId}|${stop.deliverySession}`;
+        const vId = stop.villageId?.toString();
+        if (!vId) continue;
+
+        const key = `${vId}|${stop.deliverySession}`;
         if (seen.has(key)) continue;
         seen.add(key);
 
-        // Prefer route-stop-assigned farmers over all village farmers
         const routeStopFarmers = (stop.farmers ?? [])
           .map((sf: any) => sf.farmer)
           .filter((f: any) => f?.isActive)
           .map((f: any) => ({ id: f.id, name: f.name }));
 
-        const villageFarmers = (stop.village?.farmers ?? [])
-          .map((f: any) => ({ id: f.id, name: f.name }));
-
-        // Use route-stop farmers if explicitly assigned; otherwise fall back to village farmers
-        const farmers = routeStopFarmers.length > 0 ? routeStopFarmers : villageFarmers;
+        const farmers = routeStopFarmers.length > 0 ? routeStopFarmers : (villageFarmersMap[vId] ?? []);
 
         villages.push({
-          villageId: stop.villageId,
+          villageId: vId,
           villageName: stop.village?.name ?? 'Unknown Village',
           deliverySession: stop.deliverySession,
           farmers,
