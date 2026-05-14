@@ -64,27 +64,61 @@ async function assertAgentCanRecordVillageCollection(
 }
 
 export async function listVillages() {
-  return prismaAny().village.findMany({
-    include: {
-      stops: {
-        where: { isActive: true },
-        include: {
-          farmers: {
-            include: {
-              farmer: {
-                select: { id: true, name: true, isActive: true },
-              },
-            },
-          },
+  const [villages, allStops, stopFarmers, villageFarmers] = await Promise.all([
+    prisma.village.findMany({
+      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+    }),
+    prisma.villageCollectionStop.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.villageCollectionStopFarmer.findMany({
+      include: {
+        farmer: {
+          select: { id: true, name: true, isActive: true },
         },
-        orderBy: { name: 'asc' },
       },
-      farmers: {
-        orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-      },
-    },
-    orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-  });
+    }),
+    prisma.farmer.findMany({
+      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+    }),
+  ]);
+
+  const villageFarmersMap: Record<string, any[]> = {};
+  for (const f of villageFarmers) {
+    if (f.villageId) {
+      const vId = f.villageId.toString();
+      if (!villageFarmersMap[vId]) villageFarmersMap[vId] = [];
+      villageFarmersMap[vId].push(f);
+    }
+  }
+
+  const stopFarmersMap: Record<string, any[]> = {};
+  for (const sf of stopFarmers) {
+    if (sf.stopId) {
+      const sId = sf.stopId.toString();
+      if (!stopFarmersMap[sId]) stopFarmersMap[sId] = [];
+      stopFarmersMap[sId].push(sf);
+    }
+  }
+
+  const stopsMap: Record<string, any[]> = {};
+  for (const stop of allStops) {
+    if (stop.villageId) {
+      const vId = stop.villageId.toString();
+      if (!stopsMap[vId]) stopsMap[vId] = [];
+      stopsMap[vId].push({
+        ...stop,
+        farmers: stopFarmersMap[stop.id.toString()] ?? [],
+      });
+    }
+  }
+
+  return villages.map(v => ({
+    ...v,
+    stops: stopsMap[v.id.toString()] ?? [],
+    farmers: villageFarmersMap[v.id.toString()] ?? [],
+  }));
 }
 
 export async function listCollectionRoutes() {
@@ -115,14 +149,16 @@ export async function listCollectionRoutes() {
 }
 
 async function getVillageRouteAssignmentsByDate(_targetDate: Date) {
-  const routeStops = await prismaAny().milkCollectionRouteStop.findMany({
-    include: {
+  const routeStops = await prisma.milkCollectionRouteStop.findMany({
+    select: {
+      villageId: true,
+      deliverySession: true,
       route: {
         select: {
           id: true,
           name: true,
           routeAgents: {
-            include: {
+            select: {
               user: {
                 select: { id: true, name: true, role: true, isActive: true },
               },
@@ -171,7 +207,7 @@ export async function getCollectionRouteStops(
   });
   if (!route) throw new NotFoundError('Route not found');
 
-  const stops = await prismaAny().milkCollectionRouteStop.findMany({
+  const stops = await prisma.milkCollectionRouteStop.findMany({
     where: { routeId, deliverySession },
     include: {
       villageStop: {
@@ -180,7 +216,7 @@ export async function getCollectionRouteStops(
           name: true,
           isActive: true,
           farmers: {
-            include: {
+            select: {
               farmer: {
                 select: { id: true, name: true, isActive: true },
               },
@@ -189,7 +225,8 @@ export async function getCollectionRouteStops(
         },
       },
       farmers: {
-        include: {
+        select: {
+          farmerId: true,
           farmer: {
             select: { id: true, name: true, isActive: true },
           },
@@ -200,16 +237,35 @@ export async function getCollectionRouteStops(
           id: true,
           name: true,
           isActive: true,
-          farmers: {
-            where: { isActive: true },
-            select: { id: true, name: true },
-            orderBy: { name: 'asc' },
-          },
         },
       },
     },
     orderBy: { sequenceOrder: 'asc' },
   });
+
+  const villageIds = new Set<string>();
+  for (const s of stops) {
+    if (s.villageId) villageIds.add(s.villageId.toString());
+  }
+
+  const villageFarmersMap: Record<string, any[]> = {};
+  if (villageIds.size > 0) {
+    const vFarmers = await prisma.farmer.findMany({
+      where: {
+        villageId: { in: Array.from(villageIds) },
+        isActive: true,
+      },
+      select: { id: true, name: true, villageId: true },
+      orderBy: { name: 'asc' },
+    });
+    for (const f of vFarmers) {
+      if (f.villageId) {
+        const vId = f.villageId.toString();
+        if (!villageFarmersMap[vId]) villageFarmersMap[vId] = [];
+        villageFarmersMap[vId].push({ id: f.id, name: f.name });
+      }
+    }
+  }
 
   return {
     route: {
@@ -246,16 +302,15 @@ export async function getCollectionRouteStops(
           .map((stopFarmer: any) => stopFarmer.farmer)
           .filter((farmer: any) => farmer?.isActive)
           .map((farmer: any) => farmer.name);
-        const villageFarmerNames = stop.village.farmers.map((farmer: any) => farmer.name);
+        const villageFarmerNames = (villageFarmersMap[stop.villageId.toString()] ?? []).map((farmer: any) => farmer.name);
 
-        const merged = [...routeStopFarmerNames, ...villageStopFarmerNames];
-        if (merged.length > 0) return Array.from(new Set(merged));
-        return villageFarmerNames;
+        return routeStopFarmerNames.length > 0
+          ? routeStopFarmerNames
+          : villageStopFarmerNames.length > 0
+            ? villageStopFarmerNames
+            : villageFarmerNames;
       })(),
-      availableFarmers: stop.village.farmers.map((farmer: any) => ({
-        id: farmer.id,
-        name: farmer.name,
-      })),
+      availableFarmers: villageFarmersMap[stop.villageId.toString()] ?? [],
     })),
   };
 }
