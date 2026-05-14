@@ -24,29 +24,33 @@ export async function generateInvoicesForCycle(cycleStart: string, cycleEnd: str
     });
   }
 
-  // Find all customers with delivered orders in this cycle
-  const deliveredOrders = await prisma.deliveryOrder.findMany({
+  // Find distinct customers with delivered orders in this cycle to avoid loading all orders into memory
+  const distinctCustomers = await prisma.deliveryOrder.findMany({
     where: {
       status: 'delivered',
       deliveryDate: { gte: cycleStartDate, lte: cycleEndDate },
     },
-    include: {
-      productVariant: { include: { product: true } },
-    },
-    orderBy: [{ customerId: 'asc' }, { deliveryDate: 'asc' }],
+    select: { customerId: true },
+    distinct: ['customerId'],
   });
 
-  // Group orders by customer
-  const ordersByCustomer = new Map<string, typeof deliveredOrders>();
-  for (const order of deliveredOrders) {
-    const list = ordersByCustomer.get(order.customerId) ?? [];
-    list.push(order);
-    ordersByCustomer.set(order.customerId, list);
-  }
-
+  const customerIds = distinctCustomers.map(dc => dc.customerId);
   const invoicesCreated: string[] = [];
 
-  for (const [customerId, orders] of ordersByCustomer) {
+  for (const customerId of customerIds) {
+    // Process one customer at a time
+    const orders = await prisma.deliveryOrder.findMany({
+      where: {
+        customerId,
+        status: 'delivered',
+        deliveryDate: { gte: cycleStartDate, lte: cycleEndDate },
+      },
+      include: {
+        productVariant: { include: { product: true } },
+      },
+      orderBy: { deliveryDate: 'asc' },
+    });
+
     const customer = await prisma.customer.findUnique({
       where: { id: customerId },
       select: { id: true, pricingCategory: true },

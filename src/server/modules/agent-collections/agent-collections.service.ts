@@ -82,22 +82,33 @@ export async function getDailyCollectionSummary(query: CollectionSummaryQuery) {
     agentCustomerMap.get(a.agentId)!.customerIds.push(a.customerId);
   }
 
+  // Fetch the latest ledger balance for all assigned customers in a single query to avoid N+1 queries
+  const allCustomerIds = Array.from(new Set(assignments.map(a => a.customerId)));
+  const latestEntries = await prisma.ledgerEntry.findMany({
+    where: { customerId: { in: allCustomerIds } },
+    distinct: ['customerId'],
+    orderBy: [{ entryDate: 'desc' }, { createdAt: 'desc' }],
+    select: { customerId: true, runningBalance: true },
+  });
+
+  const latestBalanceMap = new Map<string, Prisma.Decimal>();
+  for (const entry of latestEntries) {
+    if (entry.runningBalance.gt(0)) {
+      latestBalanceMap.set(entry.customerId, entry.runningBalance);
+    }
+  }
+
   const agentSummaries = [];
 
   for (const [agentId, { agent, customerIds }] of agentCustomerMap) {
     // Expected: sum of positive running balances from latest ledger entry per customer
     let expected = new Prisma.Decimal(0);
     for (const customerId of customerIds) {
-      const lastEntry = await prisma.ledgerEntry.findFirst({
-        where: { customerId },
-        orderBy: [{ entryDate: 'desc' }, { createdAt: 'desc' }],
-        select: { runningBalance: true },
-      });
-      if (lastEntry && lastEntry.runningBalance.gt(0)) {
-        expected = expected.add(lastEntry.runningBalance);
+      const balance = latestBalanceMap.get(customerId);
+      if (balance) {
+        expected = expected.add(balance);
       }
     }
-
     // Received: sum of field collections by this agent on the target date
     const receivedAgg = await prisma.payment.aggregate({
       where: {
