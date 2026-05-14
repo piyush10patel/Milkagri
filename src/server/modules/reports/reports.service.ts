@@ -138,63 +138,35 @@ export async function routeDeliveryReport(query: RouteDeliveryQuery) {
 export async function customerOutstandingReport(query: OutstandingQuery) {
   const pagination = parsePagination(query.page, query.limit);
 
-  const invoices = await prisma.invoice.findMany({
+  // Aggregate outstanding balance and oldest invoice date per customer in the DB
+  const aggregated = await prisma.invoice.groupBy({
+    by: ['customerId'],
     where: {
       isCurrent: true,
       paymentStatus: { in: ['unpaid', 'partial'] },
     },
-    include: {
-      customer: { select: { id: true, name: true, phone: true } },
-    },
-    orderBy: { closingBalance: 'desc' },
+    _sum: { closingBalance: true },
+    _count: { id: true },
+    _min: { billingCycleEnd: true },
   });
 
-  // Group by customer
-  const customerMap = new Map<
-    string,
-    {
-      customerId: string;
-      customerName: string;
-      phone: string;
-      totalOutstanding: number;
-      invoiceCount: number;
-      oldestInvoiceDate: Date;
-      agingDays: number;
-    }
-  >();
-
   const now = new Date();
-
-  for (const inv of invoices) {
-    const cid = inv.customerId;
-    if (!customerMap.has(cid)) {
-      customerMap.set(cid, {
-        customerId: cid,
-        customerName: inv.customer.name,
-        phone: inv.customer.phone,
-        totalOutstanding: 0,
-        invoiceCount: 0,
-        oldestInvoiceDate: inv.billingCycleEnd,
-        agingDays: 0,
-      });
-    }
-    const entry = customerMap.get(cid)!;
-    // closingBalance already includes payments/discounts/adjustments for current invoice
-    entry.totalOutstanding += Number(inv.closingBalance);
-    entry.invoiceCount++;
-    if (inv.billingCycleEnd < entry.oldestInvoiceDate) {
-      entry.oldestInvoiceDate = inv.billingCycleEnd;
-    }
-  }
-
-  // Calculate aging
-  for (const entry of customerMap.values()) {
-    entry.agingDays = Math.floor(
-      (now.getTime() - entry.oldestInvoiceDate.getTime()) / (1000 * 60 * 60 * 24),
+  const allRows = aggregated.map((group) => {
+    const totalOutstanding = Number(group._sum.closingBalance ?? 0);
+    const invoiceCount = group._count.id;
+    const oldestInvoiceDate = group._min.billingCycleEnd ?? now;
+    const agingDays = Math.floor(
+      (now.getTime() - oldestInvoiceDate.getTime()) / (1000 * 60 * 60 * 24),
     );
-  }
 
-  let allRows = [...customerMap.values()];
+    return {
+      customerId: group.customerId,
+      totalOutstanding,
+      invoiceCount,
+      oldestInvoiceDate,
+      agingDays,
+    };
+  });
 
   // Sort
   const sortBy = query.sortBy ?? 'totalOutstanding';
@@ -208,8 +180,27 @@ export async function customerOutstandingReport(query: OutstandingQuery) {
   const total = allRows.length;
   const paged = allRows.slice(pagination.skip, pagination.skip + pagination.take);
 
-  const base = paginatedResponse(paged, total, pagination);
-  const totalOutstanding = allRows.reduce((sum, row) => sum + Number(row.totalOutstanding ?? 0), 0);
+  // Fetch customer details only for the paginated slice
+  const customerIds = paged.map((row) => row.customerId);
+  const customers = customerIds.length > 0 
+    ? await prisma.customer.findMany({
+        where: { id: { in: customerIds } },
+        select: { id: true, name: true, phone: true },
+      })
+    : [];
+  const customerMap = new Map(customers.map((c) => [c.id, c]));
+
+  const enrichedPaged = paged.map((row) => {
+    const c = customerMap.get(row.customerId);
+    return {
+      ...row,
+      customerName: c?.name ?? 'Unknown',
+      phone: c?.phone ?? 'Unknown',
+    };
+  });
+
+  const base = paginatedResponse(enrichedPaged, total, pagination);
+  const totalOutstanding = allRows.reduce((sum, row) => sum + row.totalOutstanding, 0);
 
   return {
     ...base,
@@ -234,23 +225,22 @@ export async function revenueReport(query: RevenueQuery) {
     lte: new Date(endDate + 'T00:00:00.000Z'),
   };
 
-  // Get delivered orders with their line items
-  const lineItems = await prisma.invoiceLineItem.findMany({
+  // Group by delivery date in the database to prevent loading all line items into memory
+  const dailyAggregates = await prisma.invoiceLineItem.groupBy({
+    by: ['deliveryDate'],
     where: {
       deliveryDate: dateFilter,
       invoice: { isCurrent: true },
     },
-    select: {
-      deliveryDate: true,
-      lineTotal: true,
-    },
+    _sum: { lineTotal: true },
   });
 
-  // Group by period
+  // Group by requested period (day/week/month)
   const buckets = new Map<string, number>();
 
-  for (const item of lineItems) {
+  for (const item of dailyAggregates) {
     const date = item.deliveryDate;
+    const dailyTotal = Number(item._sum.lineTotal ?? 0);
     let key: string;
 
     if (groupBy === 'day') {
@@ -267,7 +257,7 @@ export async function revenueReport(query: RevenueQuery) {
       key = date.toISOString().slice(0, 7);
     }
 
-    buckets.set(key, (buckets.get(key) ?? 0) + Number(item.lineTotal));
+    buckets.set(key, (buckets.get(key) ?? 0) + dailyTotal);
   }
 
   const allRows = [...buckets.entries()]
