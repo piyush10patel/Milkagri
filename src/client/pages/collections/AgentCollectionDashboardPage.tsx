@@ -52,7 +52,7 @@ export default function AgentCollectionDashboardPage() {
   const [formPaymentMethod, setFormPaymentMethod] = useState('cash');
   const [formError, setFormError] = useState('');
 
-  const { data: dashboard, isLoading } = useQuery({
+  const { data: dashboard, isLoading, error } = useQuery({
     queryKey: ['agent-dashboard', date],
     queryFn: () => Promise.race([
       api.get<DashboardData>(`/api/agent-collections/dashboard?date=${date}`),
@@ -115,6 +115,12 @@ export default function AgentCollectionDashboardPage() {
       <h1 className="text-xl font-semibold text-gray-900 mb-4">My Collections</h1>
 
       {isLoading && <p className="text-sm text-gray-500" aria-live="polite">Loading…</p>}
+
+      {!isLoading && error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 mb-6">
+          <p className="text-sm text-red-600">{(error as any)?.message || 'Failed to load dashboard data. Please try again.'}</p>
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
