@@ -1081,9 +1081,7 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
   const villageIdsToFetch = new Set<string>();
   for (const r of rawRoutes) {
     for (const stop of r.collectionRouteStops) {
-      if (!stop.farmers || stop.farmers.length === 0) {
-        if (stop.villageId) villageIdsToFetch.add(stop.villageId.toString());
-      }
+      if (stop.villageId) villageIdsToFetch.add(stop.villageId.toString());
     }
   }
 

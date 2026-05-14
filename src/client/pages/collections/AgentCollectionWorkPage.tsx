@@ -31,6 +31,13 @@ interface AgentDashboardResponse {
       farmers: Array<{ id: string; name: string }>;
     }>;
   }>;
+  recordedMilkCollections: Array<{
+    id: string;
+    villageId: string;
+    farmerId: string;
+    deliverySession: 'morning' | 'evening';
+    quantity: number;
+  }>;
 }
 
 export default function AgentCollectionWorkPage() {
@@ -58,6 +65,18 @@ export default function AgentCollectionWorkPage() {
     enabled: !authLoading,
     retry: false,
   });
+
+  // Pre-fill entries from server data
+  useEffect(() => {
+    if (data?.recordedMilkCollections) {
+      const initialEntries: Record<string, string> = {};
+      data.recordedMilkCollections.forEach((record) => {
+        const key = `${record.villageId}-${record.farmerId}`;
+        initialEntries[key] = record.quantity.toString();
+      });
+      setEntries(initialEntries);
+    }
+  }, [data]);
 
   const routes = data?.collectionRoutes ?? [];
   const activeRoute = selectedRouteId ? routes.find((r) => r.id === selectedRouteId) : routes[0];
