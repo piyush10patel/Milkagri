@@ -70,11 +70,10 @@ interface AgentCollectionDashboardResponse {
   collectionRoutes: Array<{
     id: string;
     name: string;
-    stops: Array<{
+    villages: Array<{
       villageId: string;
       villageName: string;
       deliverySession: 'morning' | 'evening';
-      sequenceOrder: number;
       farmers: Array<{ id: string; name: string }>;
     }>;
   }>;
@@ -371,7 +370,7 @@ function AgentWorkPanel({ today, data }: { today: string; data: AgentCollectionD
   const [quantity, setQuantity] = useState('');
   const [error, setError] = useState('');
 
-  const assignedStops = (data?.collectionRoutes ?? []).flatMap((route) => route.stops);
+  const assignedStops = (data?.collectionRoutes ?? []).flatMap((route) => route.villages);
   const villageOptions = Array.from(new Map(assignedStops.map((stop) => [stop.villageId, { id: stop.villageId, name: stop.villageName }])).values());
   const selectedStop = assignedStops.find((stop) => stop.villageId === selectedVillageId && stop.deliverySession === selectedSession);
   const farmerOptions = selectedStop?.farmers ?? [];
