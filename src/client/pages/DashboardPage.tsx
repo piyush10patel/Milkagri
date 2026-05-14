@@ -370,7 +370,7 @@ function AgentWorkPanel({ today, data }: { today: string; data: AgentCollectionD
   const [quantity, setQuantity] = useState('');
   const [error, setError] = useState('');
 
-  const assignedStops = (data?.collectionRoutes ?? []).flatMap((route) => route.villages);
+  const assignedStops = (data?.collectionRoutes ?? []).flatMap((route) => route.villages ?? []);
   const villageOptions = Array.from(new Map(assignedStops.map((stop) => [stop.villageId, { id: stop.villageId, name: stop.villageName }])).values());
   const selectedStop = assignedStops.find((stop) => stop.villageId === selectedVillageId && stop.deliverySession === selectedSession);
   const farmerOptions = selectedStop?.farmers ?? [];
@@ -425,11 +425,20 @@ function AgentWorkPanel({ today, data }: { today: string; data: AgentCollectionD
             <label className="block text-xs font-medium text-neutral-600 mb-1">Village</label>
             <select
               value={selectedVillageId}
-              onChange={(e) => { setSelectedVillageId(e.target.value); setSelectedFarmerId(''); }}
+              onChange={(e) => {
+                const vid = e.target.value;
+                setSelectedVillageId(vid);
+                setSelectedFarmerId('');
+                const validStop = assignedStops.find(s => s.villageId === vid && s.deliverySession === selectedSession);
+                if (!validStop) {
+                  const anyStop = assignedStops.find(s => s.villageId === vid);
+                  if (anyStop) setSelectedSession(anyStop.deliverySession);
+                }
+              }}
               className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-200 focus:border-primary-400 transition-all"
               required
             >
-              <option value="">Select village</option>
+              <option value="">{villageOptions.length > 0 ? 'Select village' : 'No villages scheduled'}</option>
               {villageOptions.map((village) => <option key={village.id} value={village.id}>{village.name}</option>)}
             </select>
           </div>
