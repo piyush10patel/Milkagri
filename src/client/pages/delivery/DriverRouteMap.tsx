@@ -123,12 +123,7 @@ export default function DriverRouteMap({ routeId }: DriverRouteMapProps) {
         customerStops.forEach((wp, i) => {
           const icon = L.divIcon({
             className: '',
-            html: `<div style="
-              background:#2563eb;color:#fff;width:28px;height:28px;
-              border-radius:50%;display:flex;align-items:center;justify-content:center;
-              font-size:13px;font-weight:600;border:2px solid #fff;
-              box-shadow:0 1px 4px rgba(0,0,0,.3);
-            ">${i + 1}</div>`,
+            html: `<div class="waypoint-icon waypoint-icon-customer">${i + 1}</div>`,
             iconSize: [28, 28],
             iconAnchor: [14, 14],
           });

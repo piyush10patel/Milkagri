@@ -134,15 +134,17 @@ export default function LiveVehicleTrackingPage() {
     const layerGroup = L.layerGroup();
     for (const vehicle of vehicles) {
       const marker = L.marker([vehicle.latest.latitude, vehicle.latest.longitude]);
-      marker.bindPopup(
-        `<div style="font-size:12px;line-height:1.4;">
-          <strong>${vehicle.user.name}</strong><br/>
-          Last ping: ${new Date(vehicle.latestPingAt).toLocaleString()}<br/>
-          Route: ${vehicle.latest.routeName ?? 'Unassigned'}<br/>
-          Shift: ${vehicle.latest.deliverySession ?? '—'}<br/>
-          Speed: ${vehicle.latest.speedKmph ?? 0} km/h
-        </div>`,
-      );
+      const popupContent = document.createElement('div');
+      popupContent.style.fontSize = '12px';
+      popupContent.style.lineHeight = '1.4';
+      popupContent.innerHTML = `
+        <strong>${vehicle.user.name}</strong><br/>
+        Last ping: ${new Date(vehicle.latestPingAt).toLocaleString()}<br/>
+        Route: ${vehicle.latest.routeName ?? 'Unassigned'}<br/>
+        Shift: ${vehicle.latest.deliverySession ?? '—'}<br/>
+        Speed: ${vehicle.latest.speedKmph ?? 0} km/h
+      `;
+      marker.bindPopup(popupContent);
       marker.addTo(layerGroup);
 
       const trailPoints = vehicle.trail
