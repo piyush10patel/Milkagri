@@ -84,12 +84,20 @@ export async function getDailyCollectionSummary(query: CollectionSummaryQuery) {
 
   // Fetch the latest ledger balance for all assigned customers in a single query
   const allCustomerIds = Array.from(new Set(assignments.map(a => a.customerId)));
-  const latestEntries = await prisma.ledgerEntry.findMany({
-    where: { customerId: { in: allCustomerIds } },
-    distinct: ['customerId'],
-    orderBy: [{ entryDate: 'desc' }, { createdAt: 'desc' }],
-    select: { customerId: true, runningBalance: true },
-  });
+  const latestEntries: { customerId: string; runningBalance: Prisma.Decimal }[] = [];
+
+  // Batch query to avoid memory overload with many customers
+  const batchSize = 100;
+  for (let i = 0; i < allCustomerIds.length; i += batchSize) {
+    const batch = allCustomerIds.slice(i, i + batchSize);
+    const entries = await prisma.ledgerEntry.findMany({
+      where: { customerId: { in: batch } },
+      distinct: ['customerId'],
+      orderBy: [{ entryDate: 'desc' }, { createdAt: 'desc' }],
+      select: { customerId: true, runningBalance: true },
+    });
+    latestEntries.push(...entries);
+  }
 
   const latestBalanceMap = new Map<string, Prisma.Decimal>();
   for (const entry of latestEntries) {

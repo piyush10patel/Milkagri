@@ -37,6 +37,7 @@ export async function generateInvoicesForCycle(cycleStart: string, cycleEnd: str
   const customerIds = distinctCustomers.map(dc => dc.customerId);
   const invoicesCreated: string[] = [];
 
+  // We'll process sequentially as it is memory optimal.
   for (const customerId of customerIds) {
     // Process one customer at a time
     const orders = await prisma.deliveryOrder.findMany({
