@@ -12,5 +12,13 @@ export default defineConfig({
       include: ['src/**/*.ts', 'src/**/*.tsx'],
       exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'src/client/vite.config.ts'],
     },
+    // Adding thread configuration to prevent OOM
+    pool: 'threads',
+    poolOptions: {
+      threads: {
+        singleThread: true,
+        isolate: false
+      },
+    },
   },
 });

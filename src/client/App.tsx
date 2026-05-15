@@ -1,59 +1,60 @@
+import React, { Suspense } from 'react';
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthContext, useAuthProvider, useAuth } from '@/hooks/useAuth';
 import Layout from '@/components/Layout';
 import { ToastProvider } from '@/components/ui/toast';
-import LoginPage from '@/pages/LoginPage';
-import DashboardPage from '@/pages/DashboardPage';
-import CustomerListPage from '@/pages/customers/CustomerListPage';
-import CustomerFormPage from '@/pages/customers/CustomerFormPage';
-import CustomerDetailPage from '@/pages/customers/CustomerDetailPage';
-import ProductListPage from '@/pages/products/ProductListPage';
-import ProductFormPage from '@/pages/products/ProductFormPage';
-import PricingPage from '@/pages/products/PricingPage';
-import SubscriptionListPage from '@/pages/subscriptions/SubscriptionListPage';
-import SubscriptionFormPage from '@/pages/subscriptions/SubscriptionFormPage';
-import DailyOperationsPage from '@/pages/orders/DailyOperationsPage';
-import OrderMilkSummaryPage from '@/pages/orders/OrderMilkSummaryPage';
-import MilkCollectionPage from '@/pages/milk-collections/MilkCollectionPage';
-import VillageCollectionDetailPage from '@/pages/milk-collections/VillageCollectionDetailPage';
-import VillageCollectionsOverviewPage from '@/pages/milk-collections/VillageCollectionsOverviewPage';
-import CollectionRoutesPage from '@/pages/milk-collections/CollectionRoutesPage';
-import FarmerMilkReportPage from '@/pages/milk-collections/FarmerMilkReportPage';
-import TotalCollectionsPage from '@/pages/milk-collections/TotalCollectionsPage';
-import DeliveryManifestPage from '@/pages/delivery/DeliveryManifestPage';
-import RouteListPage from '@/pages/routes/RouteListPage';
-import RouteFormPage from '@/pages/routes/RouteFormPage';
-import RouteMapPage from '@/pages/routes/RouteMapPage';
-import LiveVehicleTrackingPage from '@/pages/tracking/LiveVehicleTrackingPage';
-import InvoiceListPage from '@/pages/billing/InvoiceListPage';
-import InvoiceDetailPage from '@/pages/billing/InvoiceDetailPage';
-import OutstandingPage from '@/pages/payments/OutstandingPage';
-import PaymentFormPage from '@/pages/payments/PaymentFormPage';
-import PaymentHistoryPage from '@/pages/payments/PaymentHistoryPage';
-import CustomerLedgerPage from '@/pages/ledger/CustomerLedgerPage';
-import ReportsDashboardPage from '@/pages/reports/ReportsDashboardPage';
-import DailyDeliveryReportPage from '@/pages/reports/DailyDeliveryReportPage';
-import RouteDeliveryReportPage from '@/pages/reports/RouteDeliveryReportPage';
-import OutstandingReportPage from '@/pages/reports/OutstandingReportPage';
-import RevenueReportPage from '@/pages/reports/RevenueReportPage';
-import ProductSalesReportPage from '@/pages/reports/ProductSalesReportPage';
-import MissedDeliveriesReportPage from '@/pages/reports/MissedDeliveriesReportPage';
-import SubscriptionChangesReportPage from '@/pages/reports/SubscriptionChangesReportPage';
-import InventoryPage from '@/pages/inventory/InventoryPage';
-import UserListPage from '@/pages/users/UserListPage';
-import UserFormPage from '@/pages/users/UserFormPage';
-import NotificationsPage from '@/pages/notifications/NotificationsPage';
-import AuditLogPage from '@/pages/audit/AuditLogPage';
-import SettingsPage from '@/pages/settings/SettingsPage';
-import AdminCollectionOverviewPage from '@/pages/collections/AdminCollectionOverviewPage';
-import AgentAssignmentPage from '@/pages/collections/AgentAssignmentPage';
-import AgentRemittancePage from '@/pages/collections/AgentRemittancePage';
-import AgentBalancesPage from '@/pages/collections/AgentBalancesPage';
-import AgentCollectionDashboardPage from '@/pages/collections/AgentCollectionDashboardPage';
-import AgentCollectionWorkPage from '@/pages/collections/AgentCollectionWorkPage';
-import PermissionMatrixPage from '@/pages/settings/PermissionMatrixPage';
-import AgentsManagementPage from '@/pages/collections/AgentsManagementPage';
+const LoginPage = React.lazy(() => import('@/pages/LoginPage'));
+const DashboardPage = React.lazy(() => import('@/pages/DashboardPage'));
+const CustomerListPage = React.lazy(() => import('@/pages/customers/CustomerListPage'));
+const CustomerFormPage = React.lazy(() => import('@/pages/customers/CustomerFormPage'));
+const CustomerDetailPage = React.lazy(() => import('@/pages/customers/CustomerDetailPage'));
+const ProductListPage = React.lazy(() => import('@/pages/products/ProductListPage'));
+const ProductFormPage = React.lazy(() => import('@/pages/products/ProductFormPage'));
+const PricingPage = React.lazy(() => import('@/pages/products/PricingPage'));
+const SubscriptionListPage = React.lazy(() => import('@/pages/subscriptions/SubscriptionListPage'));
+const SubscriptionFormPage = React.lazy(() => import('@/pages/subscriptions/SubscriptionFormPage'));
+const DailyOperationsPage = React.lazy(() => import('@/pages/orders/DailyOperationsPage'));
+const OrderMilkSummaryPage = React.lazy(() => import('@/pages/orders/OrderMilkSummaryPage'));
+const MilkCollectionPage = React.lazy(() => import('@/pages/milk-collections/MilkCollectionPage'));
+const VillageCollectionDetailPage = React.lazy(() => import('@/pages/milk-collections/VillageCollectionDetailPage'));
+const VillageCollectionsOverviewPage = React.lazy(() => import('@/pages/milk-collections/VillageCollectionsOverviewPage'));
+const CollectionRoutesPage = React.lazy(() => import('@/pages/milk-collections/CollectionRoutesPage'));
+const FarmerMilkReportPage = React.lazy(() => import('@/pages/milk-collections/FarmerMilkReportPage'));
+const TotalCollectionsPage = React.lazy(() => import('@/pages/milk-collections/TotalCollectionsPage'));
+const DeliveryManifestPage = React.lazy(() => import('@/pages/delivery/DeliveryManifestPage'));
+const RouteListPage = React.lazy(() => import('@/pages/routes/RouteListPage'));
+const RouteFormPage = React.lazy(() => import('@/pages/routes/RouteFormPage'));
+const RouteMapPage = React.lazy(() => import('@/pages/routes/RouteMapPage'));
+const LiveVehicleTrackingPage = React.lazy(() => import('@/pages/tracking/LiveVehicleTrackingPage'));
+const InvoiceListPage = React.lazy(() => import('@/pages/billing/InvoiceListPage'));
+const InvoiceDetailPage = React.lazy(() => import('@/pages/billing/InvoiceDetailPage'));
+const OutstandingPage = React.lazy(() => import('@/pages/payments/OutstandingPage'));
+const PaymentFormPage = React.lazy(() => import('@/pages/payments/PaymentFormPage'));
+const PaymentHistoryPage = React.lazy(() => import('@/pages/payments/PaymentHistoryPage'));
+const CustomerLedgerPage = React.lazy(() => import('@/pages/ledger/CustomerLedgerPage'));
+const ReportsDashboardPage = React.lazy(() => import('@/pages/reports/ReportsDashboardPage'));
+const DailyDeliveryReportPage = React.lazy(() => import('@/pages/reports/DailyDeliveryReportPage'));
+const RouteDeliveryReportPage = React.lazy(() => import('@/pages/reports/RouteDeliveryReportPage'));
+const OutstandingReportPage = React.lazy(() => import('@/pages/reports/OutstandingReportPage'));
+const RevenueReportPage = React.lazy(() => import('@/pages/reports/RevenueReportPage'));
+const ProductSalesReportPage = React.lazy(() => import('@/pages/reports/ProductSalesReportPage'));
+const MissedDeliveriesReportPage = React.lazy(() => import('@/pages/reports/MissedDeliveriesReportPage'));
+const SubscriptionChangesReportPage = React.lazy(() => import('@/pages/reports/SubscriptionChangesReportPage'));
+const InventoryPage = React.lazy(() => import('@/pages/inventory/InventoryPage'));
+const UserListPage = React.lazy(() => import('@/pages/users/UserListPage'));
+const UserFormPage = React.lazy(() => import('@/pages/users/UserFormPage'));
+const NotificationsPage = React.lazy(() => import('@/pages/notifications/NotificationsPage'));
+const AuditLogPage = React.lazy(() => import('@/pages/audit/AuditLogPage'));
+const SettingsPage = React.lazy(() => import('@/pages/settings/SettingsPage'));
+const AdminCollectionOverviewPage = React.lazy(() => import('@/pages/collections/AdminCollectionOverviewPage'));
+const AgentAssignmentPage = React.lazy(() => import('@/pages/collections/AgentAssignmentPage'));
+const AgentRemittancePage = React.lazy(() => import('@/pages/collections/AgentRemittancePage'));
+const AgentBalancesPage = React.lazy(() => import('@/pages/collections/AgentBalancesPage'));
+const AgentCollectionDashboardPage = React.lazy(() => import('@/pages/collections/AgentCollectionDashboardPage'));
+const AgentCollectionWorkPage = React.lazy(() => import('@/pages/collections/AgentCollectionWorkPage'));
+const PermissionMatrixPage = React.lazy(() => import('@/pages/settings/PermissionMatrixPage'));
+const AgentsManagementPage = React.lazy(() => import('@/pages/collections/AgentsManagementPage'));
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -103,7 +104,7 @@ export default function App() {
   return (
     <AuthContext.Provider value={auth}>
       <ToastProvider>
-      <Routes>
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-500">Loading...</div>}><Routes>
         <Route path="/login" element={<RedirectIfAuth><LoginPage /></RedirectIfAuth>} />
         <Route element={<RequireAuth><Layout /></RequireAuth>}>
           <Route index element={<DashboardPage />} />
@@ -164,7 +165,7 @@ export default function App() {
           <Route path="collections/agents-management" element={<AgentsManagementPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
-      </Routes>
+      </Routes></Suspense>
       </ToastProvider>
     </AuthContext.Provider>
   );
