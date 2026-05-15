@@ -1,5 +1,5 @@
 import { prisma } from '../../index.js';
-import { SETTING_KEYS, type UpdateSettingsInput } from './settings.types.js';
+import { SETTING_KEYS } from './settings.types.js';
 
 // ---------------------------------------------------------------------------
 // Default values for settings that haven't been persisted yet
@@ -56,7 +56,7 @@ export async function getBillingCycleStartDay(): Promise<number> {
 /**
  * Upsert one or more settings. Only provided keys are updated.
  */
-export async function updateSettings(input: UpdateSettingsInput, userId: string) {
+export async function updateSettings(input: any, userId: string) {
   const ops: Promise<unknown>[] = [];
 
   if (input.billingCycleStartDay !== undefined) {
