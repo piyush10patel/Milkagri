@@ -376,9 +376,11 @@ export default function RouteMapPage() {
         if (startPoint) {
           latLngs.push([startPoint.lat, startPoint.lon]);
           const startMarker = L.marker([startPoint.lat, startPoint.lon], { title: startPoint.label });
-          startMarker.bindPopup(
-            `<div style="font-size:12px;line-height:1.4;"><strong>${startPoint.label}</strong><br/>Route start location</div>`,
-          );
+          const startPopup = document.createElement('div');
+          startPopup.style.fontSize = '12px';
+          startPopup.style.lineHeight = '1.4';
+          startPopup.innerHTML = `<strong>${startPoint.label}</strong><br/>Route start location`;
+          startMarker.bindPopup(startPopup);
           startMarker.addTo(layerGroup);
         }
 
@@ -401,16 +403,18 @@ export default function RouteMapPage() {
             .join(', ');
 
           marker.bindTooltip(`#${item.sequenceOrder}`, { permanent: true, direction: 'top', offset: [0, -10] });
-          marker.bindPopup(
-            `<div style="font-size:12px;line-height:1.4;">
+          const popupContent = document.createElement('div');
+          popupContent.style.fontSize = '12px';
+          popupContent.style.lineHeight = '1.4';
+          popupContent.innerHTML = `
               <strong>#${item.sequenceOrder} ${item.customer.name}</strong><br/>
               Phone: ${item.customer.phone}<br/>
               Status: ${item.status}<br/>
               ${address || 'Address not available'}<br/>
               Planned Drop: ${item.plannedDropQuantity ?? item.quantity}<br/>
               Notes: ${item.customer.deliveryNotes ?? '-'}
-            </div>`,
-          );
+          `;
+          marker.bindPopup(popupContent);
           marker.addTo(layerGroup);
         });
       } else {
@@ -429,13 +433,15 @@ export default function RouteMapPage() {
           });
 
           marker.bindTooltip(`#${stop.sequenceOrder}`, { permanent: true, direction: 'top', offset: [0, -10] });
-          marker.bindPopup(
-            `<div style="font-size:12px;line-height:1.4;">
+          const popupContent = document.createElement('div');
+          popupContent.style.fontSize = '12px';
+          popupContent.style.lineHeight = '1.4';
+          popupContent.innerHTML = `
               <strong>#${stop.sequenceOrder} ${stop.stopName}</strong><br/>
               Village: ${stop.villageName}<br/>
               Farmers (${stop.farmerCount}): ${stop.farmerNames.length > 0 ? stop.farmerNames.join(', ') : '-'}
-            </div>`,
-          );
+          `;
+          marker.bindPopup(popupContent);
           marker.addTo(layerGroup);
         });
       }

@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
 import helmet from 'helmet';
 import cors from 'cors';
 import session, { type SessionOptions } from 'express-session';
@@ -121,6 +122,11 @@ redis?.on('error', (err) => {
 // ---------------------------------------------------------------------------
 // 1. Security headers
 // ---------------------------------------------------------------------------
+app.use((req, res, next) => {
+  res.locals.nonce = crypto.randomBytes(16).toString('base64');
+  next();
+});
+
 app.use(
   helmet({
     referrerPolicy: {
@@ -129,8 +135,16 @@ app.use(
     contentSecurityPolicy: {
       useDefaults: true,
       directives: {
-        scriptSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
+        scriptSrc: [
+          "'self'",
+          'https://unpkg.com',
+          (_req, res: any) => `'nonce-${res.locals.nonce}'`,
+        ],
+        styleSrc: [
+          "'self'",
+          'https://unpkg.com',
+          (_req, res: any) => `'nonce-${res.locals.nonce}'`,
+        ],
         imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://unpkg.com'],
         connectSrc: [
           "'self'",
@@ -313,10 +327,16 @@ app.use('/api/v1/permissions', permissionsRoutes);
 // ---------------------------------------------------------------------------
 app.get('/__reset', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  const nonce = res.locals.nonce;
   res.send(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Resetting…</title></head>
+<html><head><meta charset="utf-8"><title>Resetting…</title>
+<style nonce="${nonce}">
+  body { font-family: system-ui; }
+  .message { padding: 2rem; text-align: center; color: #666; }
+</style>
+</head>
 <body>
-<script>
+<script nonce="${nonce}">
 (function(){
   var steps = [];
   if ('serviceWorker' in navigator) {
@@ -337,7 +357,7 @@ app.get('/__reset', (_req, res) => {
   });
 })();
 </script>
-<p style="font-family:system-ui;padding:2rem;text-align:center;color:#666;">Clearing cached data…</p>
+<p class="message">Clearing cached data…</p>
 </body></html>`);
 });
 

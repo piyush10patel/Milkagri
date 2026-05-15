@@ -23,58 +23,11 @@
 
     <title>Milk Delivery Platform</title>
 
-    <!-- iOS safe area padding + splash screen -->
-    <style>
-      body {
-        -webkit-tap-highlight-color: transparent;
-        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-        margin: 0;
-        background: #f8fafc;
-      }
-      #root:empty {
-        min-height: 100dvh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      #root:empty::after {
-        content: '';
-        width: 32px;
-        height: 32px;
-        border: 3px solid #e2e8f0;
-        border-top-color: #2563eb;
-        border-radius: 50%;
-        animation: splashSpin 0.7s linear infinite;
-      }
-      @keyframes splashSpin {
-        to { transform: rotate(360deg); }
-      }
-    </style>
+    <!-- App Boot Error Handler -->
+    <script type="module" src="/boot-error.ts"></script>
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      (function () {
-        var root = document.getElementById('root');
-        function showBootError(message) {
-          if (!root) return;
-          root.innerHTML =
-            '<div style="padding:16px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;margin:16px;">' +
-            '<h2 style="margin:0 0 8px 0;font-size:16px;">App failed to load</h2>' +
-            '<p style="margin:0;font-size:14px;line-height:1.4;">' + message + '</p>' +
-            '</div>';
-        }
-        window.addEventListener('error', function (event) {
-          var msg = event && event.message ? event.message : 'Unknown JavaScript error';
-          showBootError(msg);
-        });
-        window.addEventListener('unhandledrejection', function (event) {
-          var reason = event && event.reason ? String(event.reason) : 'Unhandled promise rejection';
-          showBootError(reason);
-        });
-
-      })();
-    </script>
     <script type="module" src="/main.tsx"></script>
   </body>
 </html>

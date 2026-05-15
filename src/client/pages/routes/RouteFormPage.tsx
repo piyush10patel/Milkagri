@@ -454,15 +454,10 @@ export default function RouteFormPage() {
 
   // Create a numbered icon for a waypoint marker
   function createWaypointIcon(L: any, index: number, type: 'customer_stop' | 'intermediate') {
-    const color = type === 'customer_stop' ? '#2563eb' : '#ea580c'; // blue-600 / orange-600
+    const typeClass = type === 'customer_stop' ? 'waypoint-icon-customer' : 'waypoint-icon-intermediate';
     return L.divIcon({
       className: '',
-      html: `<div style="
-        background:${color};color:#fff;width:28px;height:28px;
-        border-radius:50%;display:flex;align-items:center;justify-content:center;
-        font-size:13px;font-weight:600;border:2px solid #fff;
-        box-shadow:0 1px 4px rgba(0,0,0,.3);
-      ">${index + 1}</div>`,
+      html: `<div class="waypoint-icon ${typeClass}">${index + 1}</div>`,
       iconSize: [28, 28],
       iconAnchor: [14, 14],
     });
