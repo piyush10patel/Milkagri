@@ -41,11 +41,11 @@ Use these settings:
 - Start Command: `npm start`
 - Health Check Path: `/api/health`
 
-If Render detects [render.yaml](/J:/Milkagri/render.yaml), you can also deploy it as a Blueprint.
+If Render detects [`render.yaml`](../../render.yaml), you can also deploy it as a Blueprint.
 
 ## 3. Set Render environment variables
 
-Use [env.template](/J:/Milkagri/deploy/render-free/env.template) as the source of truth.
+Use [`env.template`](env.template) as the source of truth.
 
 Required values:
 
@@ -152,7 +152,7 @@ Check these first:
 
 ## 9. Production notes for this repo
 
-- Secure cookies require proxy trust in production; this is already handled in [index.ts](/J:/Milkagri/src/server/index.ts)
+- Secure cookies require proxy trust in production; this is already handled in [`src/server/index.ts`](../../src/server/index.ts)
 - Missing required env vars now fail fast in production
 - Background jobs are optional and should stay off on free hosting
 - The app serves frontend and API from one Node process

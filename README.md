@@ -1,29 +1,81 @@
-# Milk Delivery Platform
+# MilkAgri
 
-Self-hosted web application for running a milk and dairy delivery business: customers, subscriptions, routes, daily orders, delivery execution, billing, payments, reporting, inventory, and milk collection.
+MilkAgri is a full-stack dairy delivery operations platform built to manage the day-to-day workflow of a subscription-based milk business. It covers customer onboarding, product pricing, recurring subscriptions, route planning, daily delivery execution, milk procurement, field collections, billing, payments, reports, inventory, notifications, and role-based staff access.
 
-Built with Express.js, React, PostgreSQL, Redis, and Prisma.
+The project is intentionally broad: it demonstrates end-to-end product thinking, relational data modeling, authenticated workflows, background jobs, operational dashboards, and a production deployment path.
+
+## Why This Project Matters
+
+Small dairy distributors often run on spreadsheets, phone calls, and manual reconciliation. MilkAgri turns that workflow into a structured web application:
+
+- Admins manage customers, products, routes, pricing, users, permissions, and reports.
+- Operations teams generate and track daily milk delivery orders.
+- Field teams record deliveries, payments, remittances, and milk collections.
+- Billing teams generate invoices, track outstanding balances, and review ledgers.
+- Owners get a single dashboard for revenue, delivery, collection, and customer activity.
+
+## Product Highlights
+
+| Area | What it supports |
+|---|---|
+| Customer CRM | Customer profiles, addresses, status, delivery notes, ledgers |
+| Subscriptions | Recurring delivery plans, quantities, sessions, frequencies, holds, changes |
+| Routing | Delivery routes, route maps, stop ordering, GPS tracking, route reports |
+| Daily operations | Order generation, delivery manifests, milk summaries, missed delivery tracking |
+| Billing | Invoice generation, invoice detail views, payments, outstanding balances |
+| Milk procurement | Village collections, farmers, collection routes, vehicle loads |
+| Agent collections | Agent assignments, field collection work, remittances, balances |
+| Admin controls | Users, role permissions, audit logs, settings, notifications |
+| Reporting | Revenue, product sales, daily delivery, route delivery, subscription changes |
+
+## Technical Highlights
+
+- TypeScript across client and server.
+- React 19, Vite, Tailwind CSS, React Router, and TanStack Query on the frontend.
+- Express, Prisma, PostgreSQL, Redis, BullMQ, and session-based auth on the backend.
+- Database-driven RBAC with a super-admin bypass and permission matrix.
+- CSRF protection for state-changing requests.
+- bcrypt password hashing and login lockout handling.
+- Prisma migrations for a substantial relational domain model.
+- Background jobs for recurring order and invoice generation.
+- Docker Compose, Render, Neon Postgres, and Upstash Redis deployment support.
+- Vitest coverage for core pricing, routing, billing, validation, middleware, and service logic.
+- PWA-ready client with service worker and app icons.
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Backend | Node.js, Express.js, TypeScript |
-| Frontend | React, Vite, Tailwind CSS |
+| Frontend | React, Vite, Tailwind CSS, React Router, TanStack Query |
+| Backend | Node.js, Express, TypeScript |
 | Database | PostgreSQL, Prisma ORM |
-| Queue / Jobs | Redis, BullMQ |
-| Auth | express-session, bcrypt |
-| Testing | Vitest |
-| Deployment | Docker, Docker Compose, Nginx |
+| Queue and cache | Redis, BullMQ |
+| Auth and security | express-session, bcrypt, CSRF middleware, Helmet, RBAC |
+| Testing | Vitest, fast-check |
+| Deployment | Docker, Docker Compose, Nginx, Render |
+
+## Demo Access
+
+The app includes a public `/register` page so a recruiter or reviewer can create a demo account and immediately explore the authenticated dashboard.
+
+Important: the current demo registration flow creates a `super_admin` user so the full product surface is visible during review. Use it only in a controlled demo environment. Before using this project as a real public production service, gate or remove public registration and create staff accounts through the protected user-management flow.
+
+For a guided walkthrough, see [docs/DEMO.md](docs/DEMO.md).
 
 ## Local Development
 
-### 1. Install
+### Prerequisites
+
+- Node.js 20 or newer
+- Docker Desktop, or local PostgreSQL and Redis instances
+- npm
+
+### 1. Install dependencies
 
 ```bash
-git clone <repository-url>
-cd milk-delivery-platform
-npm install
+git clone https://github.com/piyush10patel/Milkagri.git
+cd Milkagri
+npm ci
 ```
 
 ### 2. Configure environment
@@ -32,48 +84,47 @@ npm install
 cp .env.example .env
 ```
 
-Set values in `.env`. At minimum you will need:
+For local Docker services, set at least:
 
 ```dotenv
-DATABASE_URL=postgresql://<db-user>:<db-password>@localhost:5432/<db-name>
+POSTGRES_PASSWORD=local-password
+DATABASE_URL=postgresql://milkdelivery:local-password@localhost:5432/milkdelivery
 REDIS_URL=redis://localhost:6379
-SESSION_SECRET=<generate-a-random-secret>
-POSTGRES_PASSWORD=<set-a-strong-password>
+SESSION_SECRET=replace-with-a-long-random-secret
 ```
 
-Notes:
-- Do not commit `.env`
-- Use strong unique secrets in every environment
-- Rotate any secrets that were previously committed or shared
-
-### 3. Start local services
+### 3. Start PostgreSQL and Redis
 
 ```bash
 docker compose up -d postgres redis
 ```
 
-### 4. Migrate and seed
+### 4. Apply migrations and seed demo data
 
 ```bash
-npx prisma migrate deploy
+npm run db:migrate
 npm run db:seed
 ```
 
-The seed script creates sample users and demo operational data. It does not embed fixed passwords in the repository.
+The seed script creates sample operational data. If seed passwords are not provided, it generates random passwords and prints them once in the console.
 
-If you want predictable demo passwords for a local run, set them before seeding:
+For predictable local demo credentials:
 
 ```bash
-SEED_ADMIN_PASSWORD=<your-demo-admin-password>
-SEED_AGENT_PASSWORD=<your-demo-agent-password>
+SEED_ADMIN_PASSWORD=demo-admin-password SEED_AGENT_PASSWORD=demo-agent-password npm run db:seed
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:SEED_ADMIN_PASSWORD="demo-admin-password"
+$env:SEED_AGENT_PASSWORD="demo-agent-password"
 npm run db:seed
 ```
 
-If these variables are not set, the seed script generates random passwords and prints them once in the console.
+### 5. Run the app
 
-### 5. Start the app
-
-Run in two terminals:
+Use two terminals:
 
 ```bash
 npm run dev:server
@@ -84,156 +135,75 @@ npm run dev:client
 ```
 
 Default local URLs:
-- API: `http://localhost:3000`
-- App: `http://localhost:5173`
 
-## Production Deployment
-
-### Recommended hosted setup
-
-For a simple production deployment without running your own VM:
-
-- App: Render Web Service
-- Database: Neon Postgres
-- Redis: Upstash Redis
-
-This repository already serves the built frontend from the Node server in production, so you only need one app service.
-
-### 1. Prepare environment
-
-```bash
-cp .env.example .env
-```
-
-Set production values for all required variables before starting containers.
-
-Key variables:
-
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `REDIS_URL` | Yes | Redis connection string |
-| `SESSION_SECRET` | Yes | Session signing secret |
-| `CORS_ORIGIN` | Recommended | Public app URL, for example `https://your-app.onrender.com` |
-| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` | No | Email settings |
-| `SMS_PROVIDER_URL` / `SMS_API_KEY` | No | SMS integration |
-| `WEBHOOK_NOTIFICATION_URL` | No | Outbound webhook target |
-
-If you are deploying to a sleeping free-tier service, set:
-
-```dotenv
-ENABLE_BACKGROUND_JOBS=false
-```
-
-This keeps the app reliable even when background workers are not always running.
-
-### 2. Create the first admin user
-
-For a clean production setup, do not seed demo data. Instead, bootstrap the first super admin.
-
-On free hosted plans where shell access is unavailable, you can temporarily set:
-
-```dotenv
-AUTO_BOOTSTRAP_ADMIN=true
-ADMIN_EMAIL=owner@example.com
-ADMIN_PASSWORD=<strong-password>
-ADMIN_NAME=Owner
-```
-
-Redeploy once, log in, then remove those temporary bootstrap values and redeploy again.
-
-If you can run the bootstrap command locally, use:
-
-```bash
-ADMIN_EMAIL=owner@example.com ADMIN_PASSWORD=<strong-password> ADMIN_NAME="Owner" npm run bootstrap:admin
-```
-
-Run this only after the database is reachable and migrations are applied.
-
-### 3. Start services
-
-```bash
-docker compose up -d --build
-```
-
-### 4. Seed optional demo data
-
-```bash
-docker compose exec app npx tsx prisma/seed.ts
-```
-
-Use this only for non-production/demo environments unless you explicitly want sample data.
-
-### Render deployment
-
-This repo includes [render.yaml](/J:/Milkagri/render.yaml) for a one-service Render deployment.
-There is also a host-specific checklist in [deploy/render-free/README.md](/J:/Milkagri/deploy/render-free/README.md) and an env template in [deploy/render-free/env.template](/J:/Milkagri/deploy/render-free/env.template).
-
-On Render:
-
-1. Create a new Blueprint or Web Service from this repository.
-2. Set `DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET`, and `CORS_ORIGIN`.
-3. Keep `ENABLE_BACKGROUND_JOBS=false` on the free plan.
-4. After first deploy, run the admin bootstrap command from your machine using the production `DATABASE_URL`.
-
-## Database and Backups
-
-### Migrations
-
-```bash
-npm run db:migrate
-```
-
-### Prisma Studio
-
-```bash
-npm run db:studio
-```
-
-### Backup
-
-```bash
-docker compose exec postgres pg_dump -U <db-user> -Fc <db-name> > backup.dump
-```
-
-### Restore
-
-```bash
-./scripts/restore.sh <path-to-backup>
-```
-
-Make sure `DATABASE_URL` points to the correct target database before restoring.
+- Frontend: `http://localhost:5173`
+- API health check: `http://localhost:3000/api/health`
 
 ## Available Scripts
 
 | Script | Description |
 |---|---|
-| `npm run dev:server` | Start backend in development |
-| `npm run dev:client` | Start frontend in development |
+| `npm run dev:server` | Start the Express API in development |
+| `npm run dev:client` | Start the Vite frontend in development |
 | `npm run build` | Build client and server |
-| `npm test` | Run tests |
-| `npm run db:migrate` | Apply pending migrations |
-| `npm run db:migrate:dev` | Create a development migration |
-| `npm run db:generate` | Regenerate Prisma client |
-| `npm run db:seed` | Seed sample data |
+| `npm start` | Run the built production server |
+| `npm test` | Run the Vitest suite |
+| `npm run db:migrate` | Apply pending Prisma migrations |
+| `npm run db:migrate:dev` | Create and apply a development migration |
+| `npm run db:generate` | Regenerate Prisma Client |
+| `npm run db:seed` | Seed demo data |
 | `npm run db:studio` | Open Prisma Studio |
-| `npm run bootstrap:admin` | Create or reset the first super admin |
-
-## Security Notes
-
-- `.env` and other local secret files should stay out of version control
-- Never publish real production credentials in docs, scripts, or screenshots
-- If secrets were already pushed, rotate them and clean git history before treating the repo as public-safe
-- Review seeded demo data before using it in shared or customer-facing environments
+| `npm run bootstrap:admin` | Create or reset the first production super admin |
 
 ## Project Structure
 
 ```text
-prisma/         Database schema, migrations, seed
-scripts/        Backup and restore helpers
-src/server/     Express API
-src/client/     React application
+deploy/             Deployment notes and host-specific templates
+docs/               Recruiter/demo, architecture, and deployment documentation
+prisma/             Prisma schema, migrations, and seed data
+scripts/            Backup, restore, icon generation, and admin bootstrap helpers
+src/client/         React frontend application
+src/server/         Express API, modules, middleware, jobs, and shared libraries
 ```
+
+## Documentation
+
+- [docs/DEMO.md](docs/DEMO.md) - recruiter walkthrough and demo flow
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - system design and module overview
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - deployment checklist and environment notes
+- [deploy/render-free/README.md](deploy/render-free/README.md) - Render free-tier deployment guide
+
+## Quality Checks
+
+Run the production build before presenting or deploying:
+
+```bash
+npm run build
+```
+
+The repository also includes Vitest coverage for pricing, routing helpers, billing, payments, validation, permissions, middleware, and selected property-based route checks. Run it during development with:
+
+```bash
+npm test
+```
+
+## Deployment Summary
+
+For a simple hosted setup:
+
+- Render Web Service for the Node app
+- Neon Postgres for the database
+- Upstash Redis for sessions and optional background jobs
+
+The production server serves both the API and the built React frontend from one Node process. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the general checklist and [deploy/render-free/README.md](deploy/render-free/README.md) for the Render-specific version.
+
+## Security Notes
+
+- Never commit a populated `.env` file.
+- Rotate any credential that was ever committed or shared.
+- Public registration is intended only for controlled demo use in this repository state.
+- Use strong `SESSION_SECRET`, database, Redis, and admin credentials in every environment.
+- Keep demo seed data out of real customer-facing deployments.
 
 ## License
 
