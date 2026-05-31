@@ -13,6 +13,7 @@ export interface AuthState {
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -55,6 +56,19 @@ export function useAuthProvider(): AuthState {
     }
   }, []);
 
+  const register = useCallback(async (name: string, email: string, password: string) => {
+    setError(null);
+    try {
+      const data = await api.post<{ user: User }>('/api/auth/register', { name, email, password });
+      await api.refreshCsrfToken();
+      setUser(data.user);
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setError(apiErr.message || 'Registration failed');
+      throw err;
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await api.post('/api/auth/logout');
@@ -64,7 +78,7 @@ export function useAuthProvider(): AuthState {
     setUser(null);
   }, []);
 
-  return { user, loading, error, login, logout };
+  return { user, loading, error, login, register, logout };
 }
 
 export function useAuth(): AuthState {

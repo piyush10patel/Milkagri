@@ -5,6 +5,7 @@ import { AuthContext, useAuthProvider, useAuth } from '@/hooks/useAuth';
 import Layout from '@/components/Layout';
 import { ToastProvider } from '@/components/ui/toast';
 const LoginPage = React.lazy(() => import('@/pages/LoginPage'));
+const RegisterPage = React.lazy(() => import('@/pages/RegisterPage'));
 const DashboardPage = React.lazy(() => import('@/pages/DashboardPage'));
 const CustomerListPage = React.lazy(() => import('@/pages/customers/CustomerListPage'));
 const CustomerFormPage = React.lazy(() => import('@/pages/customers/CustomerFormPage'));
@@ -106,6 +107,7 @@ export default function App() {
       <ToastProvider>
       <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-500">Loading...</div>}><Routes>
         <Route path="/login" element={<RedirectIfAuth><LoginPage /></RedirectIfAuth>} />
+        <Route path="/register" element={<RedirectIfAuth><RegisterPage /></RedirectIfAuth>} />
         <Route element={<RequireAuth><Layout /></RequireAuth>}>
           <Route index element={<DashboardPage />} />
           <Route path="customers" element={<CustomerListPage />} />

@@ -1,7 +1,8 @@
 import bcrypt from 'bcrypt';
 import { prisma } from '../../index.js';
-import { UnauthorizedError, AppError } from '../../lib/errors.js';
+import { UnauthorizedError, AppError, ConflictError } from '../../lib/errors.js';
 import { dispatchNotification } from '../../lib/notificationProvider.js';
+import type { RegisterInput } from './auth.types.js';
 
 const BCRYPT_ROUNDS = 10;
 const MAX_FAILED_ATTEMPTS = 5;
@@ -60,6 +61,37 @@ export async function verifyCredentials(email: string, password: string): Promis
     role: user.role,
     isActive: user.isActive,
   };
+}
+
+export async function registerDemoAccount(input: RegisterInput): Promise<AuthenticatedUser> {
+  const email = normalizeEmail(input.email);
+  const existing = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+  });
+
+  if (existing) {
+    throw new ConflictError('A user with this email already exists');
+  }
+
+  const passwordHash = await hashPassword(input.password);
+  const user = await prisma.user.create({
+    data: {
+      email,
+      passwordHash,
+      name: input.name.trim(),
+      role: 'super_admin',
+      lastLoginAt: new Date(),
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      isActive: true,
+    },
+  });
+
+  return user;
 }
 
 async function handleFailedLogin(userId: string, currentAttempts: number): Promise<void> {

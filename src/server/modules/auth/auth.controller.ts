@@ -1,6 +1,28 @@
 import type { Request, Response, NextFunction } from 'express';
-import { verifyCredentials } from './auth.service.js';
+import { registerDemoAccount, verifyCredentials, type AuthenticatedUser } from './auth.service.js';
 import { UnauthorizedError } from '../../lib/errors.js';
+
+function saveUserSession(req: Request, res: Response, next: NextFunction, user: AuthenticatedUser, status = 200) {
+  (req.session as any).userId = user.id;
+  (req.session as any).userRole = user.role;
+  (req.session as any).userName = user.name;
+  (req.session as any).userEmail = user.email;
+  req.session.save((err) => {
+    if (err) {
+      next(err);
+      return;
+    }
+
+    res.status(status).json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    });
+  });
+}
 
 export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -9,25 +31,16 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
 
     const user = await verifyCredentials(email, password);
 
-    // Store user info in session
-    (req.session as any).userId = user.id;
-    (req.session as any).userRole = user.role;
-    (req.session as any).userName = user.name;
-    req.session.save((err) => {
-      if (err) {
-        next(err);
-        return;
-      }
+    saveUserSession(req, res, next, user);
+  } catch (err) {
+    next(err);
+  }
+}
 
-      res.json({
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        },
-      });
-    });
+export async function register(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const user = await registerDemoAccount(req.body);
+    saveUserSession(req, res, next, user, 201);
   } catch (err) {
     next(err);
   }
@@ -58,7 +71,7 @@ export async function me(req: Request, res: Response, next: NextFunction): Promi
     res.json({
       user: {
         id: userId,
-        email: (req as any).user?.email,
+        email: (req.session as any).userEmail,
         name: (req.session as any).userName,
         role: (req.session as any).userRole,
       },
