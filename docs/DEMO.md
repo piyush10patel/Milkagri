@@ -20,7 +20,7 @@ For a controlled demo environment, open:
 
 Create an account, then the app signs you in automatically.
 
-Important: demo registration grants `super_admin` access so reviewers can see the full application. Remove or gate public registration before using this as a real public production service.
+Demo accounts can see the full application surface, but they are sandboxed: list/detail pages use sample data and state-changing requests do not modify real operational records. Existing seeded/admin accounts still use the real database.
 
 ## Walkthrough Script
 
@@ -119,5 +119,6 @@ Then verify:
 
 - `/register` opens and creates a demo account.
 - The dashboard loads after registration.
-- Seed data exists if you want a richer walkthrough.
+- New demo accounts show sandbox sample data, not real populated records.
+- Seed data exists if you want to test real admin/staff logins.
 - No real credentials are present in `.env.example`, docs, screenshots, or commit history.

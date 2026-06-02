@@ -14,6 +14,7 @@ export interface AuthenticatedUser {
   email: string;
   name: string;
   role: string;
+  isDemo: boolean;
   isActive: boolean;
 }
 
@@ -59,6 +60,7 @@ export async function verifyCredentials(email: string, password: string): Promis
     email: user.email,
     name: user.name,
     role: user.role,
+    isDemo: (user as any).isDemo ?? false,
     isActive: user.isActive,
   };
 }
@@ -74,12 +76,13 @@ export async function registerDemoAccount(input: RegisterInput): Promise<Authent
   }
 
   const passwordHash = await hashPassword(input.password);
-  const user = await prisma.user.create({
+  const user = await (prisma.user as any).create({
     data: {
       email,
       passwordHash,
       name: input.name.trim(),
       role: 'super_admin',
+      isDemo: true,
       lastLoginAt: new Date(),
     },
     select: {
@@ -87,6 +90,7 @@ export async function registerDemoAccount(input: RegisterInput): Promise<Authent
       email: true,
       name: true,
       role: true,
+      isDemo: true,
       isActive: true,
     },
   });

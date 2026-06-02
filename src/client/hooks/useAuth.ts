@@ -6,6 +6,7 @@ export interface User {
   email: string;
   name: string;
   role: 'super_admin' | 'admin' | 'delivery_agent' | 'billing_staff' | 'read_only';
+  isDemo?: boolean;
 }
 
 export interface AuthState {

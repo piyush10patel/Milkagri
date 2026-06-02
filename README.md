@@ -58,7 +58,7 @@ Small dairy distributors often run on spreadsheets, phone calls, and manual reco
 
 The app includes a public `/register` page so a recruiter or reviewer can create a demo account and immediately explore the authenticated dashboard.
 
-Important: the current demo registration flow creates a `super_admin` user so the full product surface is visible during review. Use it only in a controlled demo environment. Before using this project as a real public production service, gate or remove public registration and create staff accounts through the protected user-management flow.
+Demo signups are isolated from live operational records. They get the full product surface for review, but API reads return sandbox sample data and state-changing demo requests are accepted without modifying the real database. Existing seeded/admin logins continue to use the real database exactly as before.
 
 For a guided walkthrough, see [docs/DEMO.md](docs/DEMO.md).
 
@@ -201,7 +201,7 @@ The production server serves both the API and the built React frontend from one 
 
 - Never commit a populated `.env` file.
 - Rotate any credential that was ever committed or shared.
-- Public registration is intended only for controlled demo use in this repository state.
+- Public registration creates sandboxed reviewer accounts; create real staff accounts through protected user management or `npm run bootstrap:admin`.
 - Use strong `SESSION_SECRET`, database, Redis, and admin credentials in every environment.
 - Keep demo seed data out of real customer-facing deployments.
 

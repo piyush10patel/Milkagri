@@ -12,6 +12,7 @@ import Redis from 'ioredis';
 import { PrismaClient } from '@prisma/client';
 import { errorHandler } from './middleware/errorHandler.js';
 import { apiRateLimiter } from './middleware/rateLimiter.js';
+import { demoSandbox } from './middleware/demoSandbox.js';
 import { csrfProtection, csrfTokenProvider } from './middleware/csrf.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import usersRoutes from './modules/users/users.routes.js';
@@ -235,6 +236,7 @@ app.use(
 // 6. Rate limiting (API-wide)
 // ---------------------------------------------------------------------------
 app.use('/api', apiRateLimiter);
+app.use('/api', demoSandbox);
 
 // ---------------------------------------------------------------------------
 // Health check — public, no auth required

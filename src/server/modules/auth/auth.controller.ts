@@ -7,6 +7,7 @@ function saveUserSession(req: Request, res: Response, next: NextFunction, user: 
   (req.session as any).userRole = user.role;
   (req.session as any).userName = user.name;
   (req.session as any).userEmail = user.email;
+  (req.session as any).isDemo = user.isDemo;
   req.session.save((err) => {
     if (err) {
       next(err);
@@ -19,6 +20,7 @@ function saveUserSession(req: Request, res: Response, next: NextFunction, user: 
         email: user.email,
         name: user.name,
         role: user.role,
+        isDemo: user.isDemo,
       },
     });
   });
@@ -74,6 +76,7 @@ export async function me(req: Request, res: Response, next: NextFunction): Promi
         email: (req.session as any).userEmail,
         name: (req.session as any).userName,
         role: (req.session as any).userRole,
+        isDemo: Boolean((req.session as any).isDemo),
       },
     });
   } catch (err) {
