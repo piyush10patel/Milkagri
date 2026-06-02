@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
@@ -78,9 +78,27 @@ export default function AgentCollectionWorkPage() {
     }
   }, [data]);
 
-  const routes = data?.collectionRoutes ?? [];
+  const routes = useMemo(() => data?.collectionRoutes ?? [], [data]);
   const activeRoute = selectedRouteId ? routes.find((r) => r.id === selectedRouteId) : routes[0];
   const sessionVillages = (activeRoute?.villages ?? []).filter((v) => v.deliverySession === selectedSession);
+
+  useEffect(() => {
+    if (routes.length === 0) {
+      setSelectedRouteId('');
+      return;
+    }
+    if (!selectedRouteId || !routes.some((route) => route.id === selectedRouteId)) {
+      setSelectedRouteId(routes[0].id);
+    }
+  }, [routes, selectedRouteId]);
+
+  useEffect(() => {
+    const routeVillages = activeRoute?.villages ?? [];
+    if (routeVillages.length === 0) return;
+    if (!routeVillages.some((village) => village.deliverySession === selectedSession)) {
+      setSelectedSession(routeVillages[0].deliverySession);
+    }
+  }, [activeRoute, selectedSession]);
 
   const saveMutation = useMutation({
     mutationFn: (body: { villageId: string; farmerId: string; collectionDate: string; deliverySession: 'morning' | 'evening'; quantity: number }) =>

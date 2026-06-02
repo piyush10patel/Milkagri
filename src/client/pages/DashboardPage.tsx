@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { Link } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Truck,
   Clock,
@@ -370,10 +370,34 @@ function AgentWorkPanel({ today, data }: { today: string; data: AgentCollectionD
   const [quantity, setQuantity] = useState('');
   const [error, setError] = useState('');
 
-  const assignedStops = (data?.collectionRoutes ?? []).flatMap((route) => route.villages ?? []);
-  const villageOptions = Array.from(new Map(assignedStops.map((stop) => [stop.villageId, { id: stop.villageId, name: stop.villageName }])).values());
+  const assignedStops = useMemo(
+    () => (data?.collectionRoutes ?? []).flatMap((route) => route.villages ?? []),
+    [data],
+  );
+  const villageOptions = useMemo(
+    () => Array.from(new Map(assignedStops.map((stop) => [stop.villageId, { id: stop.villageId, name: stop.villageName }])).values()),
+    [assignedStops],
+  );
   const selectedStop = assignedStops.find((stop) => stop.villageId === selectedVillageId && stop.deliverySession === selectedSession);
   const farmerOptions = selectedStop?.farmers ?? [];
+
+  useEffect(() => {
+    if (assignedStops.length === 0) {
+      setSelectedVillageId('');
+      setSelectedFarmerId('');
+      return;
+    }
+
+    const currentStop = assignedStops.find(
+      (stop) => stop.villageId === selectedVillageId && stop.deliverySession === selectedSession,
+    );
+    if (currentStop) return;
+
+    const nextStop = assignedStops.find((stop) => stop.villageId === selectedVillageId) ?? assignedStops[0];
+    setSelectedVillageId(nextStop.villageId);
+    setSelectedSession(nextStop.deliverySession);
+    setSelectedFarmerId('');
+  }, [assignedStops, selectedSession, selectedVillageId]);
 
   const saveMutation = useMutation({
     mutationFn: (body: { villageId: string; farmerId: string; collectionDate: string; deliverySession: 'morning' | 'evening'; quantity: number }) =>
