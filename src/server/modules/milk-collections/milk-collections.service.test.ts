@@ -11,10 +11,13 @@ const mockUserFindMany = vi.fn();
 const mockMilkCollectionRouteStopFindMany = vi.fn();
 const mockMilkCollectionUpsert = vi.fn();
 const mockRouteFindUnique = vi.fn();
+const mockVillageFindMany = vi.fn();
 const mockTransaction = vi.fn();
 const mockRouteAgentDeleteMany = vi.fn();
 const mockRouteAgentCreateMany = vi.fn();
 const mockRouteStopDeleteMany = vi.fn();
+const mockRouteStopCreate = vi.fn();
+const mockRouteStopFarmerCreateMany = vi.fn();
 
 vi.mock('../../index.js', () => ({
   prisma: {
@@ -36,6 +39,9 @@ vi.mock('../../index.js', () => ({
     user: {
       findUnique: (...args: any[]) => mockUserFindUnique(...args),
       findMany: (...args: any[]) => mockUserFindMany(...args),
+    },
+    village: {
+      findMany: (...args: any[]) => mockVillageFindMany(...args),
     },
     milkCollectionRouteStop: {
       findMany: (...args: any[]) => mockMilkCollectionRouteStopFindMany(...args),
@@ -60,6 +66,8 @@ beforeEach(() => {
   mockUserFindUnique.mockResolvedValue({ id: 'agent-1', role: 'delivery_agent' });
   mockMilkCollectionFindMany.mockResolvedValue([]);
   mockVillageIndividualCollectionFindMany.mockResolvedValue([]);
+  mockVillageFindMany.mockResolvedValue([]);
+  mockRouteStopCreate.mockResolvedValue({ id: 'created-stop-1' });
   mockTransaction.mockImplementation(async (callback: any) => {
     const tx = {
       routeAgent: {
@@ -68,7 +76,10 @@ beforeEach(() => {
       },
       milkCollectionRouteStop: {
         deleteMany: mockRouteStopDeleteMany,
-        create: vi.fn(),
+        create: mockRouteStopCreate,
+      },
+      milkCollectionRouteStopFarmer: {
+        createMany: mockRouteStopFarmerCreateMany,
       },
     };
     return callback(tx);
@@ -162,11 +173,14 @@ describe('getAgentCollectionDashboard', () => {
 });
 
 describe('saveCollectionRouteStops', () => {
-  it('saves selected collection agents together with village stop assignments', async () => {
+  it('saves selected collection agents together with village assignments', async () => {
     const routeId = 'route-1';
     const agentId = 'agent-1';
+    const villageId = 'village-1';
+    const farmerId = 'farmer-1';
 
     mockRouteFindUnique.mockResolvedValueOnce({ id: routeId, name: 'Collection Route A', isActive: true });
+    mockVillageFindMany.mockResolvedValueOnce([{ id: villageId, name: 'Rampur', isActive: true }]);
     mockUserFindMany.mockResolvedValueOnce([{ id: agentId, role: 'delivery_agent' }]);
     mockRouteFindUnique.mockResolvedValueOnce({
       id: routeId,
@@ -174,20 +188,23 @@ describe('saveCollectionRouteStops', () => {
       isActive: true,
       routeAgents: [{ user: { id: agentId, name: 'Ravi', role: 'delivery_agent', isActive: true } }],
     });
-    mockMilkCollectionRouteStopFindMany.mockResolvedValueOnce([]);
-    mockFarmerFindMany.mockResolvedValueOnce([]);
+    mockMilkCollectionRouteStopFindMany.mockResolvedValue([]);
+    mockFarmerFindMany
+      .mockResolvedValueOnce([{ id: farmerId, villageId, isActive: true }])
+      .mockResolvedValueOnce([{ id: farmerId, name: 'Asha Farmer', villageId }]);
 
     await saveCollectionRouteStops({
       routeId,
       deliverySession: 'morning',
       agentIds: [agentId],
-      stops: [],
+      stops: [{ villageId, sequenceOrder: 1, farmerIds: [farmerId] }],
     });
 
     expect(mockRouteAgentDeleteMany).toHaveBeenCalledWith({ where: { routeId } });
     expect(mockRouteAgentCreateMany).toHaveBeenCalledWith({
       data: [{ routeId, userId: agentId }],
     });
+    expect(mockRouteStopDeleteMany).toHaveBeenCalledWith({ where: { routeId, deliverySession: 'morning' } });
   });
 });
 

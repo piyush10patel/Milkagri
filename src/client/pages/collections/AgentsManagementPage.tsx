@@ -28,6 +28,7 @@ interface VillageData {
   id: string;
   name: string;
   isActive: boolean;
+  farmers?: Array<{ id: string; name: string; isActive: boolean }>;
   stops?: Array<{
     id: string;
     name: string;
@@ -82,7 +83,7 @@ export default function AgentsManagementPage() {
   const [paymentAgentId, setPaymentAgentId] = useState('');
   const [selectedDeliveryAgents, setSelectedDeliveryAgents] = useState<string[]>([]);
   const [selectedCollectionAgents, setSelectedCollectionAgents] = useState<string[]>([]);
-  const [selectedVillageStops, setSelectedVillageStops] = useState<string[]>([]);
+  const [selectedVillageIds, setSelectedVillageIds] = useState<string[]>([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -126,29 +127,22 @@ export default function AgentsManagementPage() {
 
   const villages = useMemo(() => asListResponse<VillageData>(villagesData), [villagesData]);
 
-  const villageStopOptions = useMemo(
+  const villageAssignmentOptions = useMemo(
     () =>
       villages
         .filter((village) => village.isActive)
-        .flatMap((village) =>
-          (village.stops ?? [])
-            .filter((stop) => stop.isActive)
-            .map((stop) => ({
-              id: stop.id,
-              villageId: village.id,
-              villageName: village.name,
-              stopName: stop.name,
-              farmerIds: (stop.farmers ?? [])
-                .map((item) => item.farmer)
-                .filter((farmer) => farmer?.isActive)
-                .map((farmer) => farmer.id),
-              farmerNames: (stop.farmers ?? [])
-                .map((item) => item.farmer)
-                .filter((farmer) => farmer?.isActive)
-                .map((farmer) => farmer.name),
-            })),
-        )
-        .sort((a, b) => `${a.villageName} ${a.stopName}`.localeCompare(`${b.villageName} ${b.stopName}`)),
+        .map((village) => ({
+          id: village.id,
+          villageId: village.id,
+          villageName: village.name,
+          farmerIds: (village.farmers ?? [])
+            .filter((farmer) => farmer?.isActive)
+            .map((farmer) => farmer.id),
+          farmerNames: (village.farmers ?? [])
+            .filter((farmer) => farmer?.isActive)
+            .map((farmer) => farmer.name),
+        }))
+        .sort((a, b) => a.villageName.localeCompare(b.villageName)),
     [villages],
   );
 
@@ -183,10 +177,9 @@ export default function AgentsManagementPage() {
 
   useEffect(() => {
     if (!routeStopsData) return;
-    const existingStopIds = routeStopsData.stops
-      .map((stop) => stop.villageStopId)
-      .filter((stopId): stopId is string => Boolean(stopId));
-    setSelectedVillageStops(existingStopIds);
+    const existingVillageIds = Array.from(new Set(routeStopsData.stops.map((stop) => stop.villageId)));
+    setSelectedVillageIds(existingVillageIds);
+    setSelectedCollectionAgents(routeStopsData.route.agentIds ?? []);
   }, [routeStopsData]);
 
   const assignPaymentMutation = useMutation({
@@ -246,7 +239,7 @@ export default function AgentsManagementPage() {
   });
 
   const saveVillageAssignmentsMutation = useMutation({
-    mutationFn: (body: { routeId: string; deliverySession: SessionType; agentIds: string[]; stops: Array<{ villageStopId: string; sequenceOrder: number; farmerIds: string[] }> }) =>
+    mutationFn: (body: { routeId: string; deliverySession: SessionType; agentIds: string[]; stops: Array<{ villageId: string; villageStopId: string | null; sequenceOrder: number; farmerIds: string[] }> }) =>
       api.put('/api/v1/milk-collections/route-stops', body),
     onSuccess: () => {
       setMessage('Collection agents and village assignments updated');
@@ -268,15 +261,16 @@ export default function AgentsManagementPage() {
 
   function saveVillageAssignments() {
     if (!collectionRouteId) return;
-    const stopMap = new Map(villageStopOptions.map((stop) => [stop.id, stop]));
+    const villageMap = new Map(villageAssignmentOptions.map((village) => [village.id, village]));
     saveVillageAssignmentsMutation.mutate({
       routeId: collectionRouteId,
       deliverySession: collectionSession,
       agentIds: selectedCollectionAgents,
-      stops: selectedVillageStops.map((stopId, index) => ({
-        villageStopId: stopId,
+      stops: selectedVillageIds.map((villageId, index) => ({
+        villageId,
+        villageStopId: null,
         sequenceOrder: index + 1,
-        farmerIds: stopMap.get(stopId)?.farmerIds ?? [],
+        farmerIds: villageMap.get(villageId)?.farmerIds ?? [],
       })),
     });
   }
@@ -451,28 +445,28 @@ export default function AgentsManagementPage() {
         <div className="mt-4 rounded-md border border-gray-200 p-3">
           <h3 className="text-xs font-semibold uppercase text-gray-600">Assign Villages (Stops)</h3>
           <p className="mt-1 text-xs text-gray-500">
-            Villages are assigned via active village stops created from the milk collection setup.
+            Assign the village itself. All active farmers in the assigned village are available to the agent.
           </p>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
-            {villageStopOptions.map((stop) => (
-              <label key={stop.id} className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm">
+            {villageAssignmentOptions.map((village) => (
+              <label key={village.id} className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm">
                 <input
                   type="checkbox"
-                  checked={selectedVillageStops.includes(stop.id)}
-                  onChange={() => toggleSelection(stop.id, selectedVillageStops, setSelectedVillageStops)}
+                  checked={selectedVillageIds.includes(village.id)}
+                  onChange={() => toggleSelection(village.id, selectedVillageIds, setSelectedVillageIds)}
                 />
                 <span>
-                  {stop.villageName} - {stop.stopName}
-                  {stop.farmerNames.length > 0 && (
+                  {village.villageName}
+                  {village.farmerNames.length > 0 && (
                     <span className="ml-1 text-xs text-gray-500">
-                      ({stop.farmerNames.join(', ')})
+                      ({village.farmerNames.join(', ')})
                     </span>
                   )}
                 </span>
               </label>
             ))}
-            {villageStopOptions.length === 0 && (
-              <p className="text-sm text-gray-500">No active village stops found. Create village stops in Milk Collection first.</p>
+            {villageAssignmentOptions.length === 0 && (
+              <p className="text-sm text-gray-500">No active villages found. Create a village in Milk Collection first.</p>
             )}
           </div>
           <button

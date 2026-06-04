@@ -347,36 +347,78 @@ export async function saveCollectionRouteStops(input: SaveCollectionRouteStopsIn
   });
   if (!route) throw new NotFoundError('Route not found');
 
-  const villageStopIds = input.stops.map((stop) => stop.villageStopId);
-  if (new Set(villageStopIds).size !== villageStopIds.length) {
-    throw new ValidationError('Duplicate village stops in collection route stops');
-  }
-
   const sequenceOrders = input.stops.map((stop) => stop.sequenceOrder);
   if (new Set(sequenceOrders).size !== sequenceOrders.length) {
     throw new ValidationError('Duplicate sequence orders in collection route stops');
   }
 
-  if (villageStopIds.length > 0) {
-    const villageStops = await prismaAny().villageCollectionStop.findMany({
-      where: { id: { in: villageStopIds } },
-      select: { id: true, villageId: true, isActive: true, name: true },
-    });
-    if (villageStops.length !== villageStopIds.length) {
-      throw new NotFoundError('One or more village stops were not found');
-    }
-    const inactive = villageStops.find((stop: any) => !stop.isActive);
-    if (inactive) {
+  const villageStopIds = Array.from(new Set(input.stops.map((stop) => stop.villageStopId).filter(Boolean) as string[]));
+  const explicitVillageIds = Array.from(new Set(input.stops.map((stop) => stop.villageId).filter(Boolean) as string[]));
+
+  const [villageStops, explicitVillages] = await Promise.all([
+    villageStopIds.length > 0
+      ? prismaAny().villageCollectionStop.findMany({
+          where: { id: { in: villageStopIds } },
+          select: { id: true, villageId: true, isActive: true, name: true },
+        })
+      : Promise.resolve([]),
+    explicitVillageIds.length > 0
+      ? prisma.village.findMany({
+          where: { id: { in: explicitVillageIds } },
+          select: { id: true, isActive: true, name: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  if (villageStops.length !== villageStopIds.length) {
+    throw new NotFoundError('One or more village stops were not found');
+  }
+
+  if (explicitVillages.length !== explicitVillageIds.length) {
+    throw new NotFoundError('One or more villages were not found');
+  }
+
+  const villageStopMap = new Map<string, any>(villageStops.map((stop: any) => [stop.id, stop]));
+  const explicitVillageMap = new Map<string, any>(explicitVillages.map((village: any) => [village.id, village]));
+  const preparedStops = input.stops.map((stop) => {
+    const villageStop = stop.villageStopId ? villageStopMap.get(stop.villageStopId) : null;
+    const villageId = villageStop?.villageId ?? stop.villageId;
+    if (!villageId) throw new ValidationError('Village or village stop is required');
+
+    const explicitVillage = explicitVillageMap.get(villageId);
+    if (villageStop && !villageStop.isActive) {
       throw new ValidationError('Inactive village stops cannot be added to collection route');
     }
+    if (!villageStop && explicitVillage && !explicitVillage.isActive) {
+      throw new ValidationError('Inactive villages cannot be added to collection route');
+    }
+    if (stop.villageId && villageStop && villageStop.villageId !== stop.villageId) {
+      throw new ValidationError('Selected village stop must belong to the selected village');
+    }
 
+    return {
+      villageId,
+      villageStopId: villageStop?.id ?? null,
+      sequenceOrder: stop.sequenceOrder,
+      farmerIds: Array.from(new Set(stop.farmerIds ?? [])),
+    };
+  });
+
+  const villageAssignmentKeys = preparedStops.map((stop) => stop.villageId);
+  if (new Set(villageAssignmentKeys).size !== villageAssignmentKeys.length) {
+    throw new ValidationError('Duplicate villages in collection route stops');
+  }
+
+  const assignedVillageIds = Array.from(new Set(preparedStops.map((stop) => stop.villageId)));
+  if (assignedVillageIds.length > 0) {
     const conflictingStops = await prismaAny().milkCollectionRouteStop.findMany({
       where: {
         deliverySession: input.deliverySession,
-        villageStopId: { in: villageStopIds },
+        villageId: { in: assignedVillageIds },
         routeId: { not: input.routeId },
       },
       include: {
+        village: { select: { id: true, name: true } },
         villageStop: { select: { id: true, name: true } },
         route: { select: { id: true, name: true } },
       },
@@ -384,39 +426,32 @@ export async function saveCollectionRouteStops(input: SaveCollectionRouteStopsIn
 
     if (conflictingStops.length > 0) {
       const details = conflictingStops
-        .map((stop: any) => `${stop.villageStop?.name ?? 'Unknown stop'} -> ${stop.route.name}`)
+        .map((stop: any) => `${stop.village?.name ?? stop.villageStop?.name ?? 'Unknown village'} -> ${stop.route.name}`)
         .join(', ');
       throw new ValidationError(
-        `Each village stop can be assigned to only one collection route per shift. Conflicts: ${details}`,
+        `Each village can be assigned to only one collection route per shift. Conflicts: ${details}`,
       );
     }
+  }
 
-    const stopVillageMap = new Map(villageStops.map((stop: any) => [stop.id, stop.villageId]));
-    const allFarmerIds = input.stops.flatMap((stop) => stop.farmerIds ?? []);
-    if (allFarmerIds.length > 0) {
-      const farmers = await prisma.farmer.findMany({
-        where: { id: { in: allFarmerIds } },
-        select: { id: true, villageId: true, isActive: true },
-      });
-      if (farmers.length !== allFarmerIds.length) {
-        throw new NotFoundError('One or more selected farmers were not found');
-      }
-      const farmerMap = new Map(farmers.map((farmer) => [farmer.id, farmer]));
-      for (const stop of input.stops) {
-        const uniqueFarmerIds = new Set(stop.farmerIds ?? []);
-        const stopVillageId = stopVillageMap.get(stop.villageStopId);
-        if (!stopVillageId) throw new NotFoundError('One or more village stops were not found');
-        for (const farmerId of uniqueFarmerIds) {
-          const farmer = farmerMap.get(farmerId);
-          if (!farmer) {
-            throw new NotFoundError('One or more selected farmers were not found');
-          }
-          if (!farmer.isActive) {
-            throw new ValidationError('Inactive farmers cannot be assigned to route stops');
-          }
-          if (farmer.villageId !== stopVillageId) {
-            throw new ValidationError('Selected farmers must belong to the same village as the stop');
-          }
+  const allFarmerIds = preparedStops.flatMap((stop) => stop.farmerIds);
+  if (allFarmerIds.length > 0) {
+    const uniqueFarmerIds = Array.from(new Set(allFarmerIds));
+    const farmers = await prisma.farmer.findMany({
+      where: { id: { in: uniqueFarmerIds } },
+      select: { id: true, villageId: true, isActive: true },
+    });
+    if (farmers.length !== uniqueFarmerIds.length) {
+      throw new NotFoundError('One or more selected farmers were not found');
+    }
+    const farmerMap = new Map(farmers.map((farmer) => [farmer.id, farmer]));
+    for (const stop of preparedStops) {
+      for (const farmerId of stop.farmerIds) {
+        const farmer = farmerMap.get(farmerId);
+        if (!farmer) throw new NotFoundError('One or more selected farmers were not found');
+        if (!farmer.isActive) throw new ValidationError('Inactive farmers cannot be assigned to route stops');
+        if (farmer.villageId !== stop.villageId) {
+          throw new ValidationError('Selected farmers must belong to the same village as the stop');
         }
       }
     }
@@ -439,28 +474,21 @@ export async function saveCollectionRouteStops(input: SaveCollectionRouteStopsIn
       where: { routeId: input.routeId, deliverySession: input.deliverySession },
     });
 
-    if (input.stops.length > 0) {
-      for (const stop of input.stops) {
-        const villageStop = await (tx as any).villageCollectionStop.findUnique({
-          where: { id: stop.villageStopId },
-          select: { id: true, villageId: true },
-        });
-        if (!villageStop) throw new NotFoundError('One or more village stops were not found');
-
+    if (preparedStops.length > 0) {
+      for (const stop of preparedStops) {
         const createdStop = await (tx as any).milkCollectionRouteStop.create({
           data: {
             routeId: input.routeId,
-            villageId: villageStop.villageId,
-            villageStopId: villageStop.id,
+            villageId: stop.villageId,
+            villageStopId: stop.villageStopId,
             deliverySession: input.deliverySession,
             sequenceOrder: stop.sequenceOrder,
           },
         });
 
-        const uniqueFarmerIds = Array.from(new Set(stop.farmerIds ?? []));
-        if (uniqueFarmerIds.length > 0) {
+        if (stop.farmerIds.length > 0) {
           await (tx as any).milkCollectionRouteStopFarmer.createMany({
-            data: uniqueFarmerIds.map((farmerId) => ({
+            data: stop.farmerIds.map((farmerId) => ({
               stopId: createdStop.id,
               farmerId,
             })),

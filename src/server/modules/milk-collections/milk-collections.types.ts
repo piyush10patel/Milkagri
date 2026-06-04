@@ -19,9 +19,12 @@ export const saveCollectionRouteStopsSchema = z.object({
   agentIds: z.array(z.string().uuid('Invalid agent ID')).optional(),
   stops: z.array(
     z.object({
-      villageStopId: z.string().uuid('Invalid village stop ID'),
+      villageId: z.string().uuid('Invalid village ID').optional(),
+      villageStopId: z.string().uuid('Invalid village stop ID').nullable().optional(),
       sequenceOrder: z.number().int().min(1, 'Sequence order must be >= 1'),
       farmerIds: z.array(z.string().uuid('Invalid farmer ID')).optional().default([]),
+    }).refine((value) => Boolean(value.villageId || value.villageStopId), {
+      message: 'Village or village stop is required',
     }),
   ),
 });
