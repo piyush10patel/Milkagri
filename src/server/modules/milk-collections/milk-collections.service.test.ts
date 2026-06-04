@@ -6,6 +6,7 @@ const mockMilkCollectionFindMany = vi.fn();
 const mockVillageIndividualCollectionFindMany = vi.fn();
 const mockFarmerFindMany = vi.fn();
 const mockFarmerFindUnique = vi.fn();
+const mockVillageFindMany = vi.fn();
 const mockUserFindUnique = vi.fn();
 const mockMilkCollectionRouteStopFindMany = vi.fn();
 const mockMilkCollectionUpsert = vi.fn();
@@ -26,6 +27,9 @@ vi.mock('../../index.js', () => ({
       findMany: (...args: any[]) => mockFarmerFindMany(...args),
       findUnique: (...args: any[]) => mockFarmerFindUnique(...args),
     },
+    village: {
+      findMany: (...args: any[]) => mockVillageFindMany(...args),
+    },
     user: {
       findUnique: (...args: any[]) => mockUserFindUnique(...args),
     },
@@ -43,6 +47,7 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockUserFindUnique.mockResolvedValue({ id: 'agent-1', role: 'delivery_agent' });
   mockMilkCollectionFindMany.mockResolvedValue([]);
   mockVillageIndividualCollectionFindMany.mockResolvedValue([]);
 });
@@ -84,7 +89,10 @@ describe('getAgentCollectionDashboard', () => {
         where: expect.objectContaining({
           isActive: true,
           routeAgents: { some: { userId: agentId } },
-          collectionRouteStops: { some: {} },
+          OR: [
+            { routeType: 'collection' },
+            { collectionRouteStops: { some: {} } },
+          ],
         }),
       }),
     );
@@ -98,6 +106,62 @@ describe('getAgentCollectionDashboard', () => {
         farmers: [
           { id: 'farmer-1', name: 'Asha Farmer' },
           { id: 'farmer-2', name: 'Bharat Farmer' },
+        ],
+      },
+    ]);
+  });
+
+  it('falls back to all active village farmers when an assigned collection route has no stops mapped', async () => {
+    const agentId = 'agent-1';
+    const villageId = 'village-1';
+    const routeId = 'route-1';
+
+    mockRouteFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: routeId,
+          name: 'Collection Route A',
+          collectionRouteStops: [],
+        },
+      ]);
+    mockFarmerFindMany.mockResolvedValue([]);
+    mockVillageFindMany.mockResolvedValue([
+      {
+        id: villageId,
+        name: 'Rampur',
+        farmers: [
+          { id: 'farmer-1', name: 'Asha Farmer' },
+          { id: 'farmer-2', name: 'Bharat Farmer' },
+        ],
+      },
+    ]);
+
+    const dashboard = await getAgentCollectionDashboard(agentId, '2026-06-04');
+
+    expect(dashboard.collectionRoutes).toEqual([
+      {
+        id: routeId,
+        name: 'Collection Route A',
+        villages: [
+          {
+            villageId,
+            villageName: 'Rampur',
+            deliverySession: 'morning',
+            farmers: [
+              { id: 'farmer-1', name: 'Asha Farmer' },
+              { id: 'farmer-2', name: 'Bharat Farmer' },
+            ],
+          },
+          {
+            villageId,
+            villageName: 'Rampur',
+            deliverySession: 'evening',
+            farmers: [
+              { id: 'farmer-1', name: 'Asha Farmer' },
+              { id: 'farmer-2', name: 'Bharat Farmer' },
+            ],
+          },
         ],
       },
     ]);

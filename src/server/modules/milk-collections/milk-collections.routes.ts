@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../../middleware/authenticate.js';
-import { authorize } from '../../middleware/authorize.js';
+import { authorize, authorizeAny } from '../../middleware/authorize.js';
 import { csrfProtection } from '../../middleware/csrf.js';
 import { validate } from '../../lib/validation.js';
 import { uuidParamSchema } from '../../lib/paramSchemas.js';
@@ -45,7 +45,7 @@ router.delete('/village-stops/:id', authorize('milk_collection'), csrfProtection
 router.post('/farmers', authorize('milk_collection'), csrfProtection, validate({ body: createFarmerSchema }), controller.createFarmer);
 router.put('/farmers/:id', authorize('milk_collection'), csrfProtection, validate({ params: uuidParamSchema, body: updateFarmerSchema }), controller.updateFarmer);
 router.delete('/farmers/:id', authorize('milk_collection'), csrfProtection, validate({ params: uuidParamSchema }), controller.removeFarmer);
-router.post('/', authorize('milk_collection'), csrfProtection, validate({ body: saveMilkCollectionSchema }), controller.saveEntry);
+router.post('/', authorizeAny(['milk_collection', 'agent_collections_dashboard']), csrfProtection, validate({ body: saveMilkCollectionSchema }), controller.saveEntry);
 router.post('/individual-records', authorize('milk_collection'), csrfProtection, validate({ body: saveVillageIndividualCollectionSchema }), controller.saveIndividualRecord);
 router.delete('/individual-records/:id', authorize('milk_collection'), csrfProtection, validate({ params: uuidParamSchema }), controller.removeIndividualRecord);
 router.post('/vehicle-loads', authorize('milk_collection'), csrfProtection, validate({ body: saveMilkVehicleLoadSchema }), controller.saveVehicleLoad);

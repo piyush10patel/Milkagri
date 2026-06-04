@@ -39,3 +39,28 @@ export function authorize(permission: string) {
     }
   };
 }
+
+export function authorizeAny(permissions: string[]) {
+  return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
+    const userRole = (req.session as any)?.userRole;
+
+    if (!userRole) {
+      return next(new UnauthorizedError('Authentication required'));
+    }
+
+    if (userRole === 'super_admin') {
+      return next();
+    }
+
+    try {
+      for (const permission of permissions) {
+        if (await permissionService.hasPermission(userRole, permission)) {
+          return next();
+        }
+      }
+      return next(new ForbiddenError('Insufficient privileges'));
+    } catch (_err) {
+      next(new AppError('Permission check failed', 500, 'INTERNAL_ERROR'));
+    }
+  };
+}

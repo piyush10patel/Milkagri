@@ -57,9 +57,41 @@ async function assertAgentCanRecordVillageCollection(
   if (user.role !== 'delivery_agent') return;
 
   const assigned = await getAgentAssignedVillageSessionSet(userId);
-  if (!assigned.has(villageSessionKey(villageId, deliverySession))) {
+  if (assigned.size > 0 && !assigned.has(villageSessionKey(villageId, deliverySession))) {
     throw new ValidationError('You can only record milk for villages assigned to your collection route and shift');
   }
+}
+
+type AgentDashboardVillage = {
+  villageId: string;
+  villageName: string;
+  deliverySession: 'morning' | 'evening';
+  farmers: Array<{ id: string; name: string }>;
+};
+
+async function getAllActiveVillageDashboardEntries(): Promise<AgentDashboardVillage[]> {
+  const villages = await prisma.village.findMany({
+    where: { isActive: true },
+    select: {
+      id: true,
+      name: true,
+      farmers: {
+        where: { isActive: true },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      },
+    },
+    orderBy: { name: 'asc' },
+  });
+
+  return villages.flatMap((village) =>
+    (['morning', 'evening'] as const).map((deliverySession) => ({
+      villageId: village.id,
+      villageName: village.name,
+      deliverySession,
+      farmers: village.farmers,
+    })),
+  );
 }
 
 export async function listVillages() {
@@ -1010,7 +1042,11 @@ export async function deleteMilkVehicleShiftLoad(id: string) {
 }
 
 export async function getAgentCollectionDashboard(userId: string, date: string) {
-  const [deliveryRoutes, rawRoutes, entries, individualCollections] = await Promise.all([
+  const [user, deliveryRoutes, rawRoutes, entries, individualCollections] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    }),
     prisma.route.findMany({
       where: {
         isActive: true,
@@ -1024,7 +1060,10 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
       where: {
         isActive: true,
         routeAgents: { some: { userId } },
-        collectionRouteStops: { some: {} },
+        OR: [
+          { routeType: 'collection' },
+          { collectionRouteStops: { some: {} } },
+        ],
       },
       select: {
         id: true,
@@ -1087,6 +1126,7 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
       },
     }),
   ]);
+  if (!user) throw new NotFoundError('User not found');
 
   const villageIdsToFetch = new Set<string>();
   for (const r of rawRoutes) {
@@ -1114,64 +1154,85 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
     }
   }
 
-  return {
-    date,
-    deliveryRoutes,
-    collectionRoutes: rawRoutes.map((route: any) => {
-      const villages: Array<{ villageId: string; villageName: string; deliverySession: 'morning' | 'evening'; farmers: Array<{ id: string; name: string }> }> = [];
-      const villageMap = new Map<string, { villageId: string; villageName: string; deliverySession: 'morning' | 'evening'; farmers: Array<{ id: string; name: string }>; farmerIds: Set<string> }>();
+  const collectionRoutes = rawRoutes.map((route: any) => {
+    const villages: AgentDashboardVillage[] = [];
+    const villageMap = new Map<string, AgentDashboardVillage & { farmerIds: Set<string> }>();
 
-      for (const stop of route.collectionRouteStops) {
-        const vId = stop.villageId?.toString();
-        if (!vId) continue;
+    for (const stop of route.collectionRouteStops) {
+      const vId = stop.villageId?.toString();
+      if (!vId) continue;
 
-        const key = `${vId}|${stop.deliverySession}`;
-        if (!villageMap.has(key)) {
-          villageMap.set(key, {
-            villageId: vId,
-            villageName: stop.village?.name ?? 'Unknown Village',
-            deliverySession: stop.deliverySession,
-            farmers: [],
-            farmerIds: new Set<string>(),
-          });
-        }
-
-        const routeStopFarmers = (stop.farmers ?? [])
-          .map((sf: any) => sf.farmer)
-          .filter((f: any) => f?.isActive)
-          .map((f: any) => ({ id: f.id, name: f.name }));
-        const villageStopFarmers = (stop.villageStop?.farmers ?? [])
-          .map((sf: any) => sf.farmer)
-          .filter((f: any) => f?.isActive)
-          .map((f: any) => ({ id: f.id, name: f.name }));
-        const explicitFarmers = [...routeStopFarmers, ...villageStopFarmers];
-        const villageEntry = villageMap.get(key)!;
-
-        for (const farmer of explicitFarmers) {
-          if (villageEntry.farmerIds.has(farmer.id)) continue;
-          villageEntry.farmerIds.add(farmer.id);
-          villageEntry.farmers.push(farmer);
-        }
-      }
-
-      for (const villageEntry of villageMap.values()) {
-        for (const farmer of villageFarmersMap[villageEntry.villageId] ?? []) {
-          if (villageEntry.farmerIds.has(farmer.id)) continue;
-          villageEntry.farmerIds.add(farmer.id);
-          villageEntry.farmers.push(farmer);
-        }
-
-        villageEntry.farmers.sort((a, b) => a.name.localeCompare(b.name));
-        villages.push({
-          villageId: villageEntry.villageId,
-          villageName: villageEntry.villageName,
-          deliverySession: villageEntry.deliverySession,
-          farmers: villageEntry.farmers,
+      const key = `${vId}|${stop.deliverySession}`;
+      if (!villageMap.has(key)) {
+        villageMap.set(key, {
+          villageId: vId,
+          villageName: stop.village?.name ?? 'Unknown Village',
+          deliverySession: stop.deliverySession,
+          farmers: [],
+          farmerIds: new Set<string>(),
         });
       }
 
-      return { id: route.id, name: route.name, villages };
-    }),
+      const routeStopFarmers = (stop.farmers ?? [])
+        .map((sf: any) => sf.farmer)
+        .filter((f: any) => f?.isActive)
+        .map((f: any) => ({ id: f.id, name: f.name }));
+      const villageStopFarmers = (stop.villageStop?.farmers ?? [])
+        .map((sf: any) => sf.farmer)
+        .filter((f: any) => f?.isActive)
+        .map((f: any) => ({ id: f.id, name: f.name }));
+      const explicitFarmers = [...routeStopFarmers, ...villageStopFarmers];
+      const villageEntry = villageMap.get(key)!;
+
+      for (const farmer of explicitFarmers) {
+        if (villageEntry.farmerIds.has(farmer.id)) continue;
+        villageEntry.farmerIds.add(farmer.id);
+        villageEntry.farmers.push(farmer);
+      }
+    }
+
+    for (const villageEntry of villageMap.values()) {
+      for (const farmer of villageFarmersMap[villageEntry.villageId] ?? []) {
+        if (villageEntry.farmerIds.has(farmer.id)) continue;
+        villageEntry.farmerIds.add(farmer.id);
+        villageEntry.farmers.push(farmer);
+      }
+
+      villageEntry.farmers.sort((a, b) => a.name.localeCompare(b.name));
+      villages.push({
+        villageId: villageEntry.villageId,
+        villageName: villageEntry.villageName,
+        deliverySession: villageEntry.deliverySession,
+        farmers: villageEntry.farmers,
+      });
+    }
+
+    return { id: route.id, name: route.name, villages };
+  });
+
+  if (
+    user.role === 'delivery_agent' &&
+    !collectionRoutes.some((route) => route.villages.length > 0)
+  ) {
+    const fallbackVillages = await getAllActiveVillageDashboardEntries();
+    if (fallbackVillages.length > 0) {
+      const fallbackRoute = {
+        id: rawRoutes[0]?.id ?? 'all-active-villages',
+        name: rawRoutes[0]?.name ?? 'All Active Villages',
+        villages: fallbackVillages,
+      };
+      if (collectionRoutes.length > 0) {
+        collectionRoutes[0] = fallbackRoute;
+      } else {
+        collectionRoutes.push(fallbackRoute);
+      }
+    }
+  }
+
+  return {
+    date,
+    deliveryRoutes,
+    collectionRoutes,
     recordedMilkCollections: entries.map((entry) => ({
       id: entry.id,
       villageId: entry.villageId,
