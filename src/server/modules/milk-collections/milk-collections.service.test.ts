@@ -124,13 +124,7 @@ describe('getAgentCollectionDashboard', () => {
 
     const dashboard = await getAgentCollectionDashboard(agentId, '2026-06-04');
 
-    expect(dashboard.collectionRoutes).toEqual([
-      {
-        id: routeId,
-        name: 'Collection Route A',
-        villages: [],
-      },
-    ]);
+    expect(dashboard.collectionRoutes).toEqual([]);
   });
 });
 

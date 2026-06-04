@@ -1188,7 +1188,7 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
   return {
     date,
     deliveryRoutes,
-    collectionRoutes,
+    collectionRoutes: collectionRoutes.filter((route) => route.villages.length > 0),
     recordedMilkCollections: entries.map((entry) => ({
       id: entry.id,
       villageId: entry.villageId,

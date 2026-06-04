@@ -78,8 +78,11 @@ export default function AgentCollectionWorkPage() {
     }
   }, [data]);
 
-  const routes = useMemo(() => data?.collectionRoutes ?? [], [data]);
-  const activeRoute = selectedRouteId ? routes.find((r) => r.id === selectedRouteId) : routes[0];
+  const routes = useMemo(
+    () => (data?.collectionRoutes ?? []).filter((route) => (route.villages ?? []).length > 0),
+    [data],
+  );
+  const activeRoute = selectedRouteId ? routes.find((r) => r.id === selectedRouteId) ?? routes[0] : routes[0];
   const sessionVillages = (activeRoute?.villages ?? []).filter((v) => v.deliverySession === selectedSession);
 
   useEffect(() => {
