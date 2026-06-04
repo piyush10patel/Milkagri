@@ -94,7 +94,6 @@ export default function App() {
       if ('caches' in window) {
         caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
       }
-      localStorage.clear();
       localStorage.setItem('app-build', currentBuild);
       window.location.reload();
       return;

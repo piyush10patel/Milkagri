@@ -1038,6 +1038,17 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
             village: {
               select: { id: true, name: true },
             },
+            villageStop: {
+              select: {
+                farmers: {
+                  select: {
+                    farmer: {
+                      select: { id: true, name: true, isActive: true },
+                    },
+                  },
+                },
+              },
+            },
             farmers: {
               select: {
                 farmer: {
@@ -1108,30 +1119,62 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
     date,
     deliveryRoutes,
     collectionRoutes: rawRoutes.map((route: any) => {
-      const seen = new Set<string>();
       const villages: Array<{ villageId: string; villageName: string; deliverySession: 'morning' | 'evening'; farmers: Array<{ id: string; name: string }> }> = [];
+      const villageMap = new Map<string, { villageId: string; villageName: string; deliverySession: 'morning' | 'evening'; farmers: Array<{ id: string; name: string }>; farmerIds: Set<string>; hasExplicitFarmers: boolean }>();
+
       for (const stop of route.collectionRouteStops) {
         const vId = stop.villageId?.toString();
         if (!vId) continue;
 
         const key = `${vId}|${stop.deliverySession}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
+        if (!villageMap.has(key)) {
+          villageMap.set(key, {
+            villageId: vId,
+            villageName: stop.village?.name ?? 'Unknown Village',
+            deliverySession: stop.deliverySession,
+            farmers: [],
+            farmerIds: new Set<string>(),
+            hasExplicitFarmers: false,
+          });
+        }
 
         const routeStopFarmers = (stop.farmers ?? [])
           .map((sf: any) => sf.farmer)
           .filter((f: any) => f?.isActive)
           .map((f: any) => ({ id: f.id, name: f.name }));
+        const villageStopFarmers = (stop.villageStop?.farmers ?? [])
+          .map((sf: any) => sf.farmer)
+          .filter((f: any) => f?.isActive)
+          .map((f: any) => ({ id: f.id, name: f.name }));
+        const explicitFarmers = [...routeStopFarmers, ...villageStopFarmers];
+        const villageEntry = villageMap.get(key)!;
 
-        const farmers = routeStopFarmers.length > 0 ? routeStopFarmers : (villageFarmersMap[vId] ?? []);
+        for (const farmer of explicitFarmers) {
+          if (villageEntry.farmerIds.has(farmer.id)) continue;
+          villageEntry.farmerIds.add(farmer.id);
+          villageEntry.farmers.push(farmer);
+          villageEntry.hasExplicitFarmers = true;
+        }
+      }
 
+      for (const villageEntry of villageMap.values()) {
+        if (!villageEntry.hasExplicitFarmers) {
+          for (const farmer of villageFarmersMap[villageEntry.villageId] ?? []) {
+            if (villageEntry.farmerIds.has(farmer.id)) continue;
+            villageEntry.farmerIds.add(farmer.id);
+            villageEntry.farmers.push(farmer);
+          }
+        }
+
+        villageEntry.farmers.sort((a, b) => a.name.localeCompare(b.name));
         villages.push({
-          villageId: vId,
-          villageName: stop.village?.name ?? 'Unknown Village',
-          deliverySession: stop.deliverySession,
-          farmers,
+          villageId: villageEntry.villageId,
+          villageName: villageEntry.villageName,
+          deliverySession: villageEntry.deliverySession,
+          farmers: villageEntry.farmers,
         });
       }
+
       return { id: route.id, name: route.name, villages };
     }),
     recordedMilkCollections: entries.map((entry) => ({

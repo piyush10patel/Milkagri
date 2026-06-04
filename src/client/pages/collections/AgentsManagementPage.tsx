@@ -48,6 +48,8 @@ interface CollectionRouteStopsResponse {
     sequenceOrder: number;
     farmerIds?: string[];
     defaultFarmerIds?: string[];
+    farmerNames?: string[];
+    availableFarmers?: Array<{ id: string; name: string }>;
   }>;
 }
 
@@ -140,6 +142,10 @@ export default function AgentsManagementPage() {
                 .map((item) => item.farmer)
                 .filter((farmer) => farmer?.isActive)
                 .map((farmer) => farmer.id),
+              farmerNames: (stop.farmers ?? [])
+                .map((item) => item.farmer)
+                .filter((farmer) => farmer?.isActive)
+                .map((farmer) => farmer.name),
             })),
         )
         .sort((a, b) => `${a.villageName} ${a.stopName}`.localeCompare(`${b.villageName} ${b.stopName}`)),
@@ -453,7 +459,14 @@ export default function AgentsManagementPage() {
                   checked={selectedVillageStops.includes(stop.id)}
                   onChange={() => toggleSelection(stop.id, selectedVillageStops, setSelectedVillageStops)}
                 />
-                <span>{stop.villageName} - {stop.stopName}</span>
+                <span>
+                  {stop.villageName} - {stop.stopName}
+                  {stop.farmerNames.length > 0 && (
+                    <span className="ml-1 text-xs text-gray-500">
+                      ({stop.farmerNames.join(', ')})
+                    </span>
+                  )}
+                </span>
               </label>
             ))}
             {villageStopOptions.length === 0 && (
@@ -484,6 +497,7 @@ export default function AgentsManagementPage() {
                   <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Seq</th>
                   <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Village</th>
                   <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Stop</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Farmers</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -492,11 +506,14 @@ export default function AgentsManagementPage() {
                     <td className="px-3 py-2 text-sm text-gray-700">{stop.sequenceOrder}</td>
                     <td className="px-3 py-2 text-sm text-gray-900">{stop.villageName}</td>
                     <td className="px-3 py-2 text-sm text-gray-700">{stop.stopName ?? 'Main'}</td>
+                    <td className="px-3 py-2 text-sm text-gray-700">
+                      {(stop.farmerNames?.length ? stop.farmerNames : stop.availableFarmers?.map((farmer) => farmer.name) ?? []).join(', ') || 'No farmers'}
+                    </td>
                   </tr>
                 ))}
                 {routeStopsData.stops.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="px-3 py-4 text-center text-sm text-gray-500">No villages assigned for this route/session</td>
+                    <td colSpan={4} className="px-3 py-4 text-center text-sm text-gray-500">No villages assigned for this route/session</td>
                   </tr>
                 )}
               </tbody>
