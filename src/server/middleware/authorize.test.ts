@@ -6,7 +6,7 @@ vi.mock('../modules/permissions/permissions.service.js', () => ({
   hasPermission: vi.fn(),
 }));
 
-import { authorize } from './authorize.js';
+import { authorize, authorizeRoleOrPermission } from './authorize.js';
 import * as permissionService from '../modules/permissions/permissions.service.js';
 
 const mockedHasPermission = vi.mocked(permissionService.hasPermission);
@@ -93,5 +93,34 @@ describe('authorize middleware', () => {
     await middleware(req, mockRes, next);
 
     expect(mockedHasPermission).toHaveBeenCalledWith('read_only', 'reports');
+  });
+});
+
+describe('authorizeRoleOrPermission middleware', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('allows the configured role without checking the permission table', async () => {
+    const next = vi.fn();
+    const middleware = authorizeRoleOrPermission('delivery_agent', 'milk_collection');
+    const req = createMockReq({ userRole: 'delivery_agent' });
+
+    await middleware(req, mockRes, next);
+
+    expect(next).toHaveBeenCalledWith();
+    expect(mockedHasPermission).not.toHaveBeenCalled();
+  });
+
+  it('allows other roles when the fallback permission is granted', async () => {
+    mockedHasPermission.mockResolvedValue(true);
+    const next = vi.fn();
+    const middleware = authorizeRoleOrPermission('delivery_agent', 'milk_collection');
+    const req = createMockReq({ userRole: 'admin' });
+
+    await middleware(req, mockRes, next);
+
+    expect(mockedHasPermission).toHaveBeenCalledWith('admin', 'milk_collection');
+    expect(next).toHaveBeenCalledWith();
   });
 });

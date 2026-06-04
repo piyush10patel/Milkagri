@@ -57,7 +57,7 @@ async function assertAgentCanRecordVillageCollection(
   if (user.role !== 'delivery_agent') return;
 
   const assigned = await getAgentAssignedVillageSessionSet(userId);
-  if (assigned.size > 0 && !assigned.has(villageSessionKey(villageId, deliverySession))) {
+  if (!assigned.has(villageSessionKey(villageId, deliverySession))) {
     throw new ValidationError('You can only record milk for villages assigned to your collection route and shift');
   }
 }
@@ -68,31 +68,6 @@ type AgentDashboardVillage = {
   deliverySession: 'morning' | 'evening';
   farmers: Array<{ id: string; name: string }>;
 };
-
-async function getAllActiveVillageDashboardEntries(): Promise<AgentDashboardVillage[]> {
-  const villages = await prisma.village.findMany({
-    where: { isActive: true },
-    select: {
-      id: true,
-      name: true,
-      farmers: {
-        where: { isActive: true },
-        select: { id: true, name: true },
-        orderBy: { name: 'asc' },
-      },
-    },
-    orderBy: { name: 'asc' },
-  });
-
-  return villages.flatMap((village) =>
-    (['morning', 'evening'] as const).map((deliverySession) => ({
-      villageId: village.id,
-      villageName: village.name,
-      deliverySession,
-      farmers: village.farmers,
-    })),
-  );
-}
 
 export async function listVillages() {
   const [villages, allStops, stopFarmers, villageFarmers] = await Promise.all([
@@ -1209,25 +1184,6 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
 
     return { id: route.id, name: route.name, villages };
   });
-
-  if (
-    user.role === 'delivery_agent' &&
-    !collectionRoutes.some((route) => route.villages.length > 0)
-  ) {
-    const fallbackVillages = await getAllActiveVillageDashboardEntries();
-    if (fallbackVillages.length > 0) {
-      const fallbackRoute = {
-        id: rawRoutes[0]?.id ?? 'all-active-villages',
-        name: rawRoutes[0]?.name ?? 'All Active Villages',
-        villages: fallbackVillages,
-      };
-      if (collectionRoutes.length > 0) {
-        collectionRoutes[0] = fallbackRoute;
-      } else {
-        collectionRoutes.push(fallbackRoute);
-      }
-    }
-  }
 
   return {
     date,
