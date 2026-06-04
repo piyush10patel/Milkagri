@@ -1120,7 +1120,7 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
     deliveryRoutes,
     collectionRoutes: rawRoutes.map((route: any) => {
       const villages: Array<{ villageId: string; villageName: string; deliverySession: 'morning' | 'evening'; farmers: Array<{ id: string; name: string }> }> = [];
-      const villageMap = new Map<string, { villageId: string; villageName: string; deliverySession: 'morning' | 'evening'; farmers: Array<{ id: string; name: string }>; farmerIds: Set<string>; hasExplicitFarmers: boolean }>();
+      const villageMap = new Map<string, { villageId: string; villageName: string; deliverySession: 'morning' | 'evening'; farmers: Array<{ id: string; name: string }>; farmerIds: Set<string> }>();
 
       for (const stop of route.collectionRouteStops) {
         const vId = stop.villageId?.toString();
@@ -1134,7 +1134,6 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
             deliverySession: stop.deliverySession,
             farmers: [],
             farmerIds: new Set<string>(),
-            hasExplicitFarmers: false,
           });
         }
 
@@ -1153,17 +1152,14 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
           if (villageEntry.farmerIds.has(farmer.id)) continue;
           villageEntry.farmerIds.add(farmer.id);
           villageEntry.farmers.push(farmer);
-          villageEntry.hasExplicitFarmers = true;
         }
       }
 
       for (const villageEntry of villageMap.values()) {
-        if (!villageEntry.hasExplicitFarmers) {
-          for (const farmer of villageFarmersMap[villageEntry.villageId] ?? []) {
-            if (villageEntry.farmerIds.has(farmer.id)) continue;
-            villageEntry.farmerIds.add(farmer.id);
-            villageEntry.farmers.push(farmer);
-          }
+        for (const farmer of villageFarmersMap[villageEntry.villageId] ?? []) {
+          if (villageEntry.farmerIds.has(farmer.id)) continue;
+          villageEntry.farmerIds.add(farmer.id);
+          villageEntry.farmers.push(farmer);
         }
 
         villageEntry.farmers.sort((a, b) => a.name.localeCompare(b.name));
