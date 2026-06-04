@@ -27,6 +27,25 @@ function formatAssignedAgents(
     .map((assignment) => assignment.user.name);
 }
 
+async function assertValidCollectionAgentIds(agentIds: string[]) {
+  if (agentIds.length === 0) return;
+
+  const agents = await prisma.user.findMany({
+    where: { id: { in: agentIds }, isActive: true },
+    select: { id: true, role: true },
+  });
+  const agentMap = new Map(agents.map((agent) => [agent.id, agent.role]));
+
+  for (const agentId of agentIds) {
+    if (!agentMap.has(agentId)) {
+      throw new NotFoundError(`Agent not found or inactive: ${agentId}`);
+    }
+    if (agentMap.get(agentId) !== 'delivery_agent') {
+      throw new ValidationError('Only delivery agents can be assigned to collection routes');
+    }
+  }
+}
+
 function villageSessionKey(villageId: string, deliverySession: 'morning' | 'evening') {
   return `${villageId}:${deliverySession}`;
 }
@@ -403,7 +422,19 @@ export async function saveCollectionRouteStops(input: SaveCollectionRouteStopsIn
     }
   }
 
+  const uniqueAgentIds = Array.from(new Set(input.agentIds ?? []));
+  await assertValidCollectionAgentIds(uniqueAgentIds);
+
   await prisma.$transaction(async (tx) => {
+    if (input.agentIds !== undefined) {
+      await tx.routeAgent.deleteMany({ where: { routeId: input.routeId } });
+      if (uniqueAgentIds.length > 0) {
+        await tx.routeAgent.createMany({
+          data: uniqueAgentIds.map((userId) => ({ routeId: input.routeId, userId })),
+        });
+      }
+    }
+
     await (tx as any).milkCollectionRouteStop.deleteMany({
       where: { routeId: input.routeId, deliverySession: input.deliverySession },
     });
@@ -446,27 +477,14 @@ export async function assignCollectionRouteAgents(input: AssignCollectionRouteAg
   const route = await prisma.route.findUnique({ where: { id: input.routeId } });
   if (!route) throw new NotFoundError('Route not found');
 
-  if (input.agentIds.length > 0) {
-    const agents = await prisma.user.findMany({
-      where: { id: { in: input.agentIds }, isActive: true },
-      select: { id: true, role: true },
-    });
-    const agentMap = new Map(agents.map((agent) => [agent.id, agent.role]));
-    for (const agentId of input.agentIds) {
-      if (!agentMap.has(agentId)) {
-        throw new NotFoundError(`Agent not found or inactive: ${agentId}`);
-      }
-      if (agentMap.get(agentId) !== 'delivery_agent') {
-        throw new ValidationError('Only delivery agents can be assigned to collection routes');
-      }
-    }
-  }
+  const uniqueAgentIds = Array.from(new Set(input.agentIds));
+  await assertValidCollectionAgentIds(uniqueAgentIds);
 
   await prisma.$transaction(async (tx) => {
     await tx.routeAgent.deleteMany({ where: { routeId: input.routeId } });
-    if (input.agentIds.length > 0) {
+    if (uniqueAgentIds.length > 0) {
       await tx.routeAgent.createMany({
-        data: input.agentIds.map((userId) => ({ routeId: input.routeId, userId })),
+        data: uniqueAgentIds.map((userId) => ({ routeId: input.routeId, userId })),
       });
     }
   });
@@ -1188,7 +1206,7 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
   return {
     date,
     deliveryRoutes,
-    collectionRoutes: collectionRoutes.filter((route) => route.villages.length > 0),
+    collectionRoutes,
     recordedMilkCollections: entries.map((entry) => ({
       id: entry.id,
       villageId: entry.villageId,

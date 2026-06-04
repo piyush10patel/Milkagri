@@ -7,13 +7,20 @@ const mockVillageIndividualCollectionFindMany = vi.fn();
 const mockFarmerFindMany = vi.fn();
 const mockFarmerFindUnique = vi.fn();
 const mockUserFindUnique = vi.fn();
+const mockUserFindMany = vi.fn();
 const mockMilkCollectionRouteStopFindMany = vi.fn();
 const mockMilkCollectionUpsert = vi.fn();
+const mockRouteFindUnique = vi.fn();
+const mockTransaction = vi.fn();
+const mockRouteAgentDeleteMany = vi.fn();
+const mockRouteAgentCreateMany = vi.fn();
+const mockRouteStopDeleteMany = vi.fn();
 
 vi.mock('../../index.js', () => ({
   prisma: {
     route: {
       findMany: (...args: any[]) => mockRouteFindMany(...args),
+      findUnique: (...args: any[]) => mockRouteFindUnique(...args),
     },
     milkCollection: {
       findMany: (...args: any[]) => mockMilkCollectionFindMany(...args),
@@ -28,16 +35,23 @@ vi.mock('../../index.js', () => ({
     },
     user: {
       findUnique: (...args: any[]) => mockUserFindUnique(...args),
+      findMany: (...args: any[]) => mockUserFindMany(...args),
     },
     milkCollectionRouteStop: {
       findMany: (...args: any[]) => mockMilkCollectionRouteStopFindMany(...args),
     },
+    routeAgent: {
+      deleteMany: (...args: any[]) => mockRouteAgentDeleteMany(...args),
+      createMany: (...args: any[]) => mockRouteAgentCreateMany(...args),
+    },
+    $transaction: (...args: any[]) => mockTransaction(...args),
   },
   redis: {},
 }));
 
 import {
   getAgentCollectionDashboard,
+  saveCollectionRouteStops,
   saveMilkCollection,
 } from './milk-collections.service.js';
 
@@ -46,6 +60,19 @@ beforeEach(() => {
   mockUserFindUnique.mockResolvedValue({ id: 'agent-1', role: 'delivery_agent' });
   mockMilkCollectionFindMany.mockResolvedValue([]);
   mockVillageIndividualCollectionFindMany.mockResolvedValue([]);
+  mockTransaction.mockImplementation(async (callback: any) => {
+    const tx = {
+      routeAgent: {
+        deleteMany: mockRouteAgentDeleteMany,
+        createMany: mockRouteAgentCreateMany,
+      },
+      milkCollectionRouteStop: {
+        deleteMany: mockRouteStopDeleteMany,
+        create: vi.fn(),
+      },
+    };
+    return callback(tx);
+  });
 });
 
 describe('getAgentCollectionDashboard', () => {
@@ -107,7 +134,7 @@ describe('getAgentCollectionDashboard', () => {
     ]);
   });
 
-  it('does not expose all villages when an assigned collection route has no stops mapped', async () => {
+  it('keeps an assigned collection route visible when no stops are mapped', async () => {
     const agentId = 'agent-1';
     const routeId = 'route-1';
 
@@ -124,7 +151,43 @@ describe('getAgentCollectionDashboard', () => {
 
     const dashboard = await getAgentCollectionDashboard(agentId, '2026-06-04');
 
-    expect(dashboard.collectionRoutes).toEqual([]);
+    expect(dashboard.collectionRoutes).toEqual([
+      {
+        id: routeId,
+        name: 'Collection Route A',
+        villages: [],
+      },
+    ]);
+  });
+});
+
+describe('saveCollectionRouteStops', () => {
+  it('saves selected collection agents together with village stop assignments', async () => {
+    const routeId = 'route-1';
+    const agentId = 'agent-1';
+
+    mockRouteFindUnique.mockResolvedValueOnce({ id: routeId, name: 'Collection Route A', isActive: true });
+    mockUserFindMany.mockResolvedValueOnce([{ id: agentId, role: 'delivery_agent' }]);
+    mockRouteFindUnique.mockResolvedValueOnce({
+      id: routeId,
+      name: 'Collection Route A',
+      isActive: true,
+      routeAgents: [{ user: { id: agentId, name: 'Ravi', role: 'delivery_agent', isActive: true } }],
+    });
+    mockMilkCollectionRouteStopFindMany.mockResolvedValueOnce([]);
+    mockFarmerFindMany.mockResolvedValueOnce([]);
+
+    await saveCollectionRouteStops({
+      routeId,
+      deliverySession: 'morning',
+      agentIds: [agentId],
+      stops: [],
+    });
+
+    expect(mockRouteAgentDeleteMany).toHaveBeenCalledWith({ where: { routeId } });
+    expect(mockRouteAgentCreateMany).toHaveBeenCalledWith({
+      data: [{ routeId, userId: agentId }],
+    });
   });
 });
 

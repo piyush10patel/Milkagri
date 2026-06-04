@@ -246,12 +246,13 @@ export default function AgentsManagementPage() {
   });
 
   const saveVillageAssignmentsMutation = useMutation({
-    mutationFn: (body: { routeId: string; deliverySession: SessionType; stops: Array<{ villageStopId: string; sequenceOrder: number; farmerIds: string[] }> }) =>
+    mutationFn: (body: { routeId: string; deliverySession: SessionType; agentIds: string[]; stops: Array<{ villageStopId: string; sequenceOrder: number; farmerIds: string[] }> }) =>
       api.put('/api/v1/milk-collections/route-stops', body),
     onSuccess: () => {
-      setMessage('Village assignments updated');
+      setMessage('Collection agents and village assignments updated');
       setError('');
       queryClient.invalidateQueries({ queryKey: ['agents-management-route-stops'] });
+      queryClient.invalidateQueries({ queryKey: ['agents-management-collection-routes'] });
       queryClient.invalidateQueries({ queryKey: ['milk-collections'] });
     },
     onError: (err: any) => {
@@ -271,6 +272,7 @@ export default function AgentsManagementPage() {
     saveVillageAssignmentsMutation.mutate({
       routeId: collectionRouteId,
       deliverySession: collectionSession,
+      agentIds: selectedCollectionAgents,
       stops: selectedVillageStops.map((stopId, index) => ({
         villageStopId: stopId,
         sequenceOrder: index + 1,

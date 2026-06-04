@@ -16,6 +16,7 @@ export const collectionRouteStopsQuerySchema = z.object({
 export const saveCollectionRouteStopsSchema = z.object({
   routeId: z.string().uuid('Invalid route ID'),
   deliverySession: z.enum(['morning', 'evening']),
+  agentIds: z.array(z.string().uuid('Invalid agent ID')).optional(),
   stops: z.array(
     z.object({
       villageStopId: z.string().uuid('Invalid village stop ID'),
