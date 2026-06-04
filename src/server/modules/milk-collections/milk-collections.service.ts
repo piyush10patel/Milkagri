@@ -35,7 +35,6 @@ async function getAgentAssignedVillageSessionSet(userId: string): Promise<Set<st
   const stops = await prismaAny().milkCollectionRouteStop.findMany({
     where: {
       route: {
-        routeType: 'collection',
         routeAgents: { some: { userId } },
       },
     },
@@ -1024,8 +1023,8 @@ export async function getAgentCollectionDashboard(userId: string, date: string) 
     prisma.route.findMany({
       where: {
         isActive: true,
-        routeType: 'collection',
         routeAgents: { some: { userId } },
+        collectionRouteStops: { some: {} },
       },
       select: {
         id: true,
