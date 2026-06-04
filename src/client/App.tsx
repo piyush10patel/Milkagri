@@ -49,7 +49,6 @@ const NotificationsPage = React.lazy(() => import('@/pages/notifications/Notific
 const AuditLogPage = React.lazy(() => import('@/pages/audit/AuditLogPage'));
 const SettingsPage = React.lazy(() => import('@/pages/settings/SettingsPage'));
 const AdminCollectionOverviewPage = React.lazy(() => import('@/pages/collections/AdminCollectionOverviewPage'));
-const AgentAssignmentPage = React.lazy(() => import('@/pages/collections/AgentAssignmentPage'));
 const AgentRemittancePage = React.lazy(() => import('@/pages/collections/AgentRemittancePage'));
 const AgentBalancesPage = React.lazy(() => import('@/pages/collections/AgentBalancesPage'));
 const AgentCollectionDashboardPage = React.lazy(() => import('@/pages/collections/AgentCollectionDashboardPage'));
@@ -158,7 +157,7 @@ export default function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/permissions" element={<RequireRole role="super_admin"><PermissionMatrixPage /></RequireRole>} />
           <Route path="collections/overview" element={<AdminCollectionOverviewPage />} />
-          <Route path="collections/assignments" element={<AgentAssignmentPage />} />
+          <Route path="collections/assignments" element={<Navigate to="/collections/agents-management" replace />} />
           <Route path="collections/remittances" element={<AgentRemittancePage />} />
           <Route path="collections/balances" element={<AgentBalancesPage />} />
           <Route path="collections/dashboard" element={<AgentCollectionDashboardPage />} />

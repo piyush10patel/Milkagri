@@ -51,7 +51,7 @@ const PERMISSION_LABELS: Record<string, string> = {
   audit_logs: 'Audit Logs',
   settings: 'Settings',
   collections_overview: 'Collections Overview',
-  agent_assignments: 'Agent Assignments',
+  agent_assignments: 'Agents Management',
   remittances: 'Remittances',
   agent_balances: 'Agent Balances',
   agent_collections_dashboard: 'Agent Collections Dashboard',

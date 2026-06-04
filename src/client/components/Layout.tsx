@@ -72,7 +72,6 @@ const NAV_ITEMS: NavItem[] = [
 const COLLECTION_NAV_ITEMS: NavItem[] = [
   { label: 'Agents Management', to: '/collections/agents-management', permission: 'agent_assignments', icon: <UserCheck className="h-4 w-4" /> },
   { label: 'Collection Overview', to: '/collections/overview', permission: 'collections_overview', icon: <DollarSign className="h-4 w-4" /> },
-  { label: 'Agent Assignments', to: '/collections/assignments', permission: 'agent_assignments', icon: <ClipboardList className="h-4 w-4" /> },
   { label: 'Remittances', to: '/collections/remittances', permission: 'remittances', icon: <RefreshCw className="h-4 w-4" /> },
   { label: 'Agent Balances', to: '/collections/balances', permission: 'agent_balances', icon: <BookOpen className="h-4 w-4" /> },
   { label: 'My Collections', to: '/collections/dashboard', permission: 'agent_collections_dashboard', icon: <ClipboardCheck className="h-4 w-4" /> },
@@ -306,5 +305,4 @@ export default function Layout() {
     </div>
   );
 }
-
 
